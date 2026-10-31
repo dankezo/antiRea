@@ -5,7 +5,7 @@
 
 **Web application reverse engineering risk assessment · Anti-scraping guidance · TypeScript security toolkit**
 
-[Tiếng Việt](README.vi.md) · [Threat model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [References](docs/REFERENCES.md) · [Contributing](CONTRIBUTING.md)
+[Tiếng Việt](README.vi.md) · [Threat model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [QA evidence](docs/QA_2026-10-31.md) · [Discovery guide](docs/DISCOVERY.md) · [Contributing](CONTRIBUTING.md)
 
 ![MIT](https://img.shields.io/badge/license-MIT-blue) ![status](https://img.shields.io/badge/status-beta-orange)
 
@@ -15,7 +15,7 @@
 
 ![Northstar synthetic SaaS — static preview, not a completed browser E2E run](benchmark/demo/preview.png)
 
-**New:** a complete synthetic Northstar SaaS dashboard with **baseline (`:4173`) and protected (`:4174`)** variants, identical UI and business fixtures, actual compiled antiRea SDK imports, local canaries, 4-per-minute server-side export quota, a repeatable browser test runner, evidence JSON and CI for real Chromium/Firefox/WebKit. No external assets or services are used by the demo.
+**New:** a complete synthetic Northstar SaaS dashboard with **baseline (`:4173`) and protected (`:4174`)** variants, identical UI and business fixtures, actual compiled antiRea SDK imports, local canaries, 4-per-minute server-side export quota, a browser test runner and evidence JSON for Chromium/Firefox/WebKit. No external assets or services are used by the demo. GitHub Actions CI has not yet been configured for this repository.
 
 ```bash
 npm install
@@ -119,7 +119,7 @@ The old `Error.stack` serialization trick was weakened by V8 changes; independen
 
 ## Test, verify, measure
 
-Run `npm run check` for **29 automated checks** and static repo guardrails. Scan the exact public output directory using `python3 scripts/verify-build.py /path/to/public-assets`. Coverage today is limited to components, not an end-to-end browser deployment or proof of anti-cloning effectiveness. For any effectiveness claim use the [test protocol](docs/BENCHMARK_PROTOCOL.md), collect screenshots/build/network comparisons and publish reproducible evidence and failures.
+Run `npm run check` for automated tests and static repo guardrails. Scan the exact public output directory using `python3 scripts/verify-build.py /path/to/public-assets`. Local browser tests are not proof of anti-cloning effectiveness. For any effectiveness claim use the [test protocol](docs/BENCHMARK_PROTOCOL.md), collect screenshots/build/network comparisons and publish reproducible evidence and failures.
 
 ## Contributing / security / limitations
 
