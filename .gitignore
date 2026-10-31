@@ -10,5 +10,3 @@ __pycache__/
 
 benchmark/results/*
 !benchmark/results/.gitkeep
-
-.github/workflows/

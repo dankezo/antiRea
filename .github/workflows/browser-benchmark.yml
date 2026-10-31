@@ -1,0 +1,40 @@
+name: Browser benchmark (real engines)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'benchmark/**'
+      - 'src/**'
+      - '.github/workflows/browser-benchmark.yml'
+  pull_request:
+    paths:
+      - 'benchmark/**'
+      - 'src/**'
+      - '.github/workflows/browser-benchmark.yml'
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm install --ignore-scripts
+      - run: npm run build && npm run benchmark:build-sdk
+      - run: python -m pip install playwright
+      - run: python -m playwright install --with-deps chromium
+      - name: Local A/B test with real Chromium
+        run: python benchmark/run_all.py --browsers chromium --iterations 5
+      - name: Evidence archive (including failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-benchmark-evidence
+          path: benchmark/results/
+          if-no-files-found: warn

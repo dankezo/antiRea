@@ -1,0 +1,32 @@
+name: Manual cross-engine browser matrix
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm install --ignore-scripts
+      - run: npm run build && npm run benchmark:build-sdk
+      - run: python -m pip install playwright
+      - run: python -m playwright install --with-deps ${{ matrix.engine }}
+      - run: python benchmark/run_all.py --browsers ${{ matrix.engine }} --iterations 5
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-${{ matrix.engine }}
+          path: benchmark/results/
+          if-no-files-found: warn
