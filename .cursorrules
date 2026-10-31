@@ -1,0 +1,3 @@
+# antiRea coding agent rules
+
+Follow AGENTS.md and .agents/skills/anti-rea/SKILL.md. Do not add manipulative prompt poisoning, bypass claims or untested blocking. Run npm run check.

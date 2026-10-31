@@ -1,0 +1,54 @@
+{
+  "name": "anti-rea",
+  "version": "2.1.0-beta.2",
+  "private": false,
+  "description": "Evidence-led web anti-cloning toolkit with controlled twin-SaaS benchmark, browser probes and REA capture harness.",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "README.vi.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "check": "npm run test && node scripts/run-audit.cjs",
+    "prepack": "npm run build",
+    "benchmark:build-sdk": "tsc -p benchmark/tsconfig.browser.json",
+    "benchmark:demo": "node benchmark/demo/server.cjs --mode protected --port 4174",
+    "benchmark:baseline": "node benchmark/demo/server.cjs --mode baseline --port 4173",
+    "benchmark:browser": "python benchmark/run_browser.py",
+    "benchmark:report": "python benchmark/report.py",
+    "benchmark:all": "python benchmark/run_all.py"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "web-security",
+    "anti-scraping",
+    "canary",
+    "source-map",
+    "watermark",
+    "ai-agent-skill"
+  ],
+  "author": "Danny Phan and contributors",
+  "license": "MIT",
+  "funding": {
+    "type": "paypal",
+    "url": "https://www.paypal.com/paypalme/dannyphan190"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+__pycache__/
+
+benchmark/results/*
+!benchmark/results/.gitkeep
+
+.github/workflows/

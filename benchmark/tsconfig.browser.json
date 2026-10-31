@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ES2022", "moduleResolution": "node",
+    "lib": ["ES2022", "DOM"], "strict": true, "skipLibCheck": true,
+    "rootDir": "../src", "outDir": "./demo/public/sdk",
+    "declaration": false, "sourceMap": false, "removeComments": true
+  },
+  "include": [
+    "../src/tier1-passive/dom-poison.ts",
+    "../src/tier4-forensic/watermark.ts",
+    "../src/tier2-active/cdp-guard.ts"
+  ]
+}
