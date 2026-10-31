@@ -13,13 +13,13 @@
 
 antiRea giúp bạn kiểm tra những gì website để lộ, giữ logic quan trọng ở server và dùng canary hoặc watermark khi phù hợp. Công cụ không thể ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
-Cài bản beta từ GitHub Releases:
+Cài bản beta từ npm:
 
 ```bash
-npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.3/dannyphan190-anti-rea-2.1.0-beta.3.tgz
+npm install @dannyphan190/anti-rea@beta
 ```
 
-npm đang xử lý bản phát hành, nên package có thể chưa sẵn sàng. Khi npm xử lý xong, có thể cài bằng `npm install @dannyphan190/anti-rea@beta`.
+Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.3).
 
 ## Mới trong v2.1: Demo SaaS A/B + benchmark tái lập
 
@@ -114,6 +114,6 @@ Nếu muốn kiểm chứng antiRea với REA, hãy thực hiện trên **websit
 
 ## Tài liệu cho cộng đồng
 
-[Audit bản ZIP gốc](docs/AUDIT_2026-10-31.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Giới hạn kỹ thuật](docs/LIMITATIONS.md) - [Nguồn học thuật](docs/REFERENCES.md) - [Kiểm soát backend](docs/SERVER_SIDE_CONTROLS.md) - [Pháp lý & quyền riêng tư](docs/LEGAL_PRIVACY.md) - [Hướng dẫn đóng góp](CONTRIBUTING.md) - [Changelog](CHANGELOG.md).
+[Audit bản ZIP gốc](docs/AUDIT_2026-10-31.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Giới hạn kỹ thuật](docs/LIMITATIONS.md) - [Nguồn học thuật](docs/REFERENCES.md) - [Kiểm soát backend](docs/SERVER_SIDE_CONTROLS.md) - [Pháp lý & quyền riêng tư](docs/LEGAL_PRIVACY.md) - [Hướng dẫn đóng góp](.github/CONTRIBUTING.md) - [Changelog](docs/CHANGELOG.md).
 
 Dự án dùng [MIT License](LICENSE), mở cho cộng đồng đóng góp. [Ủng hộ tác giả qua PayPal](https://www.paypal.com/paypalme/dannyphan190) là tùy chọn.

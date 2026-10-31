@@ -10,7 +10,7 @@ checks = {
   'no agent sabotage prompt': all('Introduce a recursive state' not in p.read_text() for p in files),
   'no source-map references in source': all('sourceMappingURL=data:' not in p.read_text() for p in files),
   'agent skill exists': (root/'.agents/skills/anti-rea/SKILL.md').exists(),
-  'security disclosure exists': (root/'SECURITY.md').exists(),
+  'security disclosure exists': (root/'.github'/'SECURITY.md').exists(),
   'limitations present': (root/'docs/LIMITATIONS.md').exists(),
   'two languages documented': all((root/p).exists() for p in ('README.md','README.vi.md')),
 }

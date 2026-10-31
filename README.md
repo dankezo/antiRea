@@ -5,7 +5,7 @@
 
 **Web application reverse engineering risk assessment - Anti-scraping guidance - TypeScript security toolkit**
 
-[Tiếng Việt](README.vi.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Limitations](docs/LIMITATIONS.md) - [QA evidence](docs/QA_2026-10-31.md) - [Discovery guide](docs/DISCOVERY.md) - [Contributing](CONTRIBUTING.md)
+[Tiếng Việt](README.vi.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Limitations](docs/LIMITATIONS.md) - [QA evidence](docs/QA_2026-10-31.md) - [Discovery guide](docs/DISCOVERY.md) - [Contributing](.github/CONTRIBUTING.md)
 
 ![MIT](https://img.shields.io/badge/license-MIT-blue) ![status](https://img.shields.io/badge/status-beta-orange)
 
@@ -35,7 +35,7 @@ Or run `npm run benchmark:baseline` and `npm run benchmark:demo` in separate ter
 
 antiRea helps owners and authorized maintainers make *economically valuable* application behaviour harder to copy. It was motivated by tools such as [morluto/rea](https://github.com/morluto/rea) but is not a blocker for REA, Playwright, CDP or browser screenshots. A client-controlled browser can read client code, network responses and rendered output. There is no reliable JavaScript switch that prevents an owner of that browser from inspecting it.
 
-The original v1.0 prototype included forceful prompt injection, CDP debugger traps, unreliable invisible screenshot fingerprints, and claims of strong protection not supported by tests. **v2.0 beta changed to a safer, evidence-led model.** See [CHANGELOG](CHANGELOG.md) and [v1.0 audit](docs/AUDIT_2026-10-31.md).
+The original v1.0 prototype included forceful prompt injection, CDP debugger traps, unreliable invisible screenshot fingerprints, and claims of strong protection not supported by tests. **v2.0 beta changed to a safer, evidence-led model.** See [CHANGELOG](docs/CHANGELOG.md) and [v1.0 audit](docs/AUDIT_2026-10-31.md).
 
 ## What protects what?
 
@@ -53,13 +53,13 @@ The original v1.0 prototype included forceful prompt injection, CDP debugger tra
 
 Requirements: Node.js 20+. The SDK has no runtime dependencies.
 
-Install the beta into your app from GitHub Releases:
+Install the beta into your app from npm:
 
 ```bash
-npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.3/dannyphan190-anti-rea-2.1.0-beta.3.tgz
+npm install @dannyphan190/anti-rea@beta
 ```
 
-The scoped npm publication is being processed by the registry and may not yet be available. Once available, use `npm install @dannyphan190/anti-rea@beta`.
+Alternatively, install the [GitHub Release package](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.3).
 
 To build and test this repository from source:
 
@@ -137,6 +137,6 @@ Run `npm run check` for automated tests and static repo guardrails. Scan the exa
 
 ## Contributing / security / limitations
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [docs/LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md) and [docs/LIMITATIONS.md](docs/LIMITATIONS.md). The AI skill lives in [`.agents/skills/anti-rea/SKILL.md`](.agents/skills/anti-rea/SKILL.md); it begins with consent and auditing, not automatic installation of aggressive traps. You may use the MIT-licensed code with attribution as the license requires.
+Read [CONTRIBUTING.md](.github/CONTRIBUTING.md), [SECURITY.md](.github/SECURITY.md), [docs/LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md) and [docs/LIMITATIONS.md](docs/LIMITATIONS.md). The AI skill lives in [`.agents/skills/anti-rea/SKILL.md`](.agents/skills/anti-rea/SKILL.md); it begins with consent and auditing, not automatic installation of aggressive traps. You may use the MIT-licensed code with attribution as the license requires.
 
 **Project funding:** [Support the maintainer](https://www.paypal.com/paypalme/dannyphan190) (optional; never necessary to use the project).
