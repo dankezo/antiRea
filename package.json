@@ -36,11 +36,14 @@
   },
   "keywords": [
     "web-security",
+    "reverse-engineering",
     "anti-scraping",
-    "canary",
+    "saas-security",
     "source-map",
+    "canary",
     "watermark",
-    "ai-agent-skill"
+    "ai-agents",
+    "browser-automation"
   ],
   "author": "Danny Phan and contributors",
   "license": "MIT",
@@ -50,5 +53,13 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dankezo/antiRea.git"
+  },
+  "homepage": "https://github.com/dankezo/antiRea#readme",
+  "bugs": {
+    "url": "https://github.com/dankezo/antiRea/issues"
   }
 }

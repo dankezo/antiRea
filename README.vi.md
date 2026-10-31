@@ -3,13 +3,21 @@
 # antiRea
 ### Bảo vệ phần giá trị thật của ứng dụng, không dựa vào ảo tưởng rằng giao diện có thể bị giấu khỏi trình duyệt.
 
-**Bộ công cụ phòng vệ có kiểm chứng · TypeScript SDK · AI Agent Skill**
+**Bộ công cụ đánh giá rủi ro - TypeScript SDK - AI Agent Skill**
 
-[English](README.md) · [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) · [Giới hạn](docs/LIMITATIONS.md) · [Nguồn nghiên cứu](docs/REFERENCES.md)
+[English](README.md) - [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) - [Giới hạn](docs/LIMITATIONS.md) - [Kết quả QA](docs/QA_2026-10-31.md)
 
 ![MIT](https://img.shields.io/badge/license-MIT-blue) ![Beta](https://img.shields.io/badge/status-beta-orange)
 
 </div>
+
+antiRea giúp bạn kiểm tra những gì website để lộ, giữ logic quan trọng ở server và dùng canary hoặc watermark khi phù hợp. Công cụ không thể ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
+
+Cài bản beta từ [GitHub Releases](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.2):
+
+```bash
+npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.2/anti-rea-2.1.0-beta.2.tgz
+```
 
 ## Mới trong v2.1: Demo SaaS A/B + benchmark tái lập
 
@@ -25,7 +33,7 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Muốn xem giao diện bằng tay, mở hai terminal và chạy `npm run benchmark:baseline` cùng `npm run benchmark:demo`. Đọc [quy trình benchmark](docs/DEMO_BENCHMARK_2_1.md), [hướng dẫn chạy REA thật](benchmark/rea/README.md) và [danh sách app mẫu phù hợp](docs/TARGETS.md). **Trạng thái kiểm chứng:** 30 kiểm thử Node đạt; lần chạy Playwright tại đây bị chính sách Chromium chặn điều hướng localhost; chưa chạy REA trực tiếp. Không biến lỗi môi trường thành điểm số thành công.
+Muốn xem giao diện bằng tay, mở hai terminal và chạy `npm run benchmark:baseline` cùng `npm run benchmark:demo`. Xem [kết quả QA](docs/QA_2026-10-31.md) và [hướng dẫn chạy REA](benchmark/rea/README.md). Kiểm thử demo không chứng minh khả năng ngăn sao chép.
 
 ## antiRea giải quyết vấn đề gì?
 
@@ -37,13 +45,13 @@ Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển
 
 | Ưu tiên | Tính năng | Lợi ích có thể kỳ vọng | Giới hạn |
 |---|---|---|---|
-| **P0 – nền tảng** | Backend nắm thuật toán/secret, phân quyền từng bản ghi, giới hạn quota, hạn chế thông tin trả về | Khó sao chép logic/dữ liệu không được công khai | Không giấu được thứ đã gửi đến tài khoản hợp lệ |
+| **P0 - nền tảng** | Backend nắm thuật toán/secret, phân quyền từng bản ghi, giới hạn quota, hạn chế thông tin trả về | Khó sao chép logic/dữ liệu không được công khai | Không giấu được thứ đã gửi đến tài khoản hợp lệ |
 | **Tầng 1** | Cấu hình không public source map; thông báo bản quyền; chữ ký dấu vết SVG/text | Hạn chế vô tình lộ source gốc, hỗ trợ đối chiếu nguồn | Không ngăn soi DOM, chữ ký không phải bằng chứng pháp lý đủ dùng độc lập |
 | **Tầng 2** | API canary và tín hiệu automation mức tin cậy thấp | Ghi nhận truy cập bất thường để điều tra | Không chặn hết bot; không tự động ban |
 | **Tầng 3** | AES-GCM ràng buộc ngữ cảnh và kiểm tra phát lại | Bảo đảm toàn vẹn và kiểm soát sử dụng lại thông điệp khi khóa được giữ bí mật | Không giấu dữ liệu trước chính trình duyệt có khóa |
 | **Tầng 4** | Watermark hiển thị token phiên tạm thời | Hỗ trợ truy vết bản chụp khi token còn hiện rõ | Không chống cắt/crop hoặc xóa watermark |
 
-**Khuyến nghị mặc định:** thực hiện P0 trước, sau đó cấu hình Tầng 1. Với website có API quan trọng, bật honeypot Tầng 2 sau khi rà soát privacy. Tầng 3–4 chỉ sử dụng khi có bài toán thật và đội vận hành hiểu rõ giới hạn.
+**Khuyến nghị mặc định:** thực hiện P0 trước, sau đó cấu hình Tầng 1. Với website có API quan trọng, bật honeypot Tầng 2 sau khi rà soát privacy. Tầng 3-4 chỉ sử dụng khi có bài toán thật và đội vận hành hiểu rõ giới hạn.
 
 ## Cài đặt và kiểm thử
 
@@ -104,6 +112,6 @@ Nếu muốn kiểm chứng antiRea với REA, hãy thực hiện trên **websit
 
 ## Tài liệu cho cộng đồng
 
-[Audit bản ZIP gốc](docs/AUDIT_2026-10-31.md) · [Threat model](docs/THREAT_MODEL_REA.md) · [Giới hạn kỹ thuật](docs/LIMITATIONS.md) · [Nguồn học thuật](docs/REFERENCES.md) · [Kiểm soát backend](docs/SERVER_SIDE_CONTROLS.md) · [Pháp lý & quyền riêng tư](docs/LEGAL_PRIVACY.md) · [Hướng dẫn đóng góp](CONTRIBUTING.md) · [Changelog](CHANGELOG.md).
+[Audit bản ZIP gốc](docs/AUDIT_2026-10-31.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Giới hạn kỹ thuật](docs/LIMITATIONS.md) - [Nguồn học thuật](docs/REFERENCES.md) - [Kiểm soát backend](docs/SERVER_SIDE_CONTROLS.md) - [Pháp lý & quyền riêng tư](docs/LEGAL_PRIVACY.md) - [Hướng dẫn đóng góp](CONTRIBUTING.md) - [Changelog](CHANGELOG.md).
 
 Dự án dùng [MIT License](LICENSE), mở cho cộng đồng đóng góp. [Ủng hộ tác giả qua PayPal](https://www.paypal.com/paypalme/dannyphan190) là tùy chọn.

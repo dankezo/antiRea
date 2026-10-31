@@ -3,13 +3,17 @@
 # antiRea
 ### Protect the valuable parts of your web app, not the illusion that its UI is invisible.
 
-**Web application reverse engineering risk assessment · Anti-scraping guidance · TypeScript security toolkit**
+**Web application reverse engineering risk assessment - Anti-scraping guidance - TypeScript security toolkit**
 
-[Tiếng Việt](README.vi.md) · [Threat model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [QA evidence](docs/QA_2026-10-31.md) · [Discovery guide](docs/DISCOVERY.md) · [Contributing](CONTRIBUTING.md)
+[Tiếng Việt](README.vi.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Limitations](docs/LIMITATIONS.md) - [QA evidence](docs/QA_2026-10-31.md) - [Discovery guide](docs/DISCOVERY.md) - [Contributing](CONTRIBUTING.md)
 
 ![MIT](https://img.shields.io/badge/license-MIT-blue) ![status](https://img.shields.io/badge/status-beta-orange)
 
 </div>
+
+Built a SaaS app and worried someone could copy it? antiRea helps you identify what is exposed, move sensitive logic to your server, and add optional canaries and attribution. It cannot stop someone from inspecting code or data already sent to their browser.
+
+**Try the beta:** install the [release package](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.2), then use the examples in [Quick start](#quick-start). No npm account is needed to download it.
 
 ## v2.1: controlled twin-SaaS benchmark
 
@@ -47,7 +51,15 @@ The original v1.0 prototype included forceful prompt injection, CDP debugger tra
 
 ## Quick start
 
-Requirements: Node.js 20+, TypeScript compatible bundler for your app. This repo builds using TypeScript, with no runtime dependencies.
+Requirements: Node.js 20+. The SDK has no runtime dependencies.
+
+Install the beta into your app directly from GitHub Releases:
+
+```bash
+npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.2/anti-rea-2.1.0-beta.2.tgz
+```
+
+To build and test this repository from source:
 
 ```bash
 npm install
@@ -55,7 +67,7 @@ npm run check
 npm run build
 ```
 
-To use an unpublished local working copy in an application:
+To package a local working copy:
 
 ```bash
 npm pack
