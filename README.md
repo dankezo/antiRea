@@ -13,7 +13,7 @@
 
 Built a SaaS app and worried someone could copy it? antiRea helps you identify what is exposed, move sensitive logic to your server, and add optional canaries and attribution. It cannot stop someone from inspecting code or data already sent to their browser.
 
-**Try the beta:** install the package from npm, then use the examples in [Quick start](#quick-start). No npm account is needed to download it.
+**Try the beta:** install the package, then use the examples in [Quick start](#quick-start). No npm account is needed to download it.
 
 ## v2.1: controlled twin-SaaS benchmark
 
@@ -53,11 +53,13 @@ The original v1.0 prototype included forceful prompt injection, CDP debugger tra
 
 Requirements: Node.js 20+. The SDK has no runtime dependencies.
 
-Install the beta into your app from npm:
+Install the beta into your app from GitHub Releases:
 
 ```bash
-npm install @dannyphan190/anti-rea@beta
+npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.3/dannyphan190-anti-rea-2.1.0-beta.3.tgz
 ```
+
+The scoped npm publication is being processed by the registry and may not yet be available. Once available, use `npm install @dannyphan190/anti-rea@beta`.
 
 To build and test this repository from source:
 

@@ -13,11 +13,13 @@
 
 antiRea giúp bạn kiểm tra những gì website để lộ, giữ logic quan trọng ở server và dùng canary hoặc watermark khi phù hợp. Công cụ không thể ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
-Cài bản beta từ npm:
+Cài bản beta từ GitHub Releases:
 
 ```bash
-npm install @dannyphan190/anti-rea@beta
+npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.3/dannyphan190-anti-rea-2.1.0-beta.3.tgz
 ```
+
+npm đang xử lý bản phát hành, nên package có thể chưa sẵn sàng. Khi npm xử lý xong, có thể cài bằng `npm install @dannyphan190/anti-rea@beta`.
 
 ## Mới trong v2.1: Demo SaaS A/B + benchmark tái lập
 
