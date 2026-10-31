@@ -13,7 +13,7 @@
 
 ## Mới trong v2.1: Demo SaaS A/B + benchmark tái lập
 
-![Giao diện Northstar mô phỏng — ảnh dựng tĩnh, không phải kết quả E2E](benchmark/demo/preview.png)
+[Xem ảnh giao diện Northstar mô phỏng](benchmark/demo/preview.png)
 
 Đã dựng **Northstar**, ứng dụng SaaS giả lập với dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ và responsive UI. Có hai chế độ **không bảo vệ** (`http://127.0.0.1:4173`) và **có bảo vệ** (`http://127.0.0.1:4174`), dùng cùng dữ liệu giả lập, giao diện và workflow. Chế độ protected chạy các module TypeScript antiRea thật đã biên dịch, ghi nhận canary và kiểm soát xuất CSV trên máy chủ. Bộ Playwright đo kiểm chức năng, khả năng quan sát, phản hồi HTTP, báo cáo lỗi và chụp ảnh hai trạng thái.
 

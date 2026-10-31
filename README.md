@@ -13,7 +13,7 @@
 
 ## v2.1: controlled twin-SaaS benchmark
 
-![Northstar synthetic SaaS — static preview, not a completed browser E2E run](benchmark/demo/preview.png)
+[View the Northstar synthetic SaaS preview](benchmark/demo/preview.png)
 
 **New:** a complete synthetic Northstar SaaS dashboard with **baseline (`:4173`) and protected (`:4174`)** variants, identical UI and business fixtures, actual compiled antiRea SDK imports, local canaries, 4-per-minute server-side export quota, a browser test runner and evidence JSON for Chromium/Firefox/WebKit. No external assets or services are used by the demo. GitHub Actions runs the checks and Chromium benchmark; the three-engine matrix is also available as a manual workflow.
 
