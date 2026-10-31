@@ -13,7 +13,7 @@
 
 Built a SaaS app and worried someone could copy it? antiRea helps you identify what is exposed, move sensitive logic to your server, and add optional canaries and attribution. It cannot stop someone from inspecting code or data already sent to their browser.
 
-**Try the beta:** install the [release package](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.2), then use the examples in [Quick start](#quick-start). No npm account is needed to download it.
+**Try the beta:** install the package from npm, then use the examples in [Quick start](#quick-start). No npm account is needed to download it.
 
 ## v2.1: controlled twin-SaaS benchmark
 
@@ -53,10 +53,10 @@ The original v1.0 prototype included forceful prompt injection, CDP debugger tra
 
 Requirements: Node.js 20+. The SDK has no runtime dependencies.
 
-Install the beta into your app directly from GitHub Releases:
+Install the beta into your app from npm:
 
 ```bash
-npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.2/anti-rea-2.1.0-beta.2.tgz
+npm install @dannyphan190/anti-rea@beta
 ```
 
 To build and test this repository from source:
@@ -71,13 +71,13 @@ To package a local working copy:
 
 ```bash
 npm pack
-# npm install ../antiRea/anti-rea-2.1.0-beta.2.tgz   (from your app directory)
+# npm install ../antiRea/dannyphan190-anti-rea-2.1.0-beta.3.tgz   (from your app directory)
 ```
 
 ### 1. Publish an honest rights notice (optional)
 
 ```ts
-import { injectAgentNotice } from "anti-rea";
+import { injectAgentNotice } from "@dannyphan190/anti-rea";
 const cleanup = injectAgentNotice({
   brandName: "Example SaaS",
   canonicalOrigin: "https://app.example.com",
@@ -91,7 +91,7 @@ This does not control agents; it communicates usage terms.
 ### 2. Deploy a server canary
 
 ```ts
-import { handleCanaryTrapRequest } from "anti-rea";
+import { handleCanaryTrapRequest } from "@dannyphan190/anti-rea";
 
 const result = await handleCanaryTrapRequest(request, {
   onAlert: async event => { /* send sanitized event to your monitoring platform */ },
@@ -105,7 +105,7 @@ if (result.isTrapped) return Response.json(result.body, { status: result.status 
 ### 3. Optional watermark for authenticated previews
 
 ```ts
-import { mountForensicWatermark } from "anti-rea";
+import { mountForensicWatermark } from "@dannyphan190/anti-rea";
 const remove = mountForensicWatermark({ token: "A7fK3w9Z", enabled: true });
 // Resolve that token to a session only in your private server ledger.
 ```
@@ -115,7 +115,7 @@ Do not embed the person's email, IP or raw user ID in pixels. Give a privacy not
 ### 4. Advanced envelopes: server-owned keys only
 
 ```ts
-import { createEnvelopeKey, encryptPayload, decryptPayload } from "anti-rea";
+import { createEnvelopeKey, encryptPayload, decryptPayload } from "@dannyphan190/anti-rea";
 const key = await createEnvelopeKey(); // demo: key lifetime ends with process
 const scope = { purpose: "report-export", method: "POST", path: "/api/export", sessionBinding: "trusted-session-id" };
 const env = await encryptPayload({ result: "ok" }, key, scope);

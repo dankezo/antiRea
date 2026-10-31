@@ -1,6 +1,6 @@
 {
-  "name": "anti-rea",
-  "version": "2.1.0-beta.2",
+  "name": "@dannyphan190/anti-rea",
+  "version": "2.1.0-beta.3",
   "private": false,
   "description": "Evidence-led web anti-cloning toolkit with controlled twin-SaaS benchmark, browser probes and REA capture harness.",
   "type": "commonjs",

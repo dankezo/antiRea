@@ -13,10 +13,10 @@
 
 antiRea giúp bạn kiểm tra những gì website để lộ, giữ logic quan trọng ở server và dùng canary hoặc watermark khi phù hợp. Công cụ không thể ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
-Cài bản beta từ [GitHub Releases](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.2):
+Cài bản beta từ npm:
 
 ```bash
-npm install https://github.com/dankezo/antiRea/releases/download/v2.1.0-beta.2/anti-rea-2.1.0-beta.2.tgz
+npm install @dannyphan190/anti-rea@beta
 ```
 
 ## Mới trong v2.1: Demo SaaS A/B + benchmark tái lập
@@ -70,7 +70,7 @@ npm run build
 ### Mẫu API canary
 
 ```ts
-import { handleCanaryTrapRequest } from "anti-rea";
+import { handleCanaryTrapRequest } from "@dannyphan190/anti-rea";
 
 const result = await handleCanaryTrapRequest(request, {
   resolveUserId: () => verifiedSession.userId,  // Lấy từ backend đã xác thực
@@ -84,7 +84,7 @@ Mặc định code không tin `x-forwarded-for` hoặc `x-user-id`. Header IP ch
 ### Mẫu watermark
 
 ```ts
-import { mountForensicWatermark } from "anti-rea";
+import { mountForensicWatermark } from "@dannyphan190/anti-rea";
 const cleanup = mountForensicWatermark({ token: "A7fK3w9Z", enabled: true });
 // token → account/session được lưu và phân quyền tại máy chủ
 ```
@@ -94,7 +94,7 @@ Không đưa email, IP hoặc ID thật lên watermark. Thông báo mục đích
 ### Mẫu provenance notice
 
 ```ts
-import { injectAgentNotice } from "anti-rea";
+import { injectAgentNotice } from "@dannyphan190/anti-rea";
 const cleanup = injectAgentNotice({
   brandName: "My SaaS",
   canonicalOrigin: "https://app.example.com",
