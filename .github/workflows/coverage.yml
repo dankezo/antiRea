@@ -42,7 +42,7 @@ jobs:
             git remote add origin "$REPO_URL"
           fi
           mkdir -p "$BADGE_DIR/badges"
-          cp coverage.json "$BADGE_DIR/badges/coverage.json"
+          cp "$GITHUB_WORKSPACE/coverage.json" "$BADGE_DIR/badges/coverage.json"
           cd "$BADGE_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
