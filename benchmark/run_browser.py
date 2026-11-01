@@ -79,7 +79,8 @@ def run_case(browser,name,mode,origin,out,iterations):
 
 def fetch_error(url):
     from urllib.error import HTTPError
-    try:return fetch(url)
+    try:
+        with urllib.request.urlopen(url,timeout=8) as response:return {},response.status
     except HTTPError as e:
         try:body=json.loads(e.read())
         except Exception:body={}

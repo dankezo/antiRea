@@ -33,6 +33,6 @@ if(mode==='protected') {
   injectAgentNotice({brandName:'Northstar Demo',canonicalOrigin:location.origin,termsUrl:'/terms'});
   const session=await api('/api/session');
   mountForensicWatermark({token:session.sessionToken,enabled:true,opacity:0.045});
-  initCdpGuard({enabled:true,onDetected:reason=>fetch('/api/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({reason})}).catch(()=>{}),intervalMs:30000});
+  initCdpGuard({enabled:true,onDetected:reason=>fetch('/api/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({reason})}).then(r=>r.text()).catch(()=>{}),intervalMs:30000});
 }
 window.__northstarFullyReady=true;
