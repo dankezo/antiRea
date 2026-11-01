@@ -7,6 +7,7 @@
 | No production source maps | Harder to recover original development sources from public assets | Bundle cannot be reversed; no sources exist elsewhere |
 | Notice / terms | Provides provenance and published rights signals | An LLM must obey the notice |
 | Canary route | Correlates suspicious access after an application is configured | Anyone hitting a decoy is malicious |
+| Canary Maze | A deterministic decoy link space under a robots-Disallowed prefix; a hit is a clean investigation signal that some client followed a link no human-facing page exposes, served at near-static cost under hard per-IP and daily caps | Prevents copying or blocks REA (clients that go straight to known endpoints never follow maze links); any percentage of bots stopped or stalled (no independent measurement exists); a maze hit proves malice; poisons models or crashes clients (maze content is neutral wordlist filler by design); absolute SEO safety (safety depends on the operator correctly deploying the Disallow line, the nofollow trap link, and the built-in noindex meta) |
 | `navigator.webdriver` | Weak signal for some browser automation | Detection of all Playwright, CDP or REA clients |
 | Route encoding | Conceals clear strings from simple text grep | Cryptographic protection |
 | AES-GCM envelope | Integrity/confidentiality against parties *without the key*, replay guard with shared storage | Hide JSON from a browser that possesses the key |
