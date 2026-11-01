@@ -30,7 +30,12 @@ export interface OpenEnvelopeOptions {
 export interface ReplayGuardOptions {
   /** Default TTL in ms when caller does not supply one (default: 300_000 = 5 minutes). */
   ttlMs?: number;
-  /** Maximum cached nonces in memory before evicting oldest entries (default: 10_000). */
+  /**
+   * Maximum cached nonces in memory (default: 10_000). The bound fails
+   * closed: only expired entries are evicted, and once the cache is full of
+   * unexpired nonces new envelopes are rejected (reported as replays) rather
+   * than the guard forgetting a live nonce to make room.
+   */
   maxEntries?: number;
 }
 
@@ -122,7 +127,9 @@ export const verifyTransportEnvelope = decryptPayload;
 /**
  * Bounded in-memory replay guard for single-process deployments.
  * Automatically purges expired nonces by TTL and caps total entries via `maxEntries`
- * to prevent unbounded memory growth. Use Redis `SET ... NX PX` in distributed clusters.
+ * to prevent unbounded memory growth. The cap fails closed: a full cache of
+ * unexpired nonces rejects new envelopes instead of evicting a live nonce.
+ * Use Redis `SET ... NX PX` in distributed clusters.
  */
 export function createInMemoryReplayGuard(options: ReplayGuardOptions = {}): OpenEnvelopeOptions["markNonceOnce"] {
   const defaultTtlMs = Math.max(1000, options.ttlMs ?? 300_000);
@@ -135,11 +142,7 @@ export function createInMemoryReplayGuard(options: ReplayGuardOptions = {}): Ope
       if (expiry <= now) seen.delete(k);
     }
     if ((seen.get(key) ?? 0) > now) return false;
-    while (seen.size >= maxEntries) {
-      const oldestKey = seen.keys().next().value;
-      if (oldestKey === undefined) break;
-      seen.delete(oldestKey);
-    }
+    if (seen.size >= maxEntries) return false; // fail closed; never evict a live nonce
     seen.set(key, now + effectiveTtl);
     return true;
   };

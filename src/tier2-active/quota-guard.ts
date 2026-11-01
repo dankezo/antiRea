@@ -12,6 +12,25 @@
  * scaled deployment, supply a shared `store` (for example backed by Redis
  * sorted sets: ZREMRANGEBYSCORE to prune, ZCARD to count, ZADD to record) so
  * every instance enforces the same window.
+ *
+ * The default store fails closed: it evicts only EXPIRED windows, and when it
+ * is still full it refuses to open a new window — the guard then rejects the
+ * request (429, kind `store_capacity_exceeded`) instead of silently dropping
+ * an unexpired window and weakening the quota guarantee under load.
+ *
+ * A request whose identity cannot be resolved at all (no account, no API key
+ * and no determinable IP — for example a misnamed `trustedIpHeader` behind a
+ * proxy) is NOT exempt: by default it is counted against a single shared
+ * `unknown` bucket with the tier's normal limits. Set
+ * `allowUnresolvedIdentity: true` only to restore the legacy skip behavior.
+ *
+ * Pagination: hosts must consume the guard's normalized parse
+ * (`result.pagination`, attached as `req.quotaPagination` by the Express
+ * middleware) instead of re-reading raw query parameters. Backends diverge on
+ * duplicate parameters (first vs last value), array forms, `Number()` vs
+ * `parseInt` semantics (`1e9`, `0x…`), `page` combined with `offset`, and
+ * differently cased names — a handler that re-parses the raw query can serve
+ * a different page than the one the guard validated.
  */
 
 export interface QuotaTierConfig {
@@ -36,12 +55,13 @@ export interface QuotaIdentity {
   ip?: string;
 }
 
-export type QuotaDimension = "account" | "apiKey" | "ip";
+export type QuotaDimension = "account" | "apiKey" | "ip" | "unknown";
 
 export type QuotaExceededKind =
   | "rate_limit_exceeded"
   | "page_size_exceeded"
-  | "max_page_exceeded";
+  | "max_page_exceeded"
+  | "store_capacity_exceeded";
 
 export interface QuotaExceededEvent {
   kind: QuotaExceededKind;
@@ -103,10 +123,16 @@ export interface QuotaWindowSnapshot {
 /**
  * Storage contract for sliding windows. Implementations must prune entries
  * older than `windowMs` relative to `now` inside both operations.
+ *
+ * `record` may return `false` to signal that the store REFUSED to open a new
+ * window because it is at capacity with unexpired windows; the guard then
+ * rejects the request fail-closed (429, `store_capacity_exceeded`). Returning
+ * `true` or nothing means the hit was recorded. Stores must never make room
+ * by evicting unexpired windows.
  */
 export interface QuotaWindowStore {
   peek(key: string, now: number, windowMs: number): Promise<QuotaWindowSnapshot> | QuotaWindowSnapshot;
-  record(key: string, now: number, windowMs: number): Promise<void> | void;
+  record(key: string, now: number, windowMs: number): Promise<boolean | void> | boolean | void;
 }
 
 export interface QuotaGuardOptions {
@@ -134,6 +160,14 @@ export interface QuotaGuardOptions {
   store?: QuotaWindowStore;
   /** Cap on distinct dimension keys held by the default in-memory store. Defaults to 10,000. */
   maxEntries?: number;
+  /**
+   * When identity resolution yields no account, no API key AND no determinable
+   * IP, the default (`false`) counts the request against a single shared
+   * `unknown` bucket with the tier's normal limits, so an unresolvable request
+   * is never silently exempt. Set to `true` only to restore the legacy
+   * behavior of skipping quota checks for such requests.
+   */
+  allowUnresolvedIdentity?: boolean;
   /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
   now?: () => number;
 }
@@ -145,7 +179,13 @@ export const DEFAULT_QUOTA_TIERS: Record<string, QuotaTierConfig> = {
   enterprise: { maxRequests: 3_000, windowMs: 60_000, maxPageSize: 1_000, maxPage: 1_000 },
 };
 
-/** Bounded in-memory sliding-window store: expired timestamps are pruned on every access and the key set is capped. */
+/**
+ * Bounded in-memory sliding-window store: expired timestamps are pruned on
+ * every access and the key set is capped. The cap fails closed — only expired
+ * windows are ever evicted; when the store is still full, `record` returns
+ * `false` for a NEW window and the guard rejects the request instead of the
+ * store silently dropping live accounting.
+ */
 export function createInMemoryQuotaStore(maxEntries = 10_000): QuotaWindowStore {
   const cap = Math.max(100, Math.floor(maxEntries) || 10_000);
   const windows = new Map<string, number[]>();
@@ -165,15 +205,16 @@ export function createInMemoryQuotaStore(maxEntries = 10_000): QuotaWindowStore 
       return { count: fresh.length, oldest: fresh.length ? Math.min(...fresh) : undefined };
     },
     record(key, now, windowMs) {
+      const isNewWindow = !windows.has(key);
       const fresh = prune(key, now, windowMs);
-      fresh.push(now);
-      windows.delete(key);
-      windows.set(key, fresh);
-      while (windows.size > cap) {
-        const oldestKey = windows.keys().next().value;
-        if (oldestKey === undefined) break;
-        windows.delete(oldestKey);
+      if (isNewWindow && windows.size >= cap) {
+        // Make room only from expired windows; never evict a live one.
+        for (const otherKey of [...windows.keys()]) prune(otherKey, now, windowMs);
+        if (windows.size >= cap) return false;
       }
+      fresh.push(now);
+      windows.set(key, fresh);
+      return true;
     },
   };
 }
@@ -322,6 +363,11 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
     if (identity.accountId) dimensions.push({ dimension: "account", key: `account:${identity.accountId}` });
     if (identity.apiKeyId) dimensions.push({ dimension: "apiKey", key: `apikey:${identity.apiKeyId}` });
     if (ip) dimensions.push({ dimension: "ip", key: `ip:${ip}` });
+    if (dimensions.length === 0 && options.allowUnresolvedIdentity !== true) {
+      // No account, no API key and no determinable IP: never silently exempt.
+      // All such requests share one "unknown" bucket at the tier's limits.
+      dimensions.push({ dimension: "unknown", key: "unknown:unresolved" });
+    }
     const primary = dimensions[0];
 
     const baseIdentity: QuotaIdentity = {
@@ -352,9 +398,11 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
       const message =
         kind === "rate_limit_exceeded"
           ? "Too many requests; slow down and retry after the indicated interval."
-          : kind === "page_size_exceeded"
-            ? `Requested page size exceeds the ${tierName} tier maximum of ${tier.maxPageSize}.`
-            : `Requested page exceeds the ${tierName} tier maximum depth of ${tier.maxPage}.`;
+          : kind === "store_capacity_exceeded"
+            ? "Quota store is at capacity; the request was rejected rather than admitted unaccounted."
+            : kind === "page_size_exceeded"
+              ? `Requested page size exceeds the ${tierName} tier maximum of ${tier.maxPageSize}.`
+              : `Requested page exceeds the ${tierName} tier maximum depth of ${tier.maxPage}.`;
       return {
         allowed: false,
         status: 429,
@@ -408,8 +456,13 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
 
     // 3. Allowed: record one hit per dimension and report the tightest
     //    remaining headroom (the primary dimension) as rate-limit metadata.
-    for (const { key } of dimensions) {
-      await store.record(key, now, tier.windowMs);
+    //    A store refusal (full of unexpired windows) fails closed: the
+    //    request is rejected rather than admitted without accounting.
+    for (const { dimension, key } of dimensions) {
+      const recorded = await store.record(key, now, tier.windowMs);
+      if (recorded === false) {
+        return reject("store_capacity_exceeded", dimension, tier.maxRequests, windowRetryAfter, parsed.pagination);
+      }
     }
     const primarySnapshot = primary ? snapshots.get(primary.key) : undefined;
     const remaining = Math.max(0, tier.maxRequests - ((primarySnapshot?.count ?? 0) + (primary ? 1 : 0)));
@@ -450,6 +503,9 @@ export type QuotaExpressRequest = QuotaRequestLike & { quotaPagination?: QuotaPa
  * Express/Connect middleware: attaches the sanitized pagination as
  * `req.quotaPagination` and calls `next()` when the request is within quota;
  * otherwise responds `429` with `Retry-After` and a JSON error body.
+ * Handlers must read pagination from `req.quotaPagination`, never by
+ * re-parsing the raw query string (see the module header on parser
+ * divergence between backends).
  */
 export function createExpressQuotaMiddleware(options: QuotaGuardOptions = {}) {
   const guard = createQuotaGuard(options);

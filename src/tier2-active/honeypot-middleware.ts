@@ -18,6 +18,8 @@ export interface HoneypotAlertPayload {
   maze?: boolean;
   /** Set by the Canary Maze handler: path depth under the maze prefix (0 = prefix root). */
   depth?: number;
+  /** Set by the Canary Maze handler: `true` when a serving cap (per-IP or daily) produced this hit's response, `false` when a page was served. Alerts fire after the cap checks, so this always reflects the enforced outcome. */
+  capped?: boolean;
 }
 
 export interface CanaryOptions {
@@ -28,7 +30,12 @@ export interface CanaryOptions {
   trustedIpHeader?: string;
   /** Account identity must come from your authenticated server session, never an HTTP header. */
   resolveUserId?: () => string | undefined | Promise<string | undefined>;
-  /** Ignore cross-site browser requests to reduce false positives. */
+  /**
+   * Ignore requests carrying `sec-fetch-site: cross-site`. Default false.
+   * That header is supplied by the client: any non-browser client can send
+   * it to opt itself out of detection, so enabling this is only a noise
+   * heuristic for genuine browser cross-site embeds — never a trust decision.
+   */
   ignoreCrossSite?: boolean;
 }
 
@@ -98,7 +105,7 @@ export async function handleCanaryTrapRequest(request: CanaryRequest, opts: Cana
   if (!canarySet.has(normalizedPath)) {
     return { isTrapped: false, status: 200, body: {} };
   }
-  if (opts.ignoreCrossSite !== false && request.headers.get("sec-fetch-site") === "cross-site") {
+  if (opts.ignoreCrossSite === true && request.headers.get("sec-fetch-site") === "cross-site") {
     return { isTrapped: false, ignored: true, status: 404, body: {} };
   }
   try {
@@ -156,7 +163,12 @@ export interface CanaryMazeOptions {
   trustedIpHeader?: string;
   /** Account identity must come from your authenticated server session, never an HTTP header. */
   resolveUserId?: () => string | undefined | Promise<string | undefined>;
-  /** Ignore cross-site browser requests to reduce false positives. Default true. */
+  /**
+   * Ignore requests carrying `sec-fetch-site: cross-site`. Default false.
+   * That header is supplied by the client: any non-browser client can send
+   * it to opt itself out of detection, so enabling this is only a noise
+   * heuristic for genuine browser cross-site embeds — never a trust decision.
+   */
   ignoreCrossSite?: boolean;
   /** Outgoing maze links per page. Default 8, clamped to 1-32. */
   linksPerPage?: number;
@@ -345,13 +357,17 @@ export function createCanaryMaze(opts: CanaryMazeOptions = {}): {
     if (path !== root && !path.startsWith(prefix)) {
       return { isTrapped: false, status: 200, body: {} };
     }
-    if (opts.ignoreCrossSite !== false && request.headers.get("sec-fetch-site") === "cross-site") {
+    if (opts.ignoreCrossSite === true && request.headers.get("sec-fetch-site") === "cross-site") {
       return { isTrapped: false, ignored: true, status: 404, body: {} };
     }
     const depth = path === root ? 0 : path.slice(prefix.length).split("/").length;
     const ip = opts.trustedIpHeader
       ? readFirstIp(request.headers.get(opts.trustedIpHeader))
       : readRemoteAddress(request);
+    // Caps are evaluated BEFORE the alert fires, so the alert payload's
+    // `capped` flag always reflects the enforced outcome of this hit.
+    const now = Date.now();
+    const capped = !hitIpBudget(ip ?? "unknown", now) || !hitDailyBudget(now);
     try {
       await opts.onAlert?.({
         path,
@@ -362,12 +378,12 @@ export function createCanaryMaze(opts: CanaryMazeOptions = {}): {
         userId: await opts.resolveUserId?.(),
         maze: true,
         depth,
+        capped,
       });
     } catch {
       // Monitoring must never break the host application.
     }
-    const now = Date.now();
-    if (!hitIpBudget(ip ?? "unknown", now) || !hitDailyBudget(now)) {
+    if (capped) {
       return {
         isTrapped: true,
         status: overCapStatus,

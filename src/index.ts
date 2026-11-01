@@ -8,6 +8,7 @@ export * from "./tier2-active/record-budget";
 export * from "./tier2-active/export-guard";
 export * from "./tier2-active/cursor";
 export * from "./tier2-active/flow-scorer";
+export * from "./tier2-active/herd-detector";
 export * from "./tier2-active/decoy-mirage";
 export * from "./tier2-active/web-bot-auth";
 export * from "./tier3-crypto/transport-shield";
