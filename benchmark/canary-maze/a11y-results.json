@@ -1,0 +1,277 @@
+[
+  {
+    "page": "homepage",
+    "url": "http://127.0.0.1:8931/",
+    "axe_violations": [
+      {
+        "id": "landmark-one-main",
+        "impact": "moderate",
+        "nodes": 1,
+        "help": "Document should have one main landmark"
+      },
+      {
+        "id": "region",
+        "impact": "moderate",
+        "nodes": 3,
+        "help": "All page content should be contained by landmarks"
+      }
+    ],
+    "axe_passes_count": 12,
+    "axe_incomplete_count": 0,
+    "assert_zero_aria_hidden_focusable": true,
+    "focus_trail": [
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      },
+      {
+        "tag": "A",
+        "href": "/about",
+        "text": "About this site"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "Benchmark Test Site\nA small test site us"
+      }
+    ],
+    "focused_maze_nav_links_info": [],
+    "assert_trap_link_never_focused": true,
+    "ax_tree_link_names": [
+      "About this site"
+    ],
+    "ax_tree_nodes_total": 13,
+    "assert_trap_link_absent_from_ax_tree": true,
+    "accessibility_snapshot_excerpt": "unavailable: 'Page' object has no attribute 'accessibility'"
+  },
+  {
+    "page": "maze page",
+    "url": "http://127.0.0.1:8931/_canary/",
+    "axe_violations": [],
+    "axe_passes_count": 17,
+    "axe_incomplete_count": 0,
+    "assert_zero_aria_hidden_focusable": true,
+    "focus_trail": [
+      {
+        "tag": "A",
+        "href": "/_canary/pioneer",
+        "text": "orchard sandal"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/cradle",
+        "text": "cotton breeze"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/harbor",
+        "text": "lantern amber"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/mosaic",
+        "text": "ember island"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/pioneer",
+        "text": "valley timber"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/lagoon",
+        "text": "saddle willow"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/laurel",
+        "text": "cotton fern"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/beacon",
+        "text": "heron sandal"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "hazel lagoon\nBreeze sandal kettle coral "
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/pioneer",
+        "text": "orchard sandal"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/cradle",
+        "text": "cotton breeze"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/harbor",
+        "text": "lantern amber"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/mosaic",
+        "text": "ember island"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/pioneer",
+        "text": "valley timber"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/lagoon",
+        "text": "saddle willow"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/laurel",
+        "text": "cotton fern"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/beacon",
+        "text": "heron sandal"
+      },
+      {
+        "tag": "BODY",
+        "href": null,
+        "text": "hazel lagoon\nBreeze sandal kettle coral "
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/pioneer",
+        "text": "orchard sandal"
+      },
+      {
+        "tag": "A",
+        "href": "/_canary/cradle",
+        "text": "cotton breeze"
+      }
+    ],
+    "focused_maze_nav_links_info": [
+      "/_canary/pioneer",
+      "/_canary/cradle",
+      "/_canary/harbor",
+      "/_canary/mosaic",
+      "/_canary/pioneer",
+      "/_canary/lagoon",
+      "/_canary/laurel",
+      "/_canary/beacon",
+      "/_canary/pioneer",
+      "/_canary/cradle",
+      "/_canary/harbor",
+      "/_canary/mosaic",
+      "/_canary/pioneer",
+      "/_canary/lagoon",
+      "/_canary/laurel",
+      "/_canary/beacon",
+      "/_canary/pioneer",
+      "/_canary/cradle"
+    ],
+    "assert_trap_link_never_focused": true,
+    "ax_tree_link_names": [
+      "orchard sandal",
+      "cotton breeze",
+      "lantern amber",
+      "ember island",
+      "valley timber",
+      "saddle willow",
+      "cotton fern",
+      "heron sandal"
+    ],
+    "ax_tree_nodes_total": 63,
+    "assert_trap_link_absent_from_ax_tree": true,
+    "accessibility_snapshot_excerpt": "unavailable: 'Page' object has no attribute 'accessibility'"
+  }
+]

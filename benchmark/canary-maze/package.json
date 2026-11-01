@@ -1,0 +1,12 @@
+{
+  "name": "antirea-maze-bench",
+  "version": "1.0.0",
+  "description": "Canary Maze benchmark harness (not part of the published package). axe-core is used by a11y_test.py.",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axe-core": "^4.14.0"
+  }
+}
