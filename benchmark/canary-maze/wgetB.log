@@ -1,0 +1,1308 @@
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/
+Connecting to 127.0.0.1:8931... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/index.html'
+
+     0K                                                        44.1M=0s
+
+2026-11-01 13:46:20 (44.1 MB/s) - 'outB/index.html' saved [424]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/about
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/about'
+
+     0K                                                        26.1M=0s
+
+2026-11-01 13:46:20 (26.1 MB/s) - 'outB/about' saved [234]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/index.html'
+
+     0K                                                         134M=0s
+
+2026-11-01 13:46:20 (134 MB/s) - 'outB/_canary/index.html' saved [919]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer'
+
+     0K .                                                       106M=0s
+
+2026-11-01 13:46:20 (106 MB/s) - 'outB/_canary/pioneer' saved [1078]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle'
+
+     0K .                                                       113M=0s
+
+2026-11-01 13:46:20 (113 MB/s) - 'outB/_canary/cradle' saved [1079]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor'
+
+     0K .                                                      48.5M=0s
+
+2026-11-01 13:46:20 (48.5 MB/s) - 'outB/_canary/harbor' saved [1057]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/mosaic'
+
+     0K .                                                       220M=0s
+
+2026-11-01 13:46:20 (220 MB/s) - 'outB/_canary/mosaic' saved [1104]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/lagoon'
+
+     0K .                                                      90.5M=0s
+
+2026-11-01 13:46:20 (90.5 MB/s) - 'outB/_canary/lagoon' saved [1095]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/laurel'
+
+     0K .                                                       105M=0s
+
+2026-11-01 13:46:20 (105 MB/s) - 'outB/_canary/laurel' saved [1092]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/beacon'
+
+     0K .                                                       115M=0s
+
+2026-11-01 13:46:20 (115 MB/s) - 'outB/_canary/beacon' saved [1102]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/ribbon'
+
+     0K .                                                       140M=0s
+
+2026-11-01 13:46:20 (140 MB/s) - 'outB/_canary/pioneer/ribbon' saved [1149]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/breeze'
+
+     0K .                                                       203M=0s
+
+2026-11-01 13:46:20 (203 MB/s) - 'outB/_canary/pioneer/breeze' saved [1135]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/heron'
+
+     0K .                                                       200M=0s
+
+2026-11-01 13:46:20 (200 MB/s) - 'outB/_canary/pioneer/heron' saved [1082]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/willow'
+
+     0K .                                                       253M=0s
+
+2026-11-01 13:46:20 (253 MB/s) - 'outB/_canary/pioneer/willow' saved [1152]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/river'
+
+     0K .                                                       253M=0s
+
+2026-11-01 13:46:20 (253 MB/s) - 'outB/_canary/pioneer/river' saved [1136]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/ember'
+
+     0K .                                                      91.3M=0s
+
+2026-11-01 13:46:20 (91.3 MB/s) - 'outB/_canary/pioneer/ember' saved [1148]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/shadow'
+
+     0K .                                                       173M=0s
+
+2026-11-01 13:46:20 (173 MB/s) - 'outB/_canary/pioneer/shadow' saved [1130]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/pioneer/desert'
+
+     0K .                                                       201M=0s
+
+2026-11-01 13:46:20 (201 MB/s) - 'outB/_canary/pioneer/desert' saved [1108]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/coral'
+
+     0K .                                                       197M=0s
+
+2026-11-01 13:46:20 (197 MB/s) - 'outB/_canary/cradle/coral' saved [1140]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/mirror'
+
+     0K .                                                       210M=0s
+
+2026-11-01 13:46:20 (210 MB/s) - 'outB/_canary/cradle/mirror' saved [1102]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/sandal'
+
+     0K .                                                       242M=0s
+
+2026-11-01 13:46:20 (242 MB/s) - 'outB/_canary/cradle/sandal' saved [1133]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/meadow'
+
+     0K .                                                       115M=0s
+
+2026-11-01 13:46:20 (115 MB/s) - 'outB/_canary/cradle/meadow' saved [1132]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/orchard'
+
+     0K .                                                       147M=0s
+
+2026-11-01 13:46:20 (147 MB/s) - 'outB/_canary/cradle/orchard' saved [1112]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/pebble'
+
+     0K .                                                       158M=0s
+
+2026-11-01 13:46:20 (158 MB/s) - 'outB/_canary/cradle/pebble' saved [1108]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/cradle/needle'
+
+     0K .                                                       158M=0s
+
+2026-11-01 13:46:20 (158 MB/s) - 'outB/_canary/cradle/needle' saved [1156]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/beacon'
+
+     0K .                                                       123M=0s
+
+2026-11-01 13:46:20 (123 MB/s) - 'outB/_canary/harbor/beacon' saved [1063]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/heron'
+
+     0K .                                                       164M=0s
+
+2026-11-01 13:46:20 (164 MB/s) - 'outB/_canary/harbor/heron' saved [1179]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/lantern'
+
+     0K .                                                      74.2M=0s
+
+2026-11-01 13:46:20 (74.2 MB/s) - 'outB/_canary/harbor/lantern' saved [1089]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/cedar'
+
+     0K .                                                       108M=0s
+
+2026-11-01 13:46:20 (108 MB/s) - 'outB/_canary/harbor/cedar' saved [1075]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/timber'
+
+     0K .                                                       133M=0s
+
+2026-11-01 13:46:20 (133 MB/s) - 'outB/_canary/harbor/timber' saved [1085]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/anchor'
+
+     0K .                                                      65.7M=0s
+
+2026-11-01 13:46:20 (65.7 MB/s) - 'outB/_canary/harbor/anchor' saved [1113]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: 'outB/_canary/harbor/harbor'
+
+     0K .                                                       143M=0s
+
+2026-11-01 13:46:20 (143 MB/s) - 'outB/_canary/harbor/harbor' saved [1126]
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/ribbon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/garden
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/willow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/desert
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/ivory
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/amber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/mosaic/fern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/shadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/window
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/summit
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/amber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/lagoon/valley
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/breeze
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/coral
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/candle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/compass
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/timber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/copper
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/laurel/juniper
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/shadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/quarry
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/beacon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/desert
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/beacon/zephyr
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/willow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/copper
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/quarry
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/pioneer
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ribbon/velvet
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/amber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/coral
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/saddle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/breeze/mosaic
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/cotton
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/canyon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/ivory
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/falcon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/heron/temple
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/fern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/ribbon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/mosaic
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/hazel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/kettle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/willow/island
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/hazel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/timber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/quarry
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/fern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/willow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/river/island
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/lagoon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/beacon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/glacier
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/valley
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/zephyr
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/ivory
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/ember/oasis
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/beacon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/willow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/river
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/desert
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/sandal
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/shadow/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/kettle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/window
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/coral
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/pioneer/desert/juniper
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/saddle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/meadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/glacier
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/window
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/canyon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/coral/mirror
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/shadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/zephyr
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/quarry
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/saddle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/oasis
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/canyon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/velvet
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/mirror/mosaic
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/bridge
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/cotton
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/sandal
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/ember
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/sandal/ivory
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/sandal
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/window
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/lagoon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/cradle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/meadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/breeze
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/island
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/meadow/quarry
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/ribbon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/hazel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/coral
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/glacier
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/timber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/orchard/velvet
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/heron
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/cedar
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/pioneer
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/kettle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/compass
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/pebble/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/quarry
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/oasis
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/zephyr
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/hazel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/candle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/cradle/needle/copper
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/desert
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/lantern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/lagoon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/juniper
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/valley
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/fern
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/beacon/zephyr
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/meadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/orchard
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/laurel
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/valley
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/needle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/mirror
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/mosaic
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/heron/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/kettle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/temple
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/sandal
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/candle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/breeze
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/canyon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/lantern/pebble
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/ember
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/mirror
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/window
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/falcon
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/river
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/willow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/cedar/cradle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/timber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/summit
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/cradle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/orchard
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/shadow
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/coral
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/timber/ivory
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/island
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/mirror
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/breeze
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/anchor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/cradle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/compass
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/anchor/window
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/ivory
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/valley
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/harbor
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/timber
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/kettle
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/basket
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/zephyr
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+--2026-11-01 13:46:20--  http://127.0.0.1:8931/_canary/harbor/harbor/desert
+Reusing existing connection to 127.0.0.1:8931.
+HTTP request sent, awaiting response... 404 Not Found
+2026-11-01 13:46:20 ERROR 404: Not Found.
+
+FINISHED --2026-11-01 13:46:20--
+Total wall clock time: 0.2s
+Downloaded: 32 files, 33K in 0s (122 MB/s)

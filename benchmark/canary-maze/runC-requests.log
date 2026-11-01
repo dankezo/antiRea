@@ -1,0 +1,5 @@
+GET /__stats -> 200
+GET /about -> 200
+GET /api/v1/status -> 200
+GET /does-not-exist -> 404
+GET /__stats -> 200
