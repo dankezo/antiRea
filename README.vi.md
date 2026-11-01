@@ -22,10 +22,11 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.2: Kiểm chứng Web Bot Auth & Bản port Python/FastAPI
+## Mới trong v2.3: Kinh tế dữ liệu & Phát hiện bầy đàn
 
-- **Kiểm chứng agent có chữ ký:** `createWebBotAuthVerifier()` kiểm tra chữ ký Web Bot Auth (bản thảo IETF trên nền RFC 9421 HTTP Message Signatures, Ed25519) để nhận diện các agent tự ký request của chúng và gắn chính sách quota theo danh tính đó. Chữ ký hợp lệ chỉ chứng minh quyền sở hữu khóa cho request đã ký - không phải giấy phép truy cập và tự nó không phải tín hiệu tin cậy.
-- **Bản port Python/FastAPI:** quota guard nay có bản port Python trung thực tại [examples/python-fastapi](examples/python-fastapi), cùng tier, cùng định dạng phản hồi và giới hạn phân trang, kèm bộ test pytest đối chiếu từng kịch bản với bản TypeScript.
+- **Ngân sách theo bản ghi:** `createRecordBudget()` giới hạn số *bản ghi riêng biệt* một danh tính được nhận trong một cửa sổ thời gian, xuất dữ liệu có tính phí theo bản ghi qua `createExportGuard()`, và cursor nối chuỗi theo phiên (`mintCursor` / `verifyCursor`) - tầng quyết định một tài khoản mang về được bao nhiêu phần của bộ dữ liệu. Xem kết quả đo ở mục dưới.
+- **Phát hiện bầy đàn:** `createHerdDetector()` theo dõi nhiều danh tính cùng lúc và gắn cờ các nhóm đang cùng nhau lát kín bộ dữ liệu, kể cả khác IP; `applyHerdLadder()` cắt ngân sách của nhóm bị gắn cờ. Các lớp tín hiệu cũng lớn thêm: mê cung canary xác định (`createCanaryMaze()`) và route mồi (`createDecoyMirage()`).
+- **Kế thừa từ v2.2:** kiểm chứng chữ ký Web Bot Auth (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) và bản port quota guard Python/FastAPI tại [examples/python-fastapi](examples/python-fastapi).
 
 ## Demo SaaS A/B (v2.1)
 
@@ -47,13 +48,31 @@ Các công cụ như [morluto/rea](https://github.com/morluto/rea) hỗ trợ qu
 
 Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển khai biện pháp **thực chất, hạn chế tác dụng phụ, có bằng chứng đo đạc**.
 
+## Hiệu quả đã đo được
+
+**Phương pháp.** Chúng tôi kiểm thử trên **Ledgerly**, một SaaS giả lập chứa 10.000 bản ghi sau 120 tài khoản, chạy hai bản: baseline không bảo vệ và protected có gắn antiRea trên *cùng* một ứng dụng. Các đợt tấn công được điều khiển bằng REA 6.8.0 (`rea-agents`) và bằng các agent đa năng đi theo quy trình clone tiêu chuẩn: đăng nhập, liệt kê, dò biên, phân trang tới phủ kín, xuất dữ liệu hàng loạt. (Một phát hiện định hình mọi thứ phía dưới: bản thân REA chỉ *quan sát* - nó đọc trình duyệt đang chạy qua CDP và tự nó gửi đúng 0 request. Hành vi mà server quan sát, đo và tính giá được là của quy trình điều khiển phía sau, nên phòng thủ nhắm vào đó.) Các lượt chạy đối chứng bằng người dùng lịch sự đo cái giá đối với traffic hợp lệ. Một benchmark độc lập về chính repo này cũng đã được công bố tại [issue #1](https://github.com/dankezo/antiRea/issues/1); phần lớn claim trụ vững qua đợt kiểm đó, và mọi điểm yếu nó tìm ra đều đã sửa trong v2.3.0.
+
+| Lớp | Đã đo gì | Kết quả |
+|---|---|---|
+| Không bảo vệ (baseline) | Trích xuất toàn bộ bộ dữ liệu 10.000 bản ghi | **Tổng 160-193 request**; một lệnh export duy nhất lấy được tất cả |
+| P0 quota + giới hạn phân trang | Lạm dụng export và phân trang | Export hàng loạt bị từ chối (HTTP 422), cỡ trang và độ sâu bị chặn - cần thiết, nhưng tự nó chưa đủ |
+| Ngân sách bản ghi + export guard + cursor nối chuỗi | Một danh tính lấy được bao nhiêu (ngân sách đặt 2.000 bản ghi riêng biệt/ngày) | Trần mỗi danh tính giữ đúng ở **20% bộ dữ liệu**; phát lại cursor khác phiên bị chặn; muốn lấy trọn bộ phải dùng nhiều danh tính thay vì một tài khoản |
+| Phát hiện bầy đàn | Trích xuất phối hợp nhiều danh tính | Bầy 6 danh tính chạy script bị **gắn cờ sau 301 bản ghi** phủ chung và bị cắt bậc thang; bầy phân tán (khác IP, đăng ký rải rác) vẫn bị **gắn cờ ở 2.400 bản ghi** nhờ gom nhóm theo độ phủ bù trừ; một lượt chạy REA-first bị chặn ở khoảng **15%** bộ dữ liệu |
+| Mê cung canary + route mồi | Chất lượng tín hiệu và độ an toàn | Đã kiểm chứng tính đúng đắn và accessibility (Playwright + axe, **0 vi phạm**), trần cứng được ép (240 hit / 10 phút / IP, 10.000 trang/ngày, quá trần trả HTTP 404). Đây là lớp phát hiện - chúng tôi không tuyên bố phần trăm chặn trích xuất cho chúng |
+| Toàn bộ stack đấu với kẻ tấn công thích ứng | Kẻ tấn công cố ý rải việc qua 18 danh tính và pha loãng hành vi | Vẫn trích xuất xong - nhưng tốn **18 danh tính và 272 request** thay vì 1 tài khoản và 1 lệnh export, và bị **gắn cờ hai lần** trên đường đi. Cả hai lần đều thuộc band lát mỏng, theo thiết kế chỉ kích hoạt phản ứng bậc thang chứ không tự cắt ngân sách. Đây là giới hạn chính đã biết của stack; xem [Giới hạn](docs/LIMITATIONS.md) |
+| Người dùng hợp lệ | Cụm onboarding dày, nhóm dùng chung IP (NAT), các lượt đối chứng lịch sự | **0 gắn cờ, 0 ma sát thêm** trong mọi lượt chạy lab và đối chứng |
+
+**Tổng kết lại.** Stack này loại bỏ kiểu clone một-phát-xong ở tầng casual, và biến trích xuất hàng loạt thành bài toán danh tính: mỗi lát dữ liệu thêm tốn thêm một tài khoản và thêm dấu vết. Nó không chặn được người tái dựng quyết tâm và có nguồn lực, và cái giá thật của một danh tính (ma sát đăng ký, tài khoản đã xác minh, thanh toán) là do bạn, phía host, đặt ra - đó là lý do ngân sách được ép theo danh tính và cờ bầy đàn phân biệt "cắt ngân sách" với "tăng mức soi" thay vì dùng một phản ứng cùn cho mọi trường hợp.
+
 ## Bốn tầng và ưu tiên triển khai
 
 | Ưu tiên | Tính năng | Lợi ích có thể kỳ vọng | Giới hạn |
 |---|---|---|---|
 | **P0 - nền tảng** | Middleware giới hạn quota/phân trang (`createQuotaGuard`), phân quyền từng bản ghi, giữ thuật toán/secret ở backend | Đảm bảo an toàn cốt lõi chống scraping hàng loạt | Không giấu được dữ liệu đã trả về cho tài khoản hợp lệ |
 | **Tầng 1** | Quét và chặn lộ source map (`verify-build.py` / `run-audit.cjs`); thông báo bản quyền; chữ ký dấu vết SVG/text | Ngăn lộ mã nguồn gốc ngoài ý muốn | Không ngăn được người cố tình xóa marker |
-| **Tầng 2** | API canary chuẩn hóa đường dẫn (`handleCanaryTrapRequest`), tín hiệu automation (`detectAutomationSignals`) và kiểm chứng chữ ký Web Bot Auth (`createWebBotAuthVerifier`) cho agent tự ký request | Ghi nhận truy cập bất thường để điều tra; nhận diện agent có chữ ký để chính sách quota bám theo danh tính ổn định | Không dùng làm rào cản chặn tuyệt đối; chữ ký hợp lệ là danh tính, không phải phân quyền |
+| **Tầng 2** | API canary chuẩn hóa đường dẫn (`handleCanaryTrapRequest`), mê cung canary xác định (`createCanaryMaze`), route mồi (`createDecoyMirage`), tín hiệu automation (`detectAutomationSignals`) và kiểm chứng chữ ký Web Bot Auth (`createWebBotAuthVerifier`) cho agent tự ký request | Ghi nhận truy cập bất thường để điều tra; nhận diện agent có chữ ký để chính sách quota bám theo danh tính ổn định | Không dùng làm rào cản chặn tuyệt đối; chữ ký hợp lệ là danh tính, không phải phân quyền |
+| **Tầng 2 - Kinh tế dữ liệu** | Ngân sách theo bản ghi (`createRecordBudget`), xuất dữ liệu tính phí (`createExportGuard`), cursor nối chuỗi theo phiên (`mintCursor` / `verifyCursor`), chấm điểm chuỗi hành vi (`createFlowScorer`) | Chặn trần lượng dữ liệu một danh tính nhận được; trích xuất trọn bộ phải trả giá bằng nhiều danh tính (đã đo: trần 20% mỗi danh tính trong kiểm thử của chúng tôi) | Kẻ tấn công xoay vòng danh tính - cần kết hợp cái giá đăng ký thật ở phía host |
+| **Tầng 2 - Phát hiện bầy đàn** | Bộ phát hiện bầy đàn xuyên danh tính (`createHerdDetector`) với bậc thang phản ứng (`applyHerdLadder`) | Gắn cờ các nhóm danh tính cùng nhau lát kín bộ dữ liệu, kể cả khác IP; nhóm lát dày bị cắt ngân sách, nhóm lát mỏng nhận phản ứng bậc thang | Với bầy lát mỏng, phát hiện không đồng nghĩa cưỡng chế - một bầy thích ứng kỷ luật đã bị gắn cờ nhưng vẫn hoàn tất (xem mục hiệu quả đã đo) |
 | **Tầng 3** | AES-GCM ràng buộc ngữ cảnh (`encryptPayload` / `decryptPayload`) kèm chống phát lại giới hạn bộ nhớ (`createInMemoryReplayGuard`) | Bảo đảm toàn vẹn và chống phát lại thông điệp | Trình duyệt vẫn giải mã được nếu giữ khóa |
 | **Tầng 4** | Watermark hiển thị token phiên tạm thời (`mountForensicWatermark`) | Hỗ trợ truy vết bản chụp khi token còn hiện rõ | Không chống được cắt/chỉnh sửa ảnh |
 
@@ -171,6 +190,28 @@ Demo chạy được đầu-cuối (tạo khóa, ký request, kiểm chứng, r�
 ### 6. Python / FastAPI
 
 Backend của bạn chạy Python? [examples/python-fastapi](examples/python-fastapi) port quota guard với cùng tier, cùng ngữ nghĩa `429`, header `X-RateLimit-*` và giới hạn phân trang, kèm middleware Starlette và dependency cho FastAPI. Bộ test pytest của nó đối chiếu từng kịch bản kiểm thử của bản TypeScript, nên cả hai bản đều bị ràng bởi cùng một hợp đồng hành vi.
+
+### 7. Đo chính dữ liệu (Ngân sách bản ghi + Phát hiện bầy đàn)
+
+Quota theo request giới hạn *tốc độ*; ngân sách bản ghi giới hạn *lượng dữ liệu* một danh tính nhận được, dù nó phân trang lịch sự đến đâu. Đưa cùng các sự kiện phục vụ đó cho bộ phát hiện bầy đàn để các nhóm phối hợp cũng lộ diện.
+
+```ts
+import { createRecordBudget, createHerdDetector } from "@dannyphan190/anti-rea";
+
+// Một danh tính nhận tối đa 2.000 bản ghi riêng biệt mỗi ngày.
+const budget = createRecordBudget({ maxDistinctPerWindow: 2_000 });
+const herd = createHerdDetector({
+  onFlag: snap => { /* snap.band: "budget_cut_supported" | "graduated_only" */ },
+});
+
+// Chặn ở cổng trước khi handler chạy, rồi ghi lại những gì response thực sự đã phục vụ:
+if (!budget.check("account:123", 1).allowed) { /* trả 429 */ }
+// ... handler chạy, phân quyền đạt, recordIdsServed đã chốt ...
+budget.consume("account:123", recordIdsServed);
+herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordIds: recordIdsServed });
+```
+
+Dùng cùng một chuỗi danh tính (`account:<id>`) ở cả hai nơi, để cờ bầy đàn đưa thẳng vào `applyHerdLadder()` hoặc cơ chế ghi đè ngân sách.
 
 ## Đóng góp / An ninh / Giới hạn
 

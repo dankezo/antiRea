@@ -22,10 +22,11 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.2: Web Bot Auth Verification & Python/FastAPI Port
+## New in v2.3: Data Economics & Herd Detection
 
-- **Signed-agent verification:** `createWebBotAuthVerifier()` checks Web Bot Auth signatures (IETF draft on RFC 9421 HTTP Message Signatures, Ed25519) so you can identify agents that sign their requests and key quota policy on that identity. A verified signature proves key possession for the covered request - it is not authorization and not a trust signal by itself.
-- **Python/FastAPI port:** the quota guard now ships as a faithful Python port in [examples/python-fastapi](examples/python-fastapi), with the same tiers, wire format and pagination bounds, plus pytest parity tests against the TypeScript scenarios.
+- **Per-record budgets:** `createRecordBudget()` caps how many *distinct records* one identity can ever receive per window, priced exports via `createExportGuard()`, and session-chained cursors (`mintCursor` / `verifyCursor`) - the layer that decides how much of your dataset a single account can take home. See the measured results below.
+- **Herd detection:** `createHerdDetector()` watches many identities at once and flags groups that jointly tile your dataset, even across different IPs; `applyHerdLadder()` cuts a flagged group's budgets. Signal layers grew too: a deterministic canary maze (`createCanaryMaze()`) and decoy routes (`createDecoyMirage()`).
+- **Carried over from v2.2:** Web Bot Auth signature verification (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) and the Python/FastAPI quota-guard port in [examples/python-fastapi](examples/python-fastapi).
 
 ## Twin-SaaS Benchmark (v2.1)
 
@@ -47,13 +48,31 @@ Tools like [morluto/rea](https://github.com/morluto/rea) assist in observing DOM
 
 The goal of this project is to help app owners implement **effective measures with minimal side effects**, backed by reproducible test benchmarks rather than security by obscurity.
 
+## Does it work? Measured results
+
+**Method.** We test against **Ledgerly**, a synthetic SaaS holding 10,000 records behind 120 accounts, run twice: a baseline instance with no protection and a protected instance of the *same* app with antiRea wired in. Attack runs are driven by REA 6.8.0 (`rea-agents`) and by general-purpose agents following the standard clone workflow: authenticate, enumerate, probe boundaries, paginate to full coverage, burst exports. (One finding shapes everything below: REA itself only *perceives* - it reads a running browser over CDP and sends zero requests of its own. The behavior a server can observe, meter and price is the driving workflow, so that is what the defenses target.) Polite-user control runs measure the cost to legitimate traffic. An independent benchmark of this repository was also published in [issue #1](https://github.com/dankezo/antiRea/issues/1); most claims held up under it, and every gap it found is fixed in v2.3.0.
+
+| Layer | What we measured | Result |
+|---|---|---|
+| No protection (baseline) | Full extraction of the 10,000-record dataset | **160-193 requests total**; a single export call returns everything |
+| P0 quota + pagination bounds | Export and pagination abuse | Bulk export dumps rejected (HTTP 422), page size and depth capped - necessary, not sufficient on its own |
+| Record budget + export guard + chained cursors | How much one identity can take (budget set to 2,000 distinct records/day) | Per-identity ceiling held at exactly **20% of the dataset**; cross-session cursor replay blocked; full extraction now needs many identities instead of one account |
+| Herd detector | Coordinated multi-identity extraction | Scripted 6-identity herd **flagged after 301 records** of joint coverage and ladder-capped; a dispersed herd (separate IPs, staggered signups) still **flagged at 2,400 records** via coverage-complement grouping; a state-of-the-art REA-first run was stopped at roughly **15%** of the dataset |
+| Canary maze + decoy mirage | Signal quality and safety | Correctness and accessibility verified (Playwright + axe, **0 violations**), hard caps enforced (240 hits / 10 min / IP, 10,000 pages/day, then HTTP 404). These are detection layers - we claim no extraction-blocking percentage for them |
+| Full stack vs. adaptive attacker | Attacker deliberately spreads work across 18 identities and dilutes its pattern | Extraction still completed - but took **18 identities and 272 requests** instead of 1 account and 1 export call, and was **flagged twice** on the way. Both flags scored in the low-tiling band, which by design triggers graduated response only, not an automatic budget cut. This is the stack's main known limit; see [Limitations](docs/LIMITATIONS.md) |
+| Legitimate users | Dense onboarding clusters, shared-IP (NAT) cohorts, polite control runs | **Zero flags, zero added friction** in every lab and control run |
+
+**What this adds up to.** The stack removes the casual one-shot clone, and turns bulk extraction into an identity problem: every additional slice of the dataset costs another account and more visibility. It does not stop a determined, well-resourced rebuilder, and the real price of an identity (signup friction, verified accounts, payment) is set by you, the host - which is why budgets are enforced per identity and why herd flags distinguish "cut the budget" from "step up scrutiny" instead of firing one blunt response.
+
 ## Four Tiers and Implementation Priority
 
 | Priority | Feature | Expected Benefit | Limit |
 |---|---|---|---|
 | **P0 - Foundation** | Server-side quota/pagination middleware (`createQuotaGuard`), per-record authorization, secret isolation | Core anti-scraping & anti-cloning guarantee | Cannot hide data already served to an authorized user |
 | **Tier 1** | Hide public source maps (`verify-build.py` / `run-audit.cjs`); copyright notices; SVG/text provenance signatures | Prevents accidental full-source exposure | Easily stripped by determined users |
-| **Tier 2** | Normalized API canary traps (`handleCanaryTrapRequest`), low-confidence automation telemetry (`detectAutomationSignals`), and Web Bot Auth signature verification (`createWebBotAuthVerifier`) for agents that sign their requests | Logs abnormal probing for review; identifies signed agents so quota policy can key on a stable identity | Not a blocking access control; a verified signature is identity, not authorization |
+| **Tier 2** | Normalized API canary traps (`handleCanaryTrapRequest`), a deterministic canary maze (`createCanaryMaze`), decoy routes (`createDecoyMirage`), low-confidence automation telemetry (`detectAutomationSignals`), and Web Bot Auth signature verification (`createWebBotAuthVerifier`) for agents that sign their requests | Logs abnormal probing for review; identifies signed agents so quota policy can key on a stable identity | Not a blocking access control; a verified signature is identity, not authorization |
+| **Tier 2 - Data economics** | Per-record budget (`createRecordBudget`), priced exports (`createExportGuard`), session-chained cursors (`mintCursor` / `verifyCursor`), sequence flow scoring (`createFlowScorer`) | Caps how much of the dataset any one identity can ever receive; makes full extraction cost many identities (measured: 20% ceiling per identity in our tests) | Attackers rotate identities - pair with real signup cost on the host side |
+| **Tier 2 - Herd detection** | Cross-identity herd detector (`createHerdDetector`) with response ladder (`applyHerdLadder`) | Flags groups of identities jointly tiling the dataset, including across IPs; high-tiling groups get budget cuts, low-tiling groups get graduated response | Detection is not enforcement for low-tiling herds - a disciplined adaptive herd was flagged yet still finished (see measured results) |
 | **Tier 3** | AES-GCM context-bound envelopes (`encryptPayload` / `decryptPayload`) with bounded replay protection (`createInMemoryReplayGuard`) | Prevents simple cross-endpoint replay | Client still holds decryption context if key is in browser |
 | **Tier 4** | Ephemeral token watermark overlay (`mountForensicWatermark`) | Traceability for leaked screen captures | Screen overlays can be cropped or edited out |
 
@@ -176,6 +195,28 @@ A runnable end-to-end demo (generate a key, sign a request, verify, then tamper 
 ### 6. Python / FastAPI
 
 Running a Python backend? [examples/python-fastapi](examples/python-fastapi) ports the quota guard with identical tiers, `429` semantics, `X-RateLimit-*` headers and pagination bounds, plus a Starlette middleware and FastAPI dependencies. Its pytest suite mirrors the TypeScript test scenarios, so both implementations are held to the same contract.
+
+### 7. Meter the Data Itself (Record Budget + Herd Detection)
+
+Request quotas cap *speed*; a record budget caps *how much of the dataset* an identity can ever receive, however politely it paginates. Feed the same serving events to the herd detector so coordinated groups surface too.
+
+```ts
+import { createRecordBudget, createHerdDetector } from "@dannyphan190/anti-rea";
+
+// One identity receives at most 2,000 distinct records per day.
+const budget = createRecordBudget({ maxDistinctPerWindow: 2_000 });
+const herd = createHerdDetector({
+  onFlag: snap => { /* snap.band: "budget_cut_supported" | "graduated_only" */ },
+});
+
+// Gate before the handler runs, then record what the response actually served:
+if (!budget.check("account:123", 1).allowed) { /* return 429 */ }
+// ... handler runs, authorization passes, recordIdsServed is final ...
+budget.consume("account:123", recordIdsServed);
+herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordIds: recordIdsServed });
+```
+
+Use the same identity string (`account:<id>`) in both, so a herd flag can be fed straight into `applyHerdLadder()` or a budget override.
 
 ## Why not "block CDP" or inject malicious prompts?
 
