@@ -1,0 +1,55 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/coverage-summary.cjs'
+  workflow_dispatch:
+
+# Only this workflow may write repository contents: it publishes the
+# coverage badge JSON to the dedicated `badges` branch.
+permissions:
+  contents: write
+
+jobs:
+  badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build dependencies
+        run: npm install --ignore-scripts
+      - name: Measure coverage and build badge JSON
+        run: node scripts/coverage-summary.cjs coverage.json
+      - name: Publish badge JSON to the badges branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          BADGE_DIR="$RUNNER_TEMP/badges-branch"
+          if git ls-remote --exit-code --heads "$REPO_URL" badges >/dev/null 2>&1; then
+            git clone --depth 1 --branch badges "$REPO_URL" "$BADGE_DIR"
+          else
+            mkdir -p "$BADGE_DIR"
+            cd "$BADGE_DIR"
+            git init -b badges
+            git remote add origin "$REPO_URL"
+          fi
+          mkdir -p "$BADGE_DIR/badges"
+          cp coverage.json "$BADGE_DIR/badges/coverage.json"
+          cd "$BADGE_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add badges/coverage.json
+          if git diff --cached --quiet; then
+            echo "Badge unchanged, nothing to publish."
+            exit 0
+          fi
+          git commit -m "Update coverage badge [skip ci]"
+          git push origin badges
