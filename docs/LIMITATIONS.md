@@ -13,5 +13,6 @@
 | Watermark overlay | Attribution clue if token remains visible and ledger is authentic | Reliable steganography or screenshot/video resistance |
 | Zero-width/SVG markers | Byte-for-byte canary when they survive unchanged | Mathematical or legal proof of infringement |
 | Client click/route heuristic | Potential anomaly data after calibration | Reliable intent classification or permission to disable paid users |
+| Web Bot Auth signature (RFC 9421) | The request was signed by the holder of the published Ed25519 key for exactly the covered components, inside its validity window | The operator is trustworthy or well-behaved; identity is not authorization, and unsigned agents are not automatically abusive |
 
 No performance percentages are supplied. Any new claim requires a test, adversary model, baseline control, confidence intervals, and evidence published using [BENCHMARK_PROTOCOL](BENCHMARK_PROTOCOL.md).

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0 — 2026-11-01
+
+- **Web Bot Auth verifier (`src/tier2-active/web-bot-auth.ts`):** Added `createWebBotAuthVerifier()` implementing the IETF Web Bot Auth profile (draft-ietf-webbotauth-httpsig-protocol) on RFC 9421 HTTP Message Signatures: Ed25519 verification of covered components, `keyid` bound to the RFC 7638 JWK thumbprint, required `created`/`expires` with a capped validity window, and a bounded in-memory nonce replay guard. Keys resolve through a caller-injected resolver or a parsed signature-agent key directory (JWK Set shapes); the module performs no network fetching. A verified signature proves key possession for the covered request only - it is not authorization and not evidence of good behavior. Documented composition maps a verified verdict onto a caller-owned quota tier in `createQuotaGuard()` without changing quota-guard. 33 dedicated tests (real Ed25519 keys, tamper/expiry/replay cases); no interop test against a third-party signer yet.
+- **Python/FastAPI quota-guard port (`examples/python-fastapi/`):** Faithful port of `createQuotaGuard()` semantics to Python: identical tiers, sliding-window decisions, `429` + `Retry-After` / `X-RateLimit-*` wire format, and pagination bounds, with a `QuotaWindowStore` protocol (bounded in-memory implementation plus a Redis implementation against a duck-typed client via Lua scripts), a Starlette middleware, and FastAPI dependencies. 26 pytest parity tests mirror the TypeScript scenarios assertion-for-assertion; divergences (snake_case API, Starlette error path) are documented in the example README. The port is an example, not a published package; the Redis store is tested against an in-memory fake, not a live Redis.
+
 ## 2.1.0 — 2026-11-01
 
 - **Source-map scanner hardening (`scripts/verify-build.py` & `scripts/run-audit.cjs`):** Catches all `*.map` files (`/\.map$/i`, including short names like `bundle.map`), scans `.html`/`.htm`/`.cjs`/`.jsx`/`.tsx`, and treats inline base64 source maps (`sourceMappingURL=data:application/json;base64,...`) and HTML source map references as hard failures (`exit code 1`). Added real external-target symlink test in `tests/scan.test.cjs`.

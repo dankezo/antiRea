@@ -4,6 +4,7 @@ export * from "./tier2-active/cdp-guard";
 export * from "./tier2-active/honeypot-middleware";
 export * from "./tier2-active/route-obfuscator";
 export * from "./tier2-active/quota-guard";
+export * from "./tier2-active/web-bot-auth";
 export * from "./tier3-crypto/transport-shield";
 export * from "./tier4-forensic/watermark";
 export * from "./tier4-forensic/behavior-shield";

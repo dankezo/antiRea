@@ -1,6 +1,6 @@
 {
   "name": "@dannyphan190/anti-rea",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": false,
   "description": "Evidence-led web anti-cloning toolkit with server-side quota/pagination guards, canary traps, controlled twin-SaaS benchmark, browser probes and REA envelope guidance.",
   "type": "commonjs",
