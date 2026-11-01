@@ -18,6 +18,10 @@ dependencies = [
 dev = [
     "pytest>=8",
     "httpx>=0.27",
+    # Test-only: used by tests/test_redis_integration.py against a real
+    # server. The quota_guard package itself never imports redis; the
+    # Redis store stays duck-typed.
+    "redis>=5",
 ]
 
 [tool.setuptools]

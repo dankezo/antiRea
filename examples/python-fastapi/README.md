@@ -125,8 +125,9 @@ async def records(pagination: QuotaPagination = Depends(get_quota_pagination)):
 
 Multi-instance deployments: share the window across processes with
 `RedisQuotaStore`, given any async redis client exposing redis-py's
-`eval(script, numkeys, *args)` shape — no redis package is imported by this
-example:
+`eval(script, numkeys, *args)` shape — no redis package is imported by the
+`quota_guard` package itself (redis-py appears only in the `[dev]` extra,
+for the real-Redis integration tests):
 
 ```python
 from quota_guard import create_quota_guard
@@ -141,7 +142,8 @@ guard = create_quota_guard(store=RedisQuotaStore(redis_client))
 cd examples/python-fastapi
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"        # or: pip install fastapi pytest httpx
-python -m pytest               # parity + store + integration tests
+python -m pytest               # parity + store + HTTP tests (Redis suite skips)
+REDIS_URL=redis://127.0.0.1:6379/15 python -m pytest   # + real-Redis integration tests
 uvicorn app:app --port 8000    # demo app (uvicorn installed separately)
 ```
 
@@ -181,12 +183,18 @@ behavior-identical.
 - The in-memory store is **per-process**: multiple workers each enforce
   their own window. Use `RedisQuotaStore` when more than one process serves
   traffic.
-- Tests run the Redis store against an **in-memory fake** that emulates the
-  sorted-set semantics of the two Lua scripts. They do **not** run against a
-  real Redis server, do not verify Lua behavior under Redis's actual
-  scripting engine, and do not cover Redis failure modes (disconnects,
-  timeouts) — the guard lets store exceptions propagate, as does the TS
-  version.
+- The unit tests run the Redis store against an **in-memory fake** that
+  emulates the sorted-set semantics of the two Lua scripts. A separate
+  **real-Redis integration suite** (`tests/test_redis_integration.py`) does
+  run the store against an actual server — the real Lua scripting engine,
+  real pruning, real `PEXPIRE` TTLs, plus guard enforcement and
+  per-identity isolation backed by Redis — and runs in CI
+  (`.github/workflows/python.yml`) against a `redis:7` service container.
+  It is opt-in locally: the module skips unless `REDIS_URL` is set (point
+  it at a dedicated logical DB; the suite FLUSHDBs it). Still **not**
+  covered: Redis failure modes (disconnects, timeouts, failover),
+  Cluster/Sentinel topologies, and persistence behavior — the guard lets
+  store exceptions propagate, as does the TS version.
 - Tests do **not** cover: real concurrency/load behavior or race windows;
   multiple Uvicorn workers; a FastAPI/Starlette version matrix (developed
   against FastAPI 0.162 / Starlette 1.10); automated TS↔Python differential
