@@ -88,13 +88,36 @@ test('global daily cap trips across IPs and honors a configured 429', async () =
   assert.equal(capped.capped, true);
 });
 
-test('canary maze ignores cross-site browser requests without alerting', async () => {
+test('canary maze traps cross-site requests by default; ignoreCrossSite is an explicit opt-in', async () => {
+  // sec-fetch-site is client-supplied, so by default the maze does not let a
+  // caller opt itself out of detection by sending it.
   const alerts = [];
   const maze = sdk.createCanaryMaze({ enabled: true, onAlert: a => alerts.push(a) });
   const r = await maze.handle(mockReq('/_canary/amber', { 'sec-fetch-site': 'cross-site' }));
-  assert.equal(r.isTrapped, false);
-  assert.equal(r.ignored, true);
-  assert.equal(alerts.length, 0);
+  assert.equal(r.isTrapped, true);
+  assert.equal(r.status, 200);
+  assert.equal(alerts.length, 1);
+
+  const optInAlerts = [];
+  const optIn = sdk.createCanaryMaze({ enabled: true, ignoreCrossSite: true, onAlert: a => optInAlerts.push(a) });
+  const ignored = await optIn.handle(mockReq('/_canary/amber', { 'sec-fetch-site': 'cross-site' }));
+  assert.equal(ignored.isTrapped, false);
+  assert.equal(ignored.ignored, true);
+  assert.equal(optInAlerts.length, 0);
+});
+
+test('canary maze alerts fire after cap checks and carry the capped outcome', async () => {
+  const alerts = [];
+  const maze = sdk.createCanaryMaze({ enabled: true, maxRequestsPerIp: 1, onAlert: a => alerts.push(a) });
+  const ip = '203.0.113.20';
+  const served = await maze.handle(mockReq('/_canary/amber', {}, 'GET', ip));
+  assert.equal(served.status, 200);
+  const capped = await maze.handle(mockReq('/_canary/amber', {}, 'GET', ip));
+  assert.equal(capped.status, 404);
+  assert.equal(capped.capped, true);
+  assert.equal(alerts.length, 2);
+  assert.equal(alerts[0].capped, false);
+  assert.equal(alerts[1].capped, true);
 });
 
 test('dripMs delays the response when configured', async () => {

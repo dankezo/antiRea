@@ -93,7 +93,13 @@ export interface DecoyMirageOptions {
   trustedIpHeader?: string;
   /** Account identity must come from your authenticated server session, never an HTTP header. */
   resolveUserId?: () => string | undefined | Promise<string | undefined>;
-  /** Ignore cross-site browser requests to reduce false positives. Default true (mirrors the canary handler). */
+  /**
+   * Ignore requests carrying `sec-fetch-site: cross-site`. Default false
+   * (mirrors the canary handler). That header is supplied by the client: any
+   * non-browser client can send it to opt itself out of detection, so
+   * enabling this is only a noise heuristic for genuine browser cross-site
+   * embeds — never a trust decision.
+   */
   ignoreCrossSite?: boolean;
   /** Extra seed material mixed into document generation; changing it reshapes every document. */
   seed?: string;
@@ -356,7 +362,7 @@ export function createDecoyMirage(options: DecoyMirageOptions = {}): DecoyMirage
     if (!pathSet.has(normalizedPath)) {
       return { isDecoy: false, status: 200, body: {} };
     }
-    if (options.ignoreCrossSite !== false && request.headers.get("sec-fetch-site") === "cross-site") {
+    if (options.ignoreCrossSite === true && request.headers.get("sec-fetch-site") === "cross-site") {
       return { isDecoy: false, ignored: true, status: 404, body: {} };
     }
     if (!(await hookAllows(options.authorize, request))) {

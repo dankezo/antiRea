@@ -239,6 +239,64 @@ test('requireNonce rejects a signature without a nonce', async () => {
   assert.equal(verdict.reason, 'missing_parameter');
 });
 
+test('duplicate covered components fail as duplicate_covered_components (RFC 9421 section 2.5)', async () => {
+  const agent = makeAgent();
+  // The signature is cryptographically valid over a base that lists
+  // "@authority" twice; the verifier must still reject it as non-conformant.
+  const req = signedRequest(agent, {
+    components: ['"@authority"', '"@authority"', '"signature-agent";key="sig"'],
+  });
+  const verdict = await verifierFor(agent).verify(req);
+  assert.equal(verdict.verified, false);
+  assert.equal(verdict.reason, 'duplicate_covered_components');
+});
+
+test('expires at or before created fails as invalid_validity_window', async () => {
+  const agent = makeAgent();
+  const equal = await verifierFor(agent).verify(
+    signedRequest(agent, { paramOver: { created: NOW, expires: NOW } })
+  );
+  assert.equal(equal.verified, false);
+  assert.equal(equal.reason, 'invalid_validity_window');
+
+  const inverted = await verifierFor(agent).verify(
+    signedRequest(agent, { paramOver: { created: NOW + 600, expires: NOW + 300 } })
+  );
+  assert.equal(inverted.verified, false);
+  assert.equal(inverted.reason, 'invalid_validity_window');
+});
+
+test('nonce longer than the 256-character cap fails as nonce_too_long; exactly 256 verifies', async () => {
+  const agent = makeAgent();
+  const verifier = verifierFor(agent);
+  const tooLong = await verifier.verify(
+    signedRequest(agent, { paramOver: { nonce: `"${'n'.repeat(257)}"` } })
+  );
+  assert.equal(tooLong.verified, false);
+  assert.equal(tooLong.reason, 'nonce_too_long');
+
+  const atCap = await verifier.verify(
+    signedRequest(agent, { paramOver: { nonce: `"${'n'.repeat(256)}"` } })
+  );
+  assert.equal(atCap.verified, true);
+});
+
+test('in-memory nonce store fails closed at capacity instead of evicting live nonces', () => {
+  const store = wba.createInMemoryNonceStore(100);
+  const now = NOW * 1000;
+  const expiry = now + 300_000;
+  for (let i = 0; i < 100; i++) {
+    assert.equal(store.checkAndRecord(`key-${i}\nnonce-${i}`, expiry, now), true);
+  }
+  // Full of unexpired nonces: a fresh nonce is refused, not made room for.
+  assert.equal(store.checkAndRecord('key-x\nnonce-new', expiry, now), false);
+  // Live entries are untouched: the oldest still counts as a replay.
+  assert.equal(store.checkAndRecord('key-0\nnonce-0', expiry, now), false);
+  // After every entry expires, capacity frees up and recording succeeds.
+  const later = expiry + 1;
+  assert.equal(store.checkAndRecord('key-x\nnonce-new', later + 300_000, later), true);
+});
+
 test('missing signature headers fail as no_signature_headers', async () => {
   const agent = makeAgent();
   const verdict = await verifierFor(agent).verify(mockReq({ headers: {} }));

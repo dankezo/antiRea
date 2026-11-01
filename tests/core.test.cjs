@@ -95,14 +95,25 @@ test('canaries attribute only explicitly trusted proxy headers and server sessio
   assert.equal(alert.userId, 'verified-user');
 });
 
-test('canaries ignore cross-site browser requests by default', async () => {
+test('canaries trap cross-site requests by default; ignoreCrossSite is an explicit opt-in', async () => {
+  // sec-fetch-site is client-supplied, so by default a cross-site claim does
+  // NOT exempt the request: a non-browser client could send it to opt out.
   let called = false;
-  const r = await sdk.handleCanaryTrapRequest(
+  const trapped = await sdk.handleCanaryTrapRequest(
     mockReq('/api/v1/internal/schema-export', { 'sec-fetch-site': 'cross-site' }),
     { onAlert: () => { called = true; } }
   );
-  assert.equal(r.isTrapped, false);
-  assert.equal(called, false);
+  assert.equal(trapped.isTrapped, true);
+  assert.equal(called, true);
+
+  let calledOptIn = false;
+  const ignored = await sdk.handleCanaryTrapRequest(
+    mockReq('/api/v1/internal/schema-export', { 'sec-fetch-site': 'cross-site' }),
+    { ignoreCrossSite: true, onAlert: () => { calledOptIn = true; } }
+  );
+  assert.equal(ignored.isTrapped, false);
+  assert.equal(ignored.ignored, true);
+  assert.equal(calledOptIn, false);
 });
 
 test('canary logging errors do not break app', async () => {
@@ -220,15 +231,29 @@ test('AES-GCM envelope roundtrip with required shared replay callback', async ()
   await assert.rejects(() => sdk.decryptPayload(e, key, ctx, { markNonceOnce: guard }), /Replay detected/);
 });
 
-test('createInMemoryReplayGuard enforces maxEntries bound and evicts oldest entries without memory leak', () => {
+test('createInMemoryReplayGuard fails closed at maxEntries instead of evicting live nonces', async () => {
   const guard = sdk.createInMemoryReplayGuard({ ttlMs: 60_000, maxEntries: 100 });
-  for (let i = 0; i < 105; i++) {
+  for (let i = 0; i < 100; i++) {
     assert.equal(guard(`nonce-${i}`, 60_000), true);
   }
-  // Recent entries are still remembered as seen
-  assert.equal(guard('nonce-104', 60_000), false);
-  // Oldest evicted entry (nonce-0) was evicted when size exceeded 100
-  assert.equal(guard('nonce-0', 60_000), true);
+  // The cache is full of unexpired nonces: a new envelope is rejected rather
+  // than the guard forgetting a live nonce to make room.
+  assert.equal(guard('nonce-overflow', 60_000), false);
+  // Existing entries are untouched: both the oldest and the newest still
+  // count as seen (replay), proving nothing was evicted.
+  assert.equal(guard('nonce-0', 60_000), false);
+  assert.equal(guard('nonce-99', 60_000), false);
+
+  // Once entries expire, they are evicted and capacity frees up again.
+  const shortLived = sdk.createInMemoryReplayGuard({ ttlMs: 40, maxEntries: 100 });
+  for (let i = 0; i < 100; i++) {
+    assert.equal(shortLived(`exp-${i}`, 40), true);
+  }
+  assert.equal(shortLived('exp-overflow', 40), false);
+  await new Promise(resolve => setTimeout(resolve, 70));
+  assert.equal(shortLived('exp-overflow', 40), true);
+  // An expired key can also be recorded again as fresh.
+  assert.equal(shortLived('exp-0', 40), true);
 });
 
 test('AES-GCM envelope cannot decrypt under a different request path', async () => {
@@ -352,4 +377,82 @@ test('Express quota middleware attaches sanitized pagination and blocks when quo
   assert.equal(res2.statusCode, 429);
   assert.equal(res2.headers['Retry-After'], '30');
   assert.equal(res2.payload.error, 'rate_limit_exceeded');
+});
+
+test('quota store fails closed at capacity: new windows are refused, live windows are never evicted', async () => {
+  const store = sdk.createInMemoryQuotaStore(100);
+  const now = 1_700_000_000_000;
+  for (let i = 0; i < 100; i++) {
+    assert.equal(store.record(`ip:10.0.0.${i}`, now, 60_000), true);
+  }
+  // Full of unexpired windows: a NEW window is refused, not made room for.
+  assert.equal(store.record('ip:10.9.9.9', now, 60_000), false);
+  // Existing windows are untouched and keep counting.
+  assert.equal(store.peek('ip:10.0.0.0', now, 60_000).count, 1);
+  assert.equal(store.record('ip:10.0.0.0', now, 60_000), true);
+  assert.equal(store.peek('ip:10.0.0.0', now, 60_000).count, 2);
+  // After the window slides past, expired windows free capacity again.
+  assert.equal(store.record('ip:10.9.9.9', now + 61_000, 60_000), true);
+});
+
+test('quota guard rejects 429 store_capacity_exceeded when the store refuses a new window', async () => {
+  const events = [];
+  let currentTime = 1_700_000_000_000;
+  const guard = sdk.createQuotaGuard({
+    now: () => currentTime,
+    maxEntries: 100,
+    tiers: { free: { maxRequests: 1_000, windowMs: 60_000, maxPageSize: 50, maxPage: 20 } },
+    defaultTier: 'free',
+    onQuotaExceeded: evt => { events.push(evt); }
+  });
+  for (let i = 0; i < 100; i++) {
+    const r = await guard.checkRequest(mockReq('/api/items', {}, 'GET', `10.0.1.${i}`));
+    assert.equal(r.allowed, true, `request ${i} should be admitted`);
+  }
+  const refused = await guard.checkRequest(mockReq('/api/items', {}, 'GET', '10.9.9.9'));
+  assert.equal(refused.allowed, false);
+  assert.equal(refused.status, 429);
+  assert.equal(refused.body.error, 'store_capacity_exceeded');
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, 'store_capacity_exceeded');
+  assert.equal(events[0].dimension, 'ip');
+  // A client whose window already exists is unaffected by the full store.
+  const existing = await guard.checkRequest(mockReq('/api/items', {}, 'GET', '10.0.1.0'));
+  assert.equal(existing.allowed, true);
+  // Once windows expire, new clients are admitted again.
+  currentTime += 61_000;
+  const afterExpiry = await guard.checkRequest(mockReq('/api/items', {}, 'GET', '10.9.9.9'));
+  assert.equal(afterExpiry.allowed, true);
+});
+
+test('quota guard counts unresolvable identities against a shared unknown bucket by default', async () => {
+  const events = [];
+  const guard = sdk.createQuotaGuard({
+    tiers: { free: { maxRequests: 2, windowMs: 60_000, maxPageSize: 50, maxPage: 20 } },
+    defaultTier: 'free',
+    resolveIdentity: () => undefined,
+    onQuotaExceeded: evt => { events.push(evt); }
+  });
+  // mockReq without remoteAddress and no trusted IP header: nothing resolves.
+  const r1 = await guard.checkRequest(mockReq('/api/items'));
+  const r2 = await guard.checkRequest(mockReq('/api/items'));
+  const r3 = await guard.checkRequest(mockReq('/api/items'));
+  assert.equal(r1.allowed, true);
+  assert.equal(r2.allowed, true);
+  assert.equal(r3.allowed, false);
+  assert.equal(r3.status, 429);
+  assert.equal(r3.body.error, 'rate_limit_exceeded');
+  assert.equal(events.length, 1);
+  assert.equal(events[0].dimension, 'unknown');
+
+  // The legacy skip behavior is available only as an explicit opt-in.
+  const legacy = sdk.createQuotaGuard({
+    tiers: { free: { maxRequests: 2, windowMs: 60_000, maxPageSize: 50, maxPage: 20 } },
+    defaultTier: 'free',
+    resolveIdentity: () => undefined,
+    allowUnresolvedIdentity: true
+  });
+  for (let i = 0; i < 4; i++) {
+    assert.equal((await legacy.checkRequest(mockReq('/api/items'))).allowed, true);
+  }
 });

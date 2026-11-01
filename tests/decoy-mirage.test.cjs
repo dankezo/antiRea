@@ -65,13 +65,19 @@ test('hits fire onHit with decoy:true and the normalized path, and survive a thr
   assert.equal(result.status, 200);
 });
 
-test('cross-site browser requests are ignored without a hit (mirrors the canary handler)', async () => {
+test('cross-site requests hit by default; ignoreCrossSite is an explicit opt-in (mirrors the canary handler)', async () => {
   const hits = [];
   const mirage = sdk.createDecoyMirage({ onHit: h => hits.push(h) });
-  const result = await mirage.handle(mockReq('/api/v1/internal/schema-export', { 'sec-fetch-site': 'cross-site' }));
-  assert.equal(result.isDecoy, false);
-  assert.equal(result.ignored, true);
-  assert.equal(hits.length, 0);
+  const trapped = await mirage.handle(mockReq('/api/v1/internal/schema-export', { 'sec-fetch-site': 'cross-site' }));
+  assert.equal(trapped.isDecoy, true);
+  assert.equal(hits.length, 1);
+
+  const optInHits = [];
+  const optIn = sdk.createDecoyMirage({ ignoreCrossSite: true, onHit: h => optInHits.push(h) });
+  const ignored = await optIn.handle(mockReq('/api/v1/internal/schema-export', { 'sec-fetch-site': 'cross-site' }));
+  assert.equal(ignored.isDecoy, false);
+  assert.equal(ignored.ignored, true);
+  assert.equal(optInHits.length, 0);
 });
 
 test('per-path document overrides are served verbatim and custom paths are honored', async () => {
