@@ -1,0 +1,42 @@
+name: Python (FastAPI quota-guard)
+on:
+  push:
+    paths:
+      - "examples/python-fastapi/**"
+      - ".github/workflows/python.yml"
+  pull_request:
+    paths:
+      - "examples/python-fastapi/**"
+      - ".github/workflows/python.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: examples/python-fastapi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install example with dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run pytest (unit + real-Redis integration)
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/15
+        run: python -m pytest
