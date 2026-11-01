@@ -4,11 +4,12 @@
 
 **Bộ công cụ đánh giá rủi ro · TypeScript SDK · AI Agent Skill**
 
-[English](README.md) · [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) · [Giới hạn](docs/LIMITATIONS.md) · [Kết quả QA](docs/QA_2026-10-31.md) · [Changelog](docs/CHANGELOG.md)
+[English](README.md) · [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) · [Giới hạn](docs/LIMITATIONS.md) · [Kết quả QA](docs/QA_2026-10-31.md) · [Changelog](CHANGELOG.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![npm version](https://img.shields.io/badge/npm-2.1.0-green.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
-[![tests](https://img.shields.io/badge/tests-38%20checks-informational)](tests/)
+[![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
+[![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-65%20passing-informational)](tests/)
 
 antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
@@ -20,7 +21,12 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.1: Server Quota Middleware, Chuẩn hóa Canary & Demo SaaS A/B
+## Mới trong v2.2: Kiểm chứng Web Bot Auth & Bản port Python/FastAPI
+
+- **Kiểm chứng agent có chữ ký:** `createWebBotAuthVerifier()` kiểm tra chữ ký Web Bot Auth (bản thảo IETF trên nền RFC 9421 HTTP Message Signatures, Ed25519) để nhận diện các agent tự ký request của chúng và gắn chính sách quota theo danh tính đó. Chữ ký hợp lệ chỉ chứng minh quyền sở hữu khóa cho request đã ký - không phải giấy phép truy cập và tự nó không phải tín hiệu tin cậy.
+- **Bản port Python/FastAPI:** quota guard nay có bản port Python trung thực tại [examples/python-fastapi](examples/python-fastapi), cùng tier, cùng định dạng phản hồi và giới hạn phân trang, kèm bộ test pytest đối chiếu từng kịch bản với bản TypeScript.
+
+## Demo SaaS A/B (v2.1)
 
 Đã dựng **Northstar**, ứng dụng SaaS giả lập với dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)**.
 
@@ -46,7 +52,7 @@ Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển
 |---|---|---|---|
 | **P0 - nền tảng** | Middleware giới hạn quota/phân trang (`createQuotaGuard`), phân quyền từng bản ghi, giữ thuật toán/secret ở backend | Đảm bảo an toàn cốt lõi chống scraping hàng loạt | Không giấu được dữ liệu đã trả về cho tài khoản hợp lệ |
 | **Tầng 1** | Quét và chặn lộ source map (`verify-build.py` / `run-audit.cjs`); thông báo bản quyền; chữ ký dấu vết SVG/text | Ngăn lộ mã nguồn gốc ngoài ý muốn | Không ngăn được người cố tình xóa marker |
-| **Tầng 2** | API canary chuẩn hóa đường dẫn (`handleCanaryTrapRequest`) và tín hiệu automation (`detectAutomationSignals`) | Ghi nhận truy cập bất thường để điều tra | Không dùng làm rào cản chặn tuyệt đối |
+| **Tầng 2** | API canary chuẩn hóa đường dẫn (`handleCanaryTrapRequest`), tín hiệu automation (`detectAutomationSignals`) và kiểm chứng chữ ký Web Bot Auth (`createWebBotAuthVerifier`) cho agent tự ký request | Ghi nhận truy cập bất thường để điều tra; nhận diện agent có chữ ký để chính sách quota bám theo danh tính ổn định | Không dùng làm rào cản chặn tuyệt đối; chữ ký hợp lệ là danh tính, không phải phân quyền |
 | **Tầng 3** | AES-GCM ràng buộc ngữ cảnh (`encryptPayload` / `decryptPayload`) kèm chống phát lại giới hạn bộ nhớ (`createInMemoryReplayGuard`) | Bảo đảm toàn vẹn và chống phát lại thông điệp | Trình duyệt vẫn giải mã được nếu giữ khóa |
 | **Tầng 4** | Watermark hiển thị token phiên tạm thời (`mountForensicWatermark`) | Hỗ trợ truy vết bản chụp khi token còn hiện rõ | Không chống được cắt/chỉnh sửa ảnh |
 
@@ -62,7 +68,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **38 kiểm thử tự động** và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
+`npm run check` gồm biên dịch, **65 kiểm thử tự động** và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
 ### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 
@@ -134,6 +140,36 @@ const cleanupNotice = injectAgentNotice({
   termsUrl: "https://app.example.com/terms",
 });
 ```
+
+### 5. Mẫu Kiểm chứng Agent có Chữ ký (Web Bot Auth)
+
+Một số crawler và AI agent tự ký request theo profile Web Bot Auth (RFC 9421, Ed25519). Bộ kiểm chứng dựng lại và kiểm tra chữ ký, ép cửa sổ hiệu lực, và từ chối nonce bị dùng lại. Module không tự tải khóa - bạn cấp khóa tĩnh hoặc qua resolver của riêng mình (tự fetch `/.well-known/http-message-signatures-directory` từ origin của agent với cache và chính sách SSRF của bạn).
+
+```ts
+import { createWebBotAuthVerifier } from "@dannyphan190/anti-rea";
+
+const verifier = createWebBotAuthVerifier({
+  resolveKey: async ({ agent }) => {
+    if (!agent) return undefined;
+    const res = await fetch(new URL("/.well-known/http-message-signatures-directory", agent));
+    return res.ok ? await res.json() : undefined;
+  },
+  maxValiditySeconds: 600, // siết trần 24h của bản thảo
+});
+
+const verdict = await verifier.verify(request);
+if (verdict.verified) {
+  // verdict.agent / verdict.keyId xác định người ký của CHÍNH request này.
+  // Đưa danh tính vào quyết định tier quota - và giữ nguyên kiểm tra
+  // phân quyền như với traffic không ký.
+}
+```
+
+Demo chạy được đầu-cuối (tạo khóa, ký request, kiểm chứng, rồi sửa request và xem nó bị từ chối) nằm tại [examples/web-bot-auth-verify.cjs](examples/web-bot-auth-verify.cjs).
+
+### 6. Python / FastAPI
+
+Backend của bạn chạy Python? [examples/python-fastapi](examples/python-fastapi) port quota guard với cùng tier, cùng ngữ nghĩa `429`, header `X-RateLimit-*` và giới hạn phân trang, kèm middleware Starlette và dependency cho FastAPI. Bộ test pytest của nó đối chiếu từng kịch bản kiểm thử của bản TypeScript, nên cả hai bản đều bị ràng bởi cùng một hợp đồng hành vi.
 
 ## Đóng góp / An ninh / Giới hạn
 

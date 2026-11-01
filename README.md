@@ -4,11 +4,12 @@
 
 **Risk Assessment Toolkit · TypeScript SDK · AI Agent Skill**
 
-[Tiếng Việt](README.vi.md) · [Threat Model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [QA Status](docs/QA_2026-10-31.md) · [Changelog](docs/CHANGELOG.md)
+[Tiếng Việt](README.vi.md) · [Threat Model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [QA Status](docs/QA_2026-10-31.md) · [Changelog](CHANGELOG.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![npm version](https://img.shields.io/badge/npm-2.1.0-green.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
-[![tests](https://img.shields.io/badge/tests-38%20checks-informational)](tests/)
+[![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
+[![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-65%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -20,7 +21,12 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.1: Server Quota Guard, Normalized Canaries & Twin-SaaS Benchmark
+## New in v2.2: Web Bot Auth Verification & Python/FastAPI Port
+
+- **Signed-agent verification:** `createWebBotAuthVerifier()` checks Web Bot Auth signatures (IETF draft on RFC 9421 HTTP Message Signatures, Ed25519) so you can identify agents that sign their requests and key quota policy on that identity. A verified signature proves key possession for the covered request - it is not authorization and not a trust signal by itself.
+- **Python/FastAPI port:** the quota guard now ships as a faithful Python port in [examples/python-fastapi](examples/python-fastapi), with the same tiers, wire format and pagination bounds, plus pytest parity tests against the TypeScript scenarios.
+
+## Twin-SaaS Benchmark (v2.1)
 
 We built **Northstar**, a synthetic SaaS app with dashboard, customer search, lead creation, CSV export, and chart views in both **baseline (`:4173`)** and **protected (`:4174`)** modes.
 
@@ -46,7 +52,7 @@ The goal of this project is to help app owners implement **effective measures wi
 |---|---|---|---|
 | **P0 - Foundation** | Server-side quota/pagination middleware (`createQuotaGuard`), per-record authorization, secret isolation | Core anti-scraping & anti-cloning guarantee | Cannot hide data already served to an authorized user |
 | **Tier 1** | Hide public source maps (`verify-build.py` / `run-audit.cjs`); copyright notices; SVG/text provenance signatures | Prevents accidental full-source exposure | Easily stripped by determined users |
-| **Tier 2** | Normalized API canary traps (`handleCanaryTrapRequest`) and low-confidence automation telemetry (`detectAutomationSignals`) | Logs abnormal probing for review | Not a blocking access control |
+| **Tier 2** | Normalized API canary traps (`handleCanaryTrapRequest`), low-confidence automation telemetry (`detectAutomationSignals`), and Web Bot Auth signature verification (`createWebBotAuthVerifier`) for agents that sign their requests | Logs abnormal probing for review; identifies signed agents so quota policy can key on a stable identity | Not a blocking access control; a verified signature is identity, not authorization |
 | **Tier 3** | AES-GCM context-bound envelopes (`encryptPayload` / `decryptPayload`) with bounded replay protection (`createInMemoryReplayGuard`) | Prevents simple cross-endpoint replay | Client still holds decryption context if key is in browser |
 | **Tier 4** | Ephemeral token watermark overlay (`mountForensicWatermark`) | Traceability for leaked screen captures | Screen overlays can be cropped or edited out |
 
@@ -62,7 +68,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **38 automated tests**, and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **65 automated tests**, and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
@@ -139,6 +145,36 @@ const decoded = await verifyTransportEnvelope(env, key, scope, { markNonceOnce: 
 ```
 
 Use this pattern for independently controlled server services or carefully designed session protocols (use Redis `SET ... NX PX` in multi-instance clusters).
+
+### 5. Verify Signed Agents (Web Bot Auth)
+
+Some crawlers and AI agents sign their requests under the Web Bot Auth profile (RFC 9421, Ed25519). The verifier reconstructs and checks the signature, enforces the validity window, and rejects replayed nonces. It never fetches keys itself - you supply them statically or through your own resolver (fetch `/.well-known/http-message-signatures-directory` from the agent's origin with your own cache and SSRF policy).
+
+```ts
+import { createWebBotAuthVerifier } from "@dannyphan190/anti-rea";
+
+const verifier = createWebBotAuthVerifier({
+  resolveKey: async ({ agent }) => {
+    if (!agent) return undefined;
+    const res = await fetch(new URL("/.well-known/http-message-signatures-directory", agent));
+    return res.ok ? await res.json() : undefined;
+  },
+  maxValiditySeconds: 600, // tighten the draft's 24h ceiling
+});
+
+const verdict = await verifier.verify(request);
+if (verdict.verified) {
+  // verdict.agent / verdict.keyId identify the signer of THIS request.
+  // Feed the identity into your quota tier decision - and keep your
+  // authorization checks exactly as they are for unsigned traffic.
+}
+```
+
+A runnable end-to-end demo (generate a key, sign a request, verify, then tamper and watch it fail) lives in [examples/web-bot-auth-verify.cjs](examples/web-bot-auth-verify.cjs).
+
+### 6. Python / FastAPI
+
+Running a Python backend? [examples/python-fastapi](examples/python-fastapi) ports the quota guard with identical tiers, `429` semantics, `X-RateLimit-*` headers and pagination bounds, plus a Starlette middleware and FastAPI dependencies. Its pytest suite mirrors the TypeScript test scenarios, so both implementations are held to the same contract.
 
 ## Why not "block CDP" or inject malicious prompts?
 
