@@ -119,3 +119,11 @@ test('canaryRobotsTxt emits the Disallow line for the prefix', () => {
   assert.equal(sdk.canaryRobotsTxt('_canary'), 'Disallow: /_canary/\n');
   assert.equal(sdk.canaryRobotsTxt('/trap-space/'), 'Disallow: /trap-space/\n');
 });
+
+test('canary maze page markup includes a main landmark', async () => {
+  const maze = sdk.createCanaryMaze({ enabled: true });
+  const res = await maze.handle(mockReq('/_canary/amber'));
+  assert.equal(res.isTrapped, true);
+  assert.match(res.html ?? '', /<main>/);
+  assert.match(res.html ?? '', /<\/main>/);
+});
