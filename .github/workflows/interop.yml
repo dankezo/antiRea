@@ -1,0 +1,47 @@
+name: Interop (Web Bot Auth)
+on:
+  push:
+    paths:
+      - 'src/tier2-active/web-bot-auth.ts'
+      - 'tests/web-bot-auth*'
+      - 'tests/fixtures/**'
+      - 'scripts/interop-web-bot-auth.cjs'
+      - '.github/workflows/interop.yml'
+  pull_request:
+    paths:
+      - 'src/tier2-active/web-bot-auth.ts'
+      - 'tests/web-bot-auth*'
+      - 'tests/fixtures/**'
+      - 'scripts/interop-web-bot-auth.cjs'
+      - '.github/workflows/interop.yml'
+  schedule:
+    # Weekly re-check against the reference implementation, so upstream
+    # drift surfaces even when this repo does not change.
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-bot-auth-interop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Vendored reference test vectors
+        run: node --test tests/web-bot-auth-interop.test.cjs
+      - name: Install reference implementation (scratch dir, test-only)
+        run: |
+          mkdir -p "$RUNNER_TEMP/wba-interop"
+          cd "$RUNNER_TEMP/wba-interop"
+          npm init -y
+          npm install web-bot-auth
+      - name: Cross-implementation signing check
+        env:
+          INTEROP_PKG_DIR: ${{ runner.temp }}/wba-interop
+        run: node scripts/interop-web-bot-auth.cjs
