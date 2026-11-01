@@ -686,17 +686,28 @@ function looksLikeDirectoryDocument(value: unknown): boolean {
 /* Nonce replay guard (bounded, in-memory by default).                      */
 /* ------------------------------------------------------------------------ */
 
+/** Maximum accepted length of a signature `nonce` parameter, in characters. */
+export const MAX_NONCE_LENGTH = 256;
+
 export interface WebBotAuthNonceStore {
   /**
    * Atomically check-and-record a nonce scoped to a key. Returns `true` when
    * the nonce is fresh (and now recorded until `expiresAtMs`), `false` when
-   * it was already seen (replay). Implementations backed by Redis should use
+   * it was already seen (replay) OR when the store is at capacity with
+   * unexpired entries and refuses to make room by forgetting a live nonce
+   * (fail closed — the verifier reports both as `replay_detected`).
+   * Implementations backed by Redis should use
    * `SET key 1 NX PX <ttl>` so the check is atomic across instances.
    */
   checkAndRecord(scopeKey: string, expiresAtMs: number, now: number): Promise<boolean> | boolean;
 }
 
-/** Bounded in-memory nonce store: expired entries are pruned on access and the key set is capped. */
+/**
+ * Bounded in-memory nonce store: expired entries are pruned on access and
+ * the key set is capped. The cap fails closed — only expired entries are
+ * ever evicted; a full store refuses new nonces instead of dropping a live
+ * one and reopening its replay window.
+ */
 export function createInMemoryNonceStore(maxEntries = 10_000): WebBotAuthNonceStore {
   const cap = Math.max(100, Math.floor(maxEntries) || 10_000);
   const seen = new Map<string, number>();
@@ -705,12 +716,12 @@ export function createInMemoryNonceStore(maxEntries = 10_000): WebBotAuthNonceSt
       const existing = seen.get(scopeKey);
       if (existing !== undefined && existing > now) return false;
       if (existing !== undefined) seen.delete(scopeKey);
-      // Opportunistic prune when the store grows large.
       if (seen.size >= cap) {
+        // Make room only from expired entries; never evict a live nonce.
         for (const [key, expiry] of seen) {
-          if (expiry <= now || seen.size >= cap) seen.delete(key);
-          if (seen.size < cap) break;
+          if (expiry <= now) seen.delete(key);
         }
+        if (seen.size >= cap) return false;
       }
       seen.set(scopeKey, Math.max(expiresAtMs, now));
       return true;
@@ -737,12 +748,18 @@ export type WebBotAuthFailureReason =
   | "unsupported_algorithm"
   /** Covered components lack `@authority`/`@target-uri`, or lack the `signature-agent` member. */
   | "insufficient_coverage"
+  /** The covered-component list repeats a component identifier, which RFC 9421 §2.5 forbids. */
+  | "duplicate_covered_components"
   /** `expires` is in the past (beyond clock skew). */
   | "expired"
   /** `created` is in the future (beyond clock skew) — signature not yet valid. */
   | "not_yet_valid"
   /** `expires - created` exceeds the configured maximum validity window. */
   | "validity_window_too_long"
+  /** `expires` is not after `created` — the validity window is empty or negative. */
+  | "invalid_validity_window"
+  /** The `nonce` parameter exceeds `MAX_NONCE_LENGTH` characters. */
+  | "nonce_too_long"
   /** No key could be resolved for `keyid` (unknown key, or the key itself is outside its own nbf/exp window). */
   | "unknown_key"
   /** The injected key resolver threw. */
@@ -1106,8 +1123,35 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     if (requireNonce && nonce === undefined) {
       return fail("missing_parameter", "signature parameters lack a `nonce` (required by verifier configuration)", { keyId });
     }
+    if (nonce !== undefined && nonce.length > MAX_NONCE_LENGTH) {
+      return fail("nonce_too_long", `signature \`nonce\` is ${nonce.length} characters; the cap is ${MAX_NONCE_LENGTH}`, { keyId });
+    }
     if (!signature.signatureBytes) {
       return fail("malformed_headers", `Signature header has no byte-sequence member for label ${JSON.stringify(signature.label)}`, { keyId });
+    }
+
+    // --- Strictness: component list and validity window ---------------------
+    // RFC 9421 §2.5 forbids duplicate component identifiers in the covered
+    // components list; a signer that repeats one is non-conformant even when
+    // the signature itself verifies over the duplicated base.
+    const seenComponents = new Set<string>();
+    for (const component of signature.components) {
+      const identifier = serializeComponentIdentifierSafe(component);
+      if (seenComponents.has(identifier)) {
+        return fail(
+          "duplicate_covered_components",
+          `covered components repeat ${identifier}, forbidden by RFC 9421 §2.5`,
+          { keyId, expiresAt: expires },
+        );
+      }
+      seenComponents.add(identifier);
+    }
+    if (expires <= created) {
+      return fail(
+        "invalid_validity_window",
+        `\`expires\` ${expires} is not after \`created\` ${created}`,
+        { keyId, expiresAt: expires },
+      );
     }
 
     // --- Timing ------------------------------------------------------------
