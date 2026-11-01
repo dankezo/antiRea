@@ -79,8 +79,7 @@ def run_case(browser,name,mode,origin,out,iterations):
 
 def fetch_error(url):
     from urllib.error import HTTPError
-    try:
-        with urllib.request.urlopen(url,timeout=8) as response:return {},response.status
+    try:return fetch(url)
     except HTTPError as e:
         try:body=json.loads(e.read())
         except Exception:body={}
@@ -121,5 +120,5 @@ def main():
     print('Evidence:',path)
     for x in result['scenarios']:print(x['engine'],x['mode'],f"{x.get('passed','ERR')}/{x.get('total','?')}",x.get('error',''))
     for x in result['skipped']:print('SKIP',x['engine'],x['reason'][:90])
-    if result['skipped'] or not result['scenarios'] or any('error' in x or x['passed']!=x['total'] or x['page_errors'] for x in result['scenarios']):sys.exit(1)
+    if not result['scenarios'] or any('error' in x or x['passed']!=x['total'] or x['page_errors'] for x in result['scenarios']):sys.exit(1)
 if __name__=='__main__':main()

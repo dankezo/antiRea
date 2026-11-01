@@ -7,6 +7,3 @@ coverage/
 !.env.example
 .DS_Store
 __pycache__/
-
-benchmark/results/*
-!benchmark/results/.gitkeep

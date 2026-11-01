@@ -1,0 +1,23 @@
+{
+  "schema": "antirea-benchmark-v1",
+  "timestamp_utc": "2026-10-31T02:44:02.300302+00:00",
+  "environment": {
+    "python": "3.13.5",
+    "os": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "playwright": "1.57.0"
+  },
+  "disclaimer": "Browser functional/exposure tests only. REA capture NOT implied. Rate-limit measured in local deterministic fixture; results do not prove cloning prevention.",
+  "scenarios": [
+    {
+      "engine": "chromium",
+      "mode": "baseline",
+      "error": "Page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://127.0.0.1:4173/\nCall log:\n  - navigating to \"http://127.0.0.1:4173/\", waiting until \"networkidle\"\n"
+    },
+    {
+      "engine": "chromium",
+      "mode": "protected",
+      "error": "Page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://127.0.0.1:4174/\nCall log:\n  - navigating to \"http://127.0.0.1:4174/\", waiting until \"networkidle\"\n"
+    }
+  ],
+  "skipped": []
+}

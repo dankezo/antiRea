@@ -1,31 +1,28 @@
-<div align="center">
-
 # antiRea
-### Bảo vệ phần giá trị thật của ứng dụng, không dựa vào ảo tưởng rằng giao diện có thể bị giấu khỏi trình duyệt.
 
-**Bộ công cụ đánh giá rủi ro - TypeScript SDK - AI Agent Skill**
+**Bảo vệ phần giá trị thật của ứng dụng, không dựa vào ảo tưởng rằng giao diện có thể bị giấu khỏi trình duyệt.**
 
-[English](README.md) - [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) - [Giới hạn](docs/LIMITATIONS.md) - [Kết quả QA](docs/QA_2026-10-31.md)
+**Bộ công cụ đánh giá rủi ro · TypeScript SDK · AI Agent Skill**
 
-![MIT](https://img.shields.io/badge/license-MIT-blue) ![Beta](https://img.shields.io/badge/status-beta-orange)
+[English](README.md) · [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) · [Giới hạn](docs/LIMITATIONS.md) · [Kết quả QA](docs/QA_2026-10-31.md) · [Changelog](docs/CHANGELOG.md)
 
-</div>
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/badge/npm-2.1.0-green.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
+[![tests](https://img.shields.io/badge/tests-38%20checks-informational)](tests/)
 
-antiRea giúp bạn kiểm tra những gì website để lộ, giữ logic quan trọng ở server và dùng canary hoặc watermark khi phù hợp. Công cụ không thể ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
+antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
-Cài bản beta từ npm:
+Cài đặt từ npm:
 
 ```bash
-npm install @dannyphan190/anti-rea@beta
+npm install @dannyphan190/anti-rea
 ```
 
-Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases/tag/v2.1.0-beta.3).
+Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.1: Demo SaaS A/B + benchmark tái lập
+## Mới trong v2.1: Server Quota Middleware, Chuẩn hóa Canary & Demo SaaS A/B
 
-[Xem ảnh giao diện Northstar mô phỏng](benchmark/demo/preview.png)
-
-Đã dựng **Northstar**, ứng dụng SaaS giả lập với dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ và responsive UI. Có hai chế độ **không bảo vệ** (`http://127.0.0.1:4173`) và **có bảo vệ** (`http://127.0.0.1:4174`), dùng cùng dữ liệu giả lập, giao diện và workflow. Chế độ protected chạy các module TypeScript antiRea thật đã biên dịch, ghi nhận canary và kiểm soát xuất CSV trên máy chủ. Bộ Playwright đo kiểm chức năng, khả năng quan sát, phản hồi HTTP, báo cáo lỗi và chụp ảnh hai trạng thái.
+Đã dựng **Northstar**, ứng dụng SaaS giả lập với dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)**.
 
 ```bash
 npm install
@@ -35,25 +32,25 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Muốn xem giao diện bằng tay, mở hai terminal và chạy `npm run benchmark:baseline` cùng `npm run benchmark:demo`. Xem [kết quả QA](docs/QA_2026-10-31.md) và [hướng dẫn chạy REA](benchmark/rea/README.md). Kiểm thử demo không chứng minh khả năng ngăn sao chép.
+Muốn xem giao diện bằng tay, mở hai terminal và chạy `npm run benchmark:baseline` cùng `npm run benchmark:demo`.
 
 ## antiRea giải quyết vấn đề gì?
 
-Các công cụ như [morluto/rea](https://github.com/morluto/rea) hỗ trợ quan sát DOM, phân tích JavaScript bundle, quan sát phiên làm việc và chụp giao diện. Những tính năng này có thể phục vụ nghiên cứu và kiểm thử được phép, nhưng cũng khiến việc tái tạo sản phẩm dễ hơn. **antiRea không thể chặn triệt để REA, Chrome DevTools, Playwright hoặc thao tác quay màn hình.** Bất kỳ thông tin nào đã được gửi vào trình duyệt của người dùng phải được coi là có thể bị đọc.
+Các công cụ như [morluto/rea](https://github.com/morluto/rea) hỗ trợ quan sát DOM, phân tích JavaScript bundle, theo dõi mạng và tái lập UI.
 
-Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển khai biện pháp **thực chất, hạn chế tác dụng phụ, có bằng chứng và dễ đánh giá**. Bản 2.0 beta đã sửa nhiều nhược điểm của ZIP gốc: bỏ prompt poisoning gây hại, không dùng vòng lặp `debugger`, không khẳng định watermark ẩn chống nén video và không tự giảm chất lượng dịch vụ của người dùng hợp lệ.
+Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển khai biện pháp **thực chất, hạn chế tác dụng phụ, có bằng chứng đo đạc**.
 
 ## Bốn tầng và ưu tiên triển khai
 
 | Ưu tiên | Tính năng | Lợi ích có thể kỳ vọng | Giới hạn |
 |---|---|---|---|
-| **P0 - nền tảng** | Backend nắm thuật toán/secret, phân quyền từng bản ghi, giới hạn quota, hạn chế thông tin trả về | Khó sao chép logic/dữ liệu không được công khai | Không giấu được thứ đã gửi đến tài khoản hợp lệ |
-| **Tầng 1** | Cấu hình không public source map; thông báo bản quyền; chữ ký dấu vết SVG/text | Hạn chế vô tình lộ source gốc, hỗ trợ đối chiếu nguồn | Không ngăn soi DOM, chữ ký không phải bằng chứng pháp lý đủ dùng độc lập |
-| **Tầng 2** | API canary và tín hiệu automation mức tin cậy thấp | Ghi nhận truy cập bất thường để điều tra | Không chặn hết bot; không tự động ban |
-| **Tầng 3** | AES-GCM ràng buộc ngữ cảnh và kiểm tra phát lại | Bảo đảm toàn vẹn và kiểm soát sử dụng lại thông điệp khi khóa được giữ bí mật | Không giấu dữ liệu trước chính trình duyệt có khóa |
-| **Tầng 4** | Watermark hiển thị token phiên tạm thời | Hỗ trợ truy vết bản chụp khi token còn hiện rõ | Không chống cắt/crop hoặc xóa watermark |
+| **P0 - nền tảng** | Middleware giới hạn quota/phân trang (`createQuotaGuard`), phân quyền từng bản ghi, giữ thuật toán/secret ở backend | Đảm bảo an toàn cốt lõi chống scraping hàng loạt | Không giấu được dữ liệu đã trả về cho tài khoản hợp lệ |
+| **Tầng 1** | Quét và chặn lộ source map (`verify-build.py` / `run-audit.cjs`); thông báo bản quyền; chữ ký dấu vết SVG/text | Ngăn lộ mã nguồn gốc ngoài ý muốn | Không ngăn được người cố tình xóa marker |
+| **Tầng 2** | API canary chuẩn hóa đường dẫn (`handleCanaryTrapRequest`) và tín hiệu automation (`detectAutomationSignals`) | Ghi nhận truy cập bất thường để điều tra | Không dùng làm rào cản chặn tuyệt đối |
+| **Tầng 3** | AES-GCM ràng buộc ngữ cảnh (`encryptPayload` / `decryptPayload`) kèm chống phát lại giới hạn bộ nhớ (`createInMemoryReplayGuard`) | Bảo đảm toàn vẹn và chống phát lại thông điệp | Trình duyệt vẫn giải mã được nếu giữ khóa |
+| **Tầng 4** | Watermark hiển thị token phiên tạm thời (`mountForensicWatermark`) | Hỗ trợ truy vết bản chụp khi token còn hiện rõ | Không chống được cắt/chỉnh sửa ảnh |
 
-**Khuyến nghị mặc định:** thực hiện P0 trước, sau đó cấu hình Tầng 1. Với website có API quan trọng, bật honeypot Tầng 2 sau khi rà soát privacy. Tầng 3-4 chỉ sử dụng khi có bài toán thật và đội vận hành hiểu rõ giới hạn.
+**Khuyến nghị mặc định:** thực hiện P0 trước, sau đó cấu hình Tầng 1. Với website có API quan trọng, bật quota guard và honeypot/canary.
 
 ## Cài đặt và kiểm thử
 
@@ -65,55 +62,79 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **30 kiểm thử tự động** và kiểm tra tĩnh. Có thể kiểm tra thư mục build công khai bằng `python3 scripts/verify-build.py dist`. Chưa có kết quả benchmark chứng minh tỷ lệ chặn REA ngoài thực tế.
+`npm run check` gồm biên dịch, **38 kiểm thử tự động** và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
-Để tích hợp bản chưa public lên npm, chạy `npm pack` rồi cài file `.tgz` trong dự án đích, hoặc dùng trực tiếp phần mã và tài liệu hướng dẫn.
-
-### Mẫu API canary
+### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 
 ```ts
-import { handleCanaryTrapRequest } from "@dannyphan190/anti-rea";
+import { createExpressQuotaMiddleware } from "@dannyphan190/anti-rea";
+
+app.use("/api/", createExpressQuotaMiddleware({
+  trustedIpHeader: "cf-connecting-ip",
+  tiers: {
+    anonymous: { maxRequests: 30, windowMs: 60_000, maxPageSize: 25, maxPage: 5 },
+    free: { maxRequests: 60, windowMs: 60_000, maxPageSize: 50, maxPage: 20 },
+    pro: { maxRequests: 300, windowMs: 60_000, maxPageSize: 200, maxPage: 100 },
+  },
+  resolveIdentity: req => ({
+    accountId: req.headers.get("x-verified-account") ?? undefined,
+    apiKeyId: req.headers.get("x-verified-key-id") ?? undefined,
+    tier: "free",
+  }),
+  onQuotaExceeded: event => {
+    console.warn("[quota-exceeded]", event);
+  },
+}));
+```
+
+### 2. Mẫu API Canary (tự động chuẩn hóa biến thể URL)
+
+```ts
+import { handleCanaryTrapRequest, normalizeCanaryPath } from "@dannyphan190/anti-rea";
 
 const result = await handleCanaryTrapRequest(request, {
-  resolveUserId: () => verifiedSession.userId,  // Lấy từ backend đã xác thực
+  resolveUserId: () => verifiedSession.userId, // Lấy từ backend đã xác thực
   onAlert: async event => { /* gửi sự kiện đã tối giản đến logger */ },
 });
 if (result.isTrapped) return Response.json(result.body, { status: result.status });
 ```
 
-Mặc định code không tin `x-forwarded-for` hoặc `x-user-id`. Header IP chỉ đáng tin khi phía reverse proxy do bạn quản lý đã chặn và thay thế header giả mạo. Không nên khóa tài khoản chỉ vì một lần truy cập canary.
-
-### Mẫu watermark
+### 3. Mẫu Chống Replay cho Transport Envelope (không rò rỉ RAM)
 
 ```ts
-import { mountForensicWatermark } from "@dannyphan190/anti-rea";
-const cleanup = mountForensicWatermark({ token: "A7fK3w9Z", enabled: true });
-// token → account/session được lưu và phân quyền tại máy chủ
+import {
+  createEnvelopeKey,
+  encryptPayload,
+  verifyTransportEnvelope,
+  createInMemoryReplayGuard,
+} from "@dannyphan190/anti-rea";
+
+const key = await createEnvelopeKey();
+const scope = { purpose: "report-export", method: "POST", path: "/api/export", sessionBinding: "trusted-session-id" };
+const env = await encryptPayload({ result: "ok" }, key, scope);
+
+// Tự động dọn dẹp nonce hết hạn theo TTL và giới hạn số lượng bản ghi, không gây tràn RAM như Set()
+const replayGuard = createInMemoryReplayGuard({
+  ttlMs: 300_000,
+  maxEntries: 10_000,
+});
+
+const decoded = await verifyTransportEnvelope(env, key, scope, { markNonceOnce: replayGuard });
 ```
 
-Không đưa email, IP hoặc ID thật lên watermark. Thông báo mục đích xử lý dữ liệu, thời gian lưu và quy trình khiếu nại trước khi bật.
-
-### Mẫu provenance notice
+### 4. Mẫu Watermark & Provenance Notice
 
 ```ts
-import { injectAgentNotice } from "@dannyphan190/anti-rea";
-const cleanup = injectAgentNotice({
+import { mountForensicWatermark, injectAgentNotice } from "@dannyphan190/anti-rea";
+
+const cleanupWatermark = mountForensicWatermark({ token: "A7fK3w9Z", enabled: true });
+const cleanupNotice = injectAgentNotice({
   brandName: "My SaaS",
   canonicalOrigin: "https://app.example.com",
   termsUrl: "https://app.example.com/terms",
 });
 ```
 
-Đây là thông báo điều khoản, **không phải một hàng rào bảo mật** và không có khả năng ép một AI Agent làm theo chỉ dẫn.
+## Đóng góp / An ninh / Giới hạn
 
-## Những nguyên tắc cộng đồng cần giữ
-
-Không cố ý khiến Agent tạo phần mềm lỗi, không phục vụ dữ liệu sai để hại người dùng, không giám sát phím gõ/chụp màn hình trái kỳ vọng, không đưa ra số liệu hiệu năng chưa đo, và không tuyên bố bản quyền chỉ từ một marker dễ bị xóa.
-
-Nếu muốn kiểm chứng antiRea với REA, hãy thực hiện trên **website của bạn hoặc môi trường được phép kiểm thử**, theo [BENCHMARK_PROTOCOL.md](docs/BENCHMARK_PROTOCOL.md), đồng thời công bố cả trường hợp phòng thủ thất bại.
-
-## Tài liệu cho cộng đồng
-
-[Audit bản ZIP gốc](docs/AUDIT_2026-10-31.md) - [Threat model](docs/THREAT_MODEL_REA.md) - [Giới hạn kỹ thuật](docs/LIMITATIONS.md) - [Nguồn học thuật](docs/REFERENCES.md) - [Kiểm soát backend](docs/SERVER_SIDE_CONTROLS.md) - [Pháp lý & quyền riêng tư](docs/LEGAL_PRIVACY.md) - [Hướng dẫn đóng góp](.github/CONTRIBUTING.md) - [Changelog](docs/CHANGELOG.md).
-
-Dự án dùng [MIT License](LICENSE), mở cho cộng đồng đóng góp. [Ủng hộ tác giả qua PayPal](https://www.paypal.com/paypalme/dannyphan190) là tùy chọn.
+Đọc [CONTRIBUTING.md](.github/CONTRIBUTING.md), [SECURITY.md](.github/SECURITY.md), [LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md), [LIMITATIONS.md](docs/LIMITATIONS.md) và [QA_2026-10-31.md](docs/QA_2026-10-31.md).

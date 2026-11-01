@@ -1,8 +1,16 @@
 /** Configuration EXAMPLE: merge into existing vite.config.ts, not a dependency of the SDK. */
 import { defineConfig } from "vite";
 export default defineConfig({
-  build: { sourcemap: false, rollupOptions: { output: {
-    chunkFileNames: "assets/chunk-[hash].js",
-    entryFileNames: "assets/index-[hash].js"
-  } } }
+  esbuild: {
+    drop: ["console", "debugger"],
+  },
+  build: {
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        chunkFileNames: "assets/chunk-[hash].js",
+        entryFileNames: "assets/index-[hash].js",
+      },
+    },
+  },
 });

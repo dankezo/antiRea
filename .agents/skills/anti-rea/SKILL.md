@@ -18,20 +18,20 @@ Read `docs/LIMITATIONS.md`, `docs/THREAT_MODEL_REA.md` and `docs/SERVER_SIDE_CON
 
 1. Move proprietary logic, prompts and secrets into server-only modules.
 2. Test object-level and field-level authorization server-side, not only hidden UI elements.
-3. Add rate limits/quotas, export caps, minimal response fields and access logs.
+3. Add rate limits/quotas (`createQuotaGuard`), export caps, pagination limits (`maxPageSize`, `maxPage`), minimal response fields and access logs.
 4. Protect source maps/production artifacts without interfering with developer or accessibility tools.
 
 ## Stage 3 — optional instrumentation, informed by risk
 
-- Tier 1: disable public production source maps in framework config; optional `injectAgentNotice`, `signSvgPath` canaries. Explain weak evidence value.
-- Tier 2: `handleCanaryTrapRequest` on deliberately unused server routes with trusted-session resolver; alert for investigation, do not auto-ban. `initCdpGuard` optional low-confidence telemetry only.
-- Tier 3: `encryptPayload`/`decryptPayload` require CryptoKey and atomic replay store; use for independent trust boundaries and never claim a browser-held key is secret. Do not replace HTTPS.
+- Tier 1: disable public production source maps in framework config; optional `injectAgentNotice`, `signSvgPath` fragile provenance markers. Explain weak evidence value.
+- Tier 2: `createQuotaGuard` for per-account/API-key/IP rate limits and pagination caps; `handleCanaryTrapRequest` (with `normalizeCanaryPath`) on deliberately unused server routes with trusted-session resolver; alert for investigation, do not auto-ban. `detectAutomationSignals` (legacy alias `initCdpGuard`) optional low-confidence telemetry only.
+- Tier 3: `encryptPayload`/`decryptPayload` with `createInMemoryReplayGuard` (or Redis `SET NX PX`) require CryptoKey and atomic replay store; use for independent trust boundaries and never claim a browser-held key is secret. Do not replace HTTPS.
 - Tier 4: `mountForensicWatermark` with opaque server-issued rotating token; post privacy notice and define audit-ledger retention. `BehaviorShield` is opt-in telemetry, not license to degrade users.
 
 ## Stage 4 — testing and reporting
 
 1. Run `npm run check` locally and relevant framework build tests.
-2. Inspect public bundles for source-map leakage and test backend APIs for BOLA/field exposure and quotas.
+2. Inspect public bundles for source-map leakage (`scripts/verify-build.py` or `node scripts/run-audit.cjs <dir>`) and test backend APIs for BOLA/field exposure and quotas.
 3. If comparing to REA, use a dedicated consented browser and versioned observation protocol in `docs/BENCHMARK_PROTOCOL.md`.
 4. Report verified / plausible / unsupported claims separately; explicitly list bypasses, accessibility and privacy implications.
 5. Never instruct agents to sabotage other software or make unverified claims of protection.

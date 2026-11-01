@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+// WARNING: Local benchmark server only. Never deploy to production.
 /** Deterministic local twin-SaaS benchmark. Only localhost; not a production server. */
 const http = require('node:http');
 const fs = require('node:fs');
@@ -7,6 +8,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { URL } = require('node:url');
 const { handleCanaryTrapRequest } = require('../../dist/tier2-active/honeypot-middleware.js');
+
+const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const isLoopback = req => LOOPBACK_ADDRESSES.has(req.socket?.remoteAddress || '');
 
 const root = path.join(__dirname, 'public');
 const arg = k => { const at = process.argv.indexOf(k); return at > -1 ? process.argv[at+1] : undefined; };
@@ -48,8 +52,14 @@ const server = http.createServer(async (req,res) => {
   Object.entries(headers).forEach(([k,v])=>res.setHeader(k,v));
   const url = new URL(req.url||'/',`http://${host}:${port}`);
   const p=url.pathname;
-  if(p==='/__benchmark/reset' && req.method==='POST') { events=[]; exportTimes.clear(); tickets.length=0; ticketCounter=200; return json(res,200,{reset:true,mode}); }
-  if(p==='/__benchmark/state') return json(res,200,{mode,events,tickets,exportLimit:securityOn?limit:null});
+  if(p==='/__benchmark/reset' && req.method==='POST') {
+    if(!isLoopback(req)) return json(res,403,{error:'loopback_only'});
+    events=[]; exportTimes.clear(); tickets.length=0; ticketCounter=200; return json(res,200,{reset:true,mode});
+  }
+  if(p==='/__benchmark/state') {
+    if(!isLoopback(req)) return json(res,403,{error:'loopback_only'});
+    return json(res,200,{mode,events,tickets,exportLimit:securityOn?limit:null});
+  }
   if(p==='/api/session') return json(res,200,{mode,sessionToken:securityOn?crypto.randomBytes(8).toString('hex'):null,authenticated:false,synthetic:true});
   if(p==='/api/summary') return json(res,200,{mrr:37620,growth:14.2,accounts:accounts.length,pipeline:318000,chart:[35,46,41,57,54,68,62,71,82,78,91,96]});
   if(p==='/api/accounts') { const q=(url.searchParams.get('search')||'').toLowerCase().slice(0,100); return json(res,200,{items:accounts.filter(a=>`${a.name} ${a.sector} ${a.owner}`.toLowerCase().includes(q)),total:accounts.length}); }
