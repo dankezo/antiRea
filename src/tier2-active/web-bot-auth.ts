@@ -15,6 +15,21 @@
  * `parseWebBotAuthDirectory`, so the fetch can go through your own HTTP
  * client, cache, timeout and SSRF policy.
  *
+ * `Signature-Agent` is accepted in BOTH wire forms. The -00 draft mandates
+ * the RFC 8941 Dictionary form for signers (`sig="https://..."`), and that
+ * form is handled exactly as specified. Production has not converged on
+ * it, though: Cloudflare's production verifier still requires the legacy
+ * bare-string form (`Signature-Agent: "https://..."`) and production
+ * signers emit it deliberately, so a dictionary-only verifier would
+ * reject the deployed ecosystem. The legacy form is therefore accepted as
+ * a deprecated compatibility path — §5.2.1 expressly permits this (a
+ * verifier MAY accept it) — under a fail-closed guardrail: it binds only
+ * when exactly one signature covers the `signature-agent` field, via the
+ * whole-field covered component (no `;key`), and the verdict reports
+ * which form was used (`agentForm`) so operators can watch legacy usage.
+ * Revisit this acceptance when the draft becomes an RFC or Cloudflare's
+ * production verifier flips to the dictionary form.
+ *
  * Threat model — read before wiring this into policy:
  *
  * - A verified signature proves only that the request was signed, at signing
@@ -365,6 +380,28 @@ export function parseSfDictionary(headerValue: string): Map<string, SfMember> {
     parser.skipOptionalWhitespace();
   }
   return members;
+}
+
+/**
+ * Parse the legacy bare-string `Signature-Agent` form
+ * (`Signature-Agent: "https://agent.example"` — one sf-string item and
+ * nothing else). Returns the string value, or `undefined` when the header
+ * is anything else. Strict on purpose: parameters, extra members or a
+ * non-string item are not the legacy form.
+ */
+function parseLegacySignatureAgent(headerValue: string): string | undefined {
+  const parser = new SfParser(headerValue);
+  try {
+    parser.skipOptionalWhitespace();
+    const item = parser.parseItem();
+    parser.skipOptionalWhitespace();
+    if (!parser.done) return undefined;
+    if (item.value.kind !== "string" || item.params.length > 0) return undefined;
+    const value = String(item.value.value);
+    return value === "" ? undefined : value;
+  } catch {
+    return undefined;
+  }
 }
 
 function serializeParamValue(value: SfValue): string {
@@ -719,6 +756,8 @@ export interface WebBotAuthVerdict {
   verified: boolean;
   /** The signed `Signature-Agent` URL, when verification got far enough to read it. This is the agent identity to key policy/quota on. */
   agent?: string;
+  /** Which `Signature-Agent` wire form the request used, when the header could be read: the draft's dictionary form, or the deprecated legacy bare-string form (accepted for production compatibility — see the module header). Lets operators measure remaining legacy usage. */
+  agentForm?: "dictionary" | "legacy";
   /** The `keyid` (JWK thumbprint) the signature claims, when readable. */
   keyId?: string;
   /** The signature label that was evaluated. */
@@ -1032,14 +1071,17 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     req: WebBotAuthRequestLike,
     url: URL | undefined,
     agentMembers: Map<string, SfMember> | undefined,
+    legacyAgent: string | undefined,
     signature: ParsedSignature,
     nowMs: number,
   ): Promise<WebBotAuthVerdict> => {
+    const agentForm: "dictionary" | "legacy" = legacyAgent !== undefined ? "legacy" : "dictionary";
     const fail = (reason: WebBotAuthFailureReason, detail: string, extra?: Partial<WebBotAuthVerdict>): WebBotAuthVerdict => ({
       verified: false,
       reason,
       detail,
       label: signature.label,
+      agentForm,
       ...extra,
     });
     const params = signature.params;
@@ -1103,7 +1145,20 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     // --- Agent identity (bound by the signature via the covered component) --
     let agent: string | undefined;
     const agentKeyParam = paramAsString(agentComponent.params, "key");
-    if (agentMembers) {
+    if (legacyAgent !== undefined) {
+      // Legacy bare-string form: the whole field value IS the agent, bound
+      // by the whole-field covered component. A `;key` component selects a
+      // dictionary member and cannot be satisfied by a header that has no
+      // members — fail closed rather than guess a binding.
+      if (agentKeyParam !== undefined) {
+        return fail(
+          "malformed_headers",
+          "covered component selects a Signature-Agent dictionary member (`;key`) but the header uses the legacy bare-string form, which has no members",
+          { keyId, expiresAt: expires },
+        );
+      }
+      agent = legacyAgent;
+    } else if (agentMembers) {
       if (agentKeyParam !== undefined) {
         const member = agentMembers.get(agentKeyParam);
         if (member?.item && member.item.value.kind === "string") agent = String(member.item.value.value);
@@ -1185,6 +1240,7 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     return {
       verified: true,
       ...(agent ? { agent } : {}),
+      agentForm,
       keyId,
       label: signature.label,
       expiresAt: expires,
@@ -1206,10 +1262,10 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     let inputMembers: Map<string, SfMember>;
     let signatureMembers: Map<string, SfMember>;
     let agentMembers: Map<string, SfMember> | undefined;
+    let legacyAgent: string | undefined;
     try {
       inputMembers = parseSfDictionary(inputHeader);
       signatureMembers = parseSfDictionary(signatureHeader);
-      agentMembers = parseSfDictionary(agentHeader);
     } catch (err) {
       return emit({
         verified: false,
@@ -1217,7 +1273,22 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
         detail: `structured-fields parse failed: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
-    if (agentMembers.size === 0) {
+    try {
+      agentMembers = parseSfDictionary(agentHeader);
+    } catch (err) {
+      // Not a dictionary: fall back to the legacy bare-string form (the
+      // dual-form acceptance described in the module header). A header
+      // that is neither form stays `malformed_headers`, exactly as before.
+      legacyAgent = parseLegacySignatureAgent(agentHeader);
+      if (legacyAgent === undefined) {
+        return emit({
+          verified: false,
+          reason: "malformed_headers",
+          detail: `structured-fields parse failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+    if (agentMembers !== undefined && agentMembers.size === 0) {
       return emit({ verified: false, reason: "no_signature_agent", detail: "Signature-Agent header carries no members" });
     }
 
@@ -1242,13 +1313,33 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
       return emit({ verified: false, reason: "malformed_headers", detail: "Signature-Input carries no usable signature labels" });
     }
 
+    if (legacyAgent !== undefined) {
+      // Fail-closed binding guardrail for the legacy form: the bare string
+      // is bound implicitly to the covering signature, which is only
+      // unambiguous when exactly one signature covers the field. With
+      // several covering signatures, keep rejecting instead of guessing.
+      const coveringCount = parsed.filter(p =>
+        p.components.some(
+          c => c.value.kind === "string" && String(c.value.value).toLowerCase() === "signature-agent",
+        ),
+      ).length;
+      if (coveringCount > 1) {
+        return emit({
+          verified: false,
+          reason: "malformed_headers",
+          agentForm: "legacy",
+          detail: `legacy bare-string Signature-Agent cannot be bound unambiguously: ${coveringCount} signatures cover the signature-agent field`,
+        });
+      }
+    }
+
     // Evaluate Web Bot Auth candidates first (tag present and correct), then
     // fall back to the first label so the failure reason stays precise.
     const candidates = parsed.filter(p => paramAsString(p.params, "tag") === WEB_BOT_AUTH_TAG);
     const ordered = candidates.length ? candidates : parsed.slice(0, 1);
     let firstFailure: WebBotAuthVerdict | undefined;
     for (const signature of ordered) {
-      const verdict = await evaluateLabel(req, url, agentMembers, signature, nowMs);
+      const verdict = await evaluateLabel(req, url, agentMembers, legacyAgent, signature, nowMs);
       if (verdict.verified) return emit(verdict);
       firstFailure ??= verdict;
     }

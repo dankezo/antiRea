@@ -23,7 +23,8 @@
  * draft-ietf-webbotauth-httpsig-protocol-00. Both Ed25519 vectors carry
  * RFC 9421 signatures that are cryptographically VALID (asserted below
  * with node:crypto over hand-built signature bases, independently of the
- * verifier), yet the -00 profile gates reject both:
+ * verifier), and they land on opposite sides of this verifier's
+ * Signature-Agent policy:
  *
  *  - sig1 covers "@authority" only and the request carries NO
  *    Signature-Agent header. -00 §5.2.1: "A signed request MUST carry the
@@ -35,12 +36,18 @@
  *  - sig2 uses the LEGACY bare-sf-string Signature-Agent form
  *    (`Signature-Agent: "https://signature-agent.test"`) with whole-field
  *    coverage. -00 §5.2.1 makes the Dictionary form mandatory for signers
- *    and says a verifier MAY accept the legacy form; this verifier does
- *    not — the header fails its dictionary parse and the verdict is
- *    `malformed_headers`. Accepting the legacy form is a policy decision
- *    for the module, not a test-harness fix; it is recorded here and in
- *    the task report, and these tests pin the current behavior so the
- *    decision cannot drift silently.
+ *    and says a verifier MAY accept the legacy form. Decision (Danny,
+ *    2026-11-01): accept BOTH forms — the draft mandates the dictionary
+ *    form, but Cloudflare's production verifier still requires the bare
+ *    string and production signers send it deliberately, so a
+ *    dictionary-only verifier would reject the deployed ecosystem. The
+ *    legacy form is accepted as deprecated compatibility under a
+ *    fail-closed guardrail (exactly one signature may cover the field;
+ *    whole-field component only, no `;key` binding) and the verdict
+ *    reports `agentForm: "legacy"`. The tests below pin the acceptance —
+ *    and its tamper / ambiguity / `;key` edges — so the behavior cannot
+ *    drift silently. Revisit when the draft becomes an RFC or Cloudflare
+ *    flips its production verifier to the dictionary form.
  *
  * The draft's own Appendix E.2.1 vector (dictionary form, member coverage)
  * verifies cleanly — see the last test.
@@ -142,7 +149,7 @@ test('DIVERGENCE (profile): architecture-v1 Ed25519 sig1 — valid RFC 9421 sign
   assert.equal(verdict.reason, 'no_signature_agent');
 });
 
-test('DIVERGENCE (legacy form): architecture-v1 Ed25519 sig2 — valid RFC 9421 signature, rejected at the dictionary-only Signature-Agent gate', async () => {
+test('COMPAT (legacy form): architecture-v1 Ed25519 sig2 — valid RFC 9421 signature, verified via legacy bare-string Signature-Agent acceptance', async () => {
   // Legacy whole-field form: the covered component value is the raw field
   // value (a bare sf-string), and over that base the signature is sound.
   assert.equal(
@@ -153,13 +160,77 @@ test('DIVERGENCE (legacy form): architecture-v1 Ed25519 sig2 — valid RFC 9421 
     true,
   );
 
-  // This verifier parses Signature-Agent strictly as an RFC 8941
-  // dictionary (the -00 form signers MUST send; verifier acceptance of the
-  // legacy string form is a MAY in §5.2.1 that this module does not
-  // implement), so the request is rejected while parsing headers.
+  // Dual-form acceptance (decision: Danny, 2026-11-01): the draft
+  // mandates the dictionary form for signers, but Cloudflare's production
+  // verifier requires this bare-string form and production signers send
+  // it deliberately, so the verifier accepts it under the §5.2.1 MAY —
+  // bound to the single covering signature via the whole-field component,
+  // and reported on the verdict as agentForm "legacy" so operators can
+  // watch remaining legacy usage.
   const verdict = await verifierForVector(ed25519Sig2).verify(requestFromVector(ed25519Sig2));
+  assert.equal(verdict.verified, true);
+  assert.equal(verdict.agent, 'https://signature-agent.test');
+  assert.equal(verdict.agentForm, 'legacy');
+  assert.equal(verdict.label, 'sig2');
+  assert.equal(verdict.keyId, 'poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U');
+});
+
+test('COMPAT (legacy form): tampered legacy agent URL fails as invalid_signature', async () => {
+  // The agent URL is inside the signature base, so swapping the header
+  // value for an attacker's URL must break Ed25519 verification — the
+  // legacy acceptance never detaches identity from the signature.
+  const req = mockReq({
+    url: ed25519Sig2.target_url,
+    headers: {
+      'signature-input': ed25519Sig2.signature_input,
+      signature: ed25519Sig2.signature,
+      'signature-agent': '"https://attacker.example"',
+    },
+  });
+  const verdict = await verifierForVector(ed25519Sig2).verify(req);
+  assert.equal(verdict.verified, false);
+  assert.equal(verdict.reason, 'invalid_signature');
+  assert.equal(verdict.agentForm, 'legacy');
+});
+
+test('COMPAT (legacy form): ambiguous multi-signature coverage is rejected as malformed_headers', async () => {
+  // The same covering signature presented under two labels: the implicit
+  // binding of a bare-string agent is ambiguous, so the guardrail keeps
+  // rejecting instead of guessing which signature the agent belongs to.
+  const params = ed25519Sig2.signature_input.slice(ed25519Sig2.label.length + 1); // strip "sig2="
+  const sigMember = ed25519Sig2.signature.slice(ed25519Sig2.label.length + 1); // strip "sig2=", keeps ":...:"
+  const req = mockReq({
+    url: ed25519Sig2.target_url,
+    headers: {
+      'signature-agent': ed25519Sig2.signature_agent,
+      'signature-input': `siga=${params}, sigb=${params}`,
+      signature: `siga=${sigMember}, sigb=${sigMember}`,
+    },
+  });
+  const verdict = await verifierForVector(ed25519Sig2).verify(req);
   assert.equal(verdict.verified, false);
   assert.equal(verdict.reason, 'malformed_headers');
+  assert.equal(verdict.agentForm, 'legacy');
+});
+
+test('COMPAT (legacy form): dictionary-member coverage (`;key`) over a legacy header is rejected as malformed_headers', async () => {
+  // A `;key` component selects a dictionary member; a bare-string header
+  // has no members, so there is nothing to bind — fail closed.
+  const params = ed25519Sig2.signature_input.slice(ed25519Sig2.label.length + 1); // strip "sig2="
+  const keyedParams = params.replace('"signature-agent"', '"signature-agent";key="agent"');
+  assert.notEqual(keyedParams, params); // the rewrite actually happened
+  const req = mockReq({
+    url: ed25519Sig2.target_url,
+    headers: {
+      'signature-agent': ed25519Sig2.signature_agent,
+      'signature-input': `sig2=${keyedParams}`,
+      signature: ed25519Sig2.signature,
+    },
+  });
+  const verdict = await verifierForVector(ed25519Sig2).verify(req);
+  assert.equal(verdict.verified, false);
+  assert.equal(verdict.reason, 'malformed_headers');
+  assert.equal(verdict.agentForm, 'legacy');
 });
 
 test('draft-ietf-webbotauth-httpsig-protocol-00 Appendix E.2.1 Ed25519 vector verifies', async () => {
@@ -191,6 +262,7 @@ test('draft-ietf-webbotauth-httpsig-protocol-00 Appendix E.2.1 Ed25519 vector ve
   const verdict = await verifier.verify(req);
   assert.equal(verdict.verified, true);
   assert.equal(verdict.agent, 'https://signature-agent.test');
+  assert.equal(verdict.agentForm, 'dictionary');
   assert.equal(verdict.keyId, 'poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U');
   assert.equal(verdict.label, 'sig2');
   assert.equal(verdict.expiresAt, 4889289600);
