@@ -172,6 +172,15 @@ behavior-identical.
 5. **Header containers**: mapping headers are scanned case-insensitively
    (the TS plain-object path); non-mapping header objects are queried via
    their own `get()` (the TS Fetch-`Headers` path).
+6. **Store capacity and unresolved identity (TS hardened after the port)**:
+   the TS in-memory quota store now fails closed at its key cap (only
+   expired windows are evicted; a new window is refused and the guard
+   rejects with `store_capacity_exceeded`), and a request with no resolvable
+   account/API key/IP is counted against a shared `unknown` bucket unless
+   `allowUnresolvedIdentity` is set. This Python port still uses
+   insertion-order eviction at the cap and still skips quota checks for
+   fully unresolvable requests; both behaviors predate the TS hardening and
+   are tracked divergences, not parity.
 
 ## Limitations and what the tests do NOT cover
 
