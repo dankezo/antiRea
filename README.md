@@ -4,7 +4,7 @@
 
 **Risk Assessment Toolkit · TypeScript SDK · AI Agent Skill**
 
-[Tiếng Việt](README.vi.md) · [Threat Model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [QA Status](docs/QA_2026-10-31.md) · [Changelog](CHANGELOG.md)
+[Tiếng Việt](README.vi.md) · [Threat Model](docs/THREAT_MODEL_REA.md) · [Limitations](docs/LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
@@ -28,9 +28,9 @@ You can also install via [GitHub Release](https://github.com/dankezo/antiRea/rel
 - **Herd detection:** `createHerdDetector()` watches many identities at once and flags groups that jointly tile your dataset, even across different IPs; `applyHerdLadder()` cuts a flagged group's budgets. Signal layers grew too: a deterministic canary maze (`createCanaryMaze()`) and decoy routes (`createDecoyMirage()`).
 - **Carried over from v2.2:** Web Bot Auth signature verification (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) and the Python/FastAPI quota-guard port in [examples/python-fastapi](examples/python-fastapi).
 
-## Twin-SaaS Benchmark (v2.1)
+## Browser benchmark harness
 
-We built **Northstar**, a synthetic SaaS app with dashboard, customer search, lead creation, CSV export, and chart views in both **baseline (`:4173`)** and **protected (`:4174`)** modes.
+The repo ships a Playwright harness that runs a synthetic SaaS (**Northstar**: dashboard, customer search, lead creation, CSV export, chart views) in **baseline (`:4173`)** and **protected (`:4174`)** modes across Chromium, Firefox and WebKit - the reproducible in-repo companion to the measured results below.
 
 ```bash
 npm install
@@ -39,8 +39,6 @@ python -m pip install playwright
 python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
-
-To view the UI manually, open two terminals and run `npm run benchmark:baseline` alongside `npm run benchmark:demo`.
 
 ## What problem does antiRea address?
 
@@ -224,6 +222,6 @@ The old `Error.stack` serialization trick was weakened by V8 changes; independen
 
 ## Contributing / Security / Limitations
 
-Read [CONTRIBUTING.md](.github/CONTRIBUTING.md), [SECURITY.md](.github/SECURITY.md), [docs/LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md), [docs/LIMITATIONS.md](docs/LIMITATIONS.md), and [docs/QA_2026-10-31.md](docs/QA_2026-10-31.md).
+Read [CONTRIBUTING.md](.github/CONTRIBUTING.md), [SECURITY.md](.github/SECURITY.md), [docs/LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md), and [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 **Project funding:** [Support the maintainer](https://www.paypal.com/paypalme/dannyphan190) (optional; never necessary to use).

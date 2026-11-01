@@ -4,7 +4,7 @@
 
 **Bộ công cụ đánh giá rủi ro · TypeScript SDK · AI Agent Skill**
 
-[English](README.md) · [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) · [Giới hạn](docs/LIMITATIONS.md) · [Kết quả QA](docs/QA_2026-10-31.md) · [Changelog](CHANGELOG.md)
+[English](README.md) · [Mô hình rủi ro](docs/THREAT_MODEL_REA.md) · [Giới hạn](docs/LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
@@ -28,9 +28,9 @@ Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/anti
 - **Phát hiện bầy đàn:** `createHerdDetector()` theo dõi nhiều danh tính cùng lúc và gắn cờ các nhóm đang cùng nhau lát kín bộ dữ liệu, kể cả khác IP; `applyHerdLadder()` cắt ngân sách của nhóm bị gắn cờ. Các lớp tín hiệu cũng lớn thêm: mê cung canary xác định (`createCanaryMaze()`) và route mồi (`createDecoyMirage()`).
 - **Kế thừa từ v2.2:** kiểm chứng chữ ký Web Bot Auth (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) và bản port quota guard Python/FastAPI tại [examples/python-fastapi](examples/python-fastapi).
 
-## Demo SaaS A/B (v2.1)
+## Bộ khung benchmark trình duyệt
 
-Đã dựng **Northstar**, ứng dụng SaaS giả lập với dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)**.
+Repo kèm một bộ khung Playwright chạy SaaS giả lập (**Northstar**: dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ) ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)** trên Chromium, Firefox và WebKit - bản tái lập được ngay trong repo, đi cùng mục kết quả đã đo ở dưới.
 
 ```bash
 npm install
@@ -39,8 +39,6 @@ python -m pip install playwright
 python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
-
-Muốn xem giao diện bằng tay, mở hai terminal và chạy `npm run benchmark:baseline` cùng `npm run benchmark:demo`.
 
 ## antiRea giải quyết vấn đề gì?
 
@@ -215,4 +213,4 @@ Dùng cùng một chuỗi danh tính (`account:<id>`) ở cả hai nơi, để c
 
 ## Đóng góp / An ninh / Giới hạn
 
-Đọc [CONTRIBUTING.md](.github/CONTRIBUTING.md), [SECURITY.md](.github/SECURITY.md), [LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md), [LIMITATIONS.md](docs/LIMITATIONS.md) và [QA_2026-10-31.md](docs/QA_2026-10-31.md).
+Đọc [CONTRIBUTING.md](.github/CONTRIBUTING.md), [SECURITY.md](.github/SECURITY.md), [LEGAL_PRIVACY.md](docs/LEGAL_PRIVACY.md) và [LIMITATIONS.md](docs/LIMITATIONS.md).
