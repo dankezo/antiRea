@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![cobertura de líneas de dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
 
 antiRea ayuda a auditar lo que expone un sitio web, aplicar cuotas de velocidad y paginación en el servidor, mover la lógica crítica al servidor y aplicar controles canary o de marca de agua donde corresponda. **No puede** impedir que usuarios o agentes inspeccionen el código entregado a su navegador.
 
@@ -30,15 +30,16 @@ npm install @dannyphan190/anti-rea
 
 También se puede instalar mediante [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Novedades de v2.6.1
+## Novedades de v2.6.2
 
-Una versión de parche pequeña: una auditoría de seguridad independiente de la v2.6.0 encontró tres errores, y los tres están corregidos. Para los usuarios normales, el funcionamiento de antiRea no cambia en nada: no hay pasos de actualización ni ajustes nuevos.
+Una versión de parche pequeña sobre relojes. Las ventanas de tiempo de antiRea se medían antes con el reloj de pared del servidor, el que puede saltar cuando la máquina sincroniza la hora o un administrador la cambia. Esos saltos podían torcer sus límites. Ya no pueden. Nada más cambia: no hay pasos de actualización ni ajustes nuevos.
 
-- **Un "número de recibo" prestado ya no funciona.** Cada reserva lleva una clave de idempotencia - piense en ella como el número de recibo de "esto ya lo pagué". Antes, cualquiera que conociera el número de recibo de otra cuenta podía presentarlo como propio y gastar del presupuesto de esa cuenta. Ahora el recibo se contrasta con aquello para lo que se emitió la primera vez, en ambos libros de registro; si no coincide, se rechaza, y las reservas escritas por versiones anteriores, que no llevan la nueva huella, se cierran de forma segura durante los pocos minutos que les quedan de vida.
-- **Una base de datos rota ya no puede tumbar su aplicación.** Cuando el almacenamiento detrás de los libros se corrompía o devolvía datos basura, el SDK lanzaba errores en bruto directamente a su manejo de peticiones: en la prueba en vivo de la auditoría, un almacenamiento muerto mató el proceso anfitrión en su primera petición. Ahora el SDK responde con un rechazo limpio (una decisión estilo HTTP 429 "store unavailable") y su proceso sigue vivo.
-- **Los ID de registro enormes vuelven a ser baratos.** El libro guardaba una lista con una casilla por cada ID posible, así que un solo registro con ID 100.000.000 inflaba el estado guardado a 16,7 MB. Ahora usa una lista dispersa que crece con el número de registros que usted realmente tiene: ese mismo caso tarda 3 ms y 1.745 bytes de estado (antes 1.439 ms), y los estados guardados por versiones anteriores siguen cargando.
+- **Un salto del reloj hacia adelante ya no reparte un presupuesto doble.** Si el reloj del servidor saltaba 5 minutos hacia adelante, una ventana de 60 segundos ya agotada parecía "caducada", así que una sola cuenta podía llevarse 200 registros en 10 segundos reales: el doble de su presupuesto. Medido en el laboratorio sobre la versión anterior; ahora la ventana solo cuenta el tiempo real transcurrido y el lote extra se rechaza.
+- **Un salto hacia atrás ya no bloquea a los usuarios honestos.** El mismo salto en la otra dirección mantenía una ventana terminada en estado "cerrado" durante 5 minutos extra, bloqueando a usuarios normales sin motivo. Ahora las ventanas terminan a su hora.
+- **Los plazos reales siguen usando el reloj real.** Los enlaces firmados que caducan a una hora fija, los topes diarios y las reglas de calendario funcionan exactamente igual que antes: solo cambiaron los temporizadores de tipo cronómetro.
+- **La suite de pruebas creció para demostrarlo:** 322 pruebas, 320 superadas, incluidas pruebas nuevas que reproducen ambos saltos de reloj contra cada temporizador del paquete.
 
-Informe técnico completo: [Análisis detallado de v2.6.1](docs/v2.6.1-deep-dive.es.md). La capa de presupuesto de acciones nueva en v2.6.0 está cubierta en el [Análisis detallado de v2.6.0](docs/v2.6.0-deep-dive.es.md) y en el registro de cambios.
+Informe técnico completo: [Análisis detallado de v2.6.2](docs/v2.6.2-deep-dive.es.md). Las tres correcciones de auditoría de la v2.6.1 están cubiertas en el [análisis detallado de la v2.6.1](docs/v2.6.1-deep-dive.es.md) y en el registro de cambios.
 
 ## Entorno de pruebas comparativas en el navegador
 
@@ -102,7 +103,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compila, ejecuta **305 pruebas automatizadas** (303 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compila, ejecuta **322 pruebas automatizadas** (320 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
 
 ## Cómo integrar el SDK
 
