@@ -59,7 +59,7 @@
  */
 
 import type { CalibrationTier } from "./calibration-manifest";
-import type { HerdResponseBand } from "./herd-detector";
+import type { HerdFlagSnapshot, HerdResponseBand } from "./herd-detector";
 
 export type CohortOrigin = "host_declared" | "inferred";
 
@@ -84,6 +84,36 @@ export function enforcementActionRank(action: EnforcementAction): number {
  * disclosure ledger's per-subject reservation bound, 500).
  */
 export const SOFT_BUDGET_FLOOR_RECORDS = 500;
+
+/**
+ * Minimum unique (disjoint) coverage for a herd member to be a
+ * friction target of the group's flag. Derivation: the herd flag
+ * floor is 300 combined records; a member whose unique contribution
+ * is below 25 records - below 1/12 of that minimum flag floor -
+ * cannot be a material actor in the flag, however the shared
+ * records around it are counted.
+ */
+export const HERD_FRICTION_MIN_UNIQUE_RECORDS = 25;
+
+/**
+ * The members of a herd flag that friction may actually target:
+ * those whose `memberUniqueCoverage` reaches the floor (default
+ * `HERD_FRICTION_MIN_UNIQUE_RECORDS`). Legacy fallback: a snapshot
+ * produced before `memberUniqueCoverage` existed carries no such
+ * field, and for those snapshots ALL members are returned - the
+ * host cannot attribute unique coverage it was never given, so the
+ * pre-coverage behaviour is preserved rather than guessed at.
+ */
+export function herdFrictionTargets(
+  snapshot: HerdFlagSnapshot,
+  opts?: { minUniqueRecords?: number },
+): string[] {
+  const floor = opts?.minUniqueRecords ?? HERD_FRICTION_MIN_UNIQUE_RECORDS;
+  const uniqueCoverage = (snapshot as { memberUniqueCoverage?: Record<string, number> })
+    .memberUniqueCoverage;
+  if (!uniqueCoverage) return [...snapshot.members];
+  return snapshot.members.filter(member => (uniqueCoverage[member] ?? 0) >= floor);
+}
 
 export interface EnforcementContext {
   origin: CohortOrigin;
