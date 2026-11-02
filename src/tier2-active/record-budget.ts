@@ -57,6 +57,7 @@
  * default cap, never reach either threshold.
  */
 
+import { resolveIntervalClock } from "../internal/mono-clock";
 import type {
   QuotaExpressNext,
   QuotaExpressResponse,
@@ -76,8 +77,15 @@ export interface RecordBudgetOptions {
    * evict account state. Defaults to 2,000.
    */
   maxIpEntries?: number;
-  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
+  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. Display timestamps only (L-DEEP-2). */
   now?: () => number;
+  /**
+   * Monotonic clock for the window arithmetic (L-DEEP-2). When given,
+   * window expiry is measured on this clock and is immune to wall-clock
+   * steps. When only `now` is given, the injected clock drives both
+   * domains (pre-patch behavior).
+   */
+  monoNow?: () => number;
   /**
    * Fired when a `consume`/`consumeExported`/`charge` pushes an identity's
    * usage over its effective limit. Errors thrown here are swallowed:
@@ -181,6 +189,8 @@ type RecordState = 1 | 2;
 
 interface BudgetEntry {
   windowStart: number;
+  /** Monotonic twin of `windowStart` (L-DEEP-2): window expiry is measured on this clock. */
+  windowStartMono: number;
   /** Stored record keys (fixed-length hashes) -> highest state reached. */
   records: Map<string, RecordState>;
   /** Sum of the states in `records`, plus the cost of records consumed beyond the storage cap. */
@@ -219,7 +229,7 @@ export function createRecordBudget(options: RecordBudgetOptions): RecordBudget {
   const windowMs = Math.max(1, Math.floor(options.windowMs ?? DEFAULT_WINDOW_MS) || DEFAULT_WINDOW_MS);
   const maxEntries = Math.max(100, Math.floor(options.maxEntries ?? DEFAULT_MAX_ENTRIES) || DEFAULT_MAX_ENTRIES);
   const maxIpEntries = Math.max(100, Math.floor(options.maxIpEntries ?? DEFAULT_MAX_IP_ENTRIES) || DEFAULT_MAX_IP_ENTRIES);
-  const clock = options.now ?? (() => Date.now());
+  const { wall: clock, mono: monoClock } = resolveIntervalClock(options);
   /** Account/API-key identities. */
   const accountPool = new Map<string, BudgetEntry>();
   /** `ip:` identities - a separate bounded pool, so IP churn cannot evict account state. */
@@ -253,8 +263,9 @@ export function createRecordBudget(options: RecordBudgetOptions): RecordBudget {
   const liveEntry = (identity: string, create: boolean): BudgetEntry | undefined => {
     const pool = poolFor(identity);
     const now = clock();
+    const nowMono = monoClock();
     let entry = pool.get(identity);
-    if (entry && now - entry.windowStart >= windowMs) {
+    if (entry && nowMono - entry.windowStartMono >= windowMs) {
       pool.delete(identity);
       entry = undefined;
     }
@@ -263,7 +274,14 @@ export function createRecordBudget(options: RecordBudgetOptions): RecordBudget {
         const oldestKey = pool.keys().next().value;
         if (oldestKey !== undefined) pool.delete(oldestKey);
       }
-      entry = { windowStart: now, records: new Map<string, RecordState>(), recordUnits: 0, charged: 0, reserved: 0 };
+      entry = {
+        windowStart: now,
+        windowStartMono: nowMono,
+        records: new Map<string, RecordState>(),
+        recordUnits: 0,
+        charged: 0,
+        reserved: 0,
+      };
       pool.set(identity, entry);
     }
     if (entry) {

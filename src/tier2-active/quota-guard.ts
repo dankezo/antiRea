@@ -38,6 +38,8 @@
  * a different page than the one the guard validated.
  */
 
+import { resolveIntervalClock } from "../internal/mono-clock";
+
 export interface QuotaTierConfig {
   /** Maximum requests allowed inside `windowMs` per dimension (account / API key / IP). */
   maxRequests: number;
@@ -174,8 +176,16 @@ export interface QuotaGuardOptions {
    * behavior of skipping quota checks for such requests.
    */
   allowUnresolvedIdentity?: boolean;
-  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
+  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. Display timestamps only (L-DEEP-2). */
   now?: () => number;
+  /**
+   * Monotonic clock for the sliding-window arithmetic (L-DEEP-2). The
+   * guard passes this clock's timestamps to the window store, so window
+   * pruning, `Retry-After` and the reset header are measured on a clock
+   * that never steps. When only `now` is given, the injected clock
+   * drives both domains (pre-patch behavior).
+   */
+  monoNow?: () => number;
 }
 
 export const DEFAULT_QUOTA_TIERS: Record<string, QuotaTierConfig> = {
@@ -337,7 +347,7 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
   const mode = options.paginationMode ?? "reject";
   const defaultPageSize = Math.max(1, Math.floor(options.defaultPageSize ?? 20) || 20);
   const store = options.store ?? createInMemoryQuotaStore(options.maxEntries ?? 10_000);
-  const clock = options.now ?? (() => Date.now());
+  const { wall: clock, mono: monoClock } = resolveIntervalClock(options);
 
   const tierConfig = (name: string): QuotaTierConfig => {
     const direct = tiers[name];
@@ -359,7 +369,10 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
 
   const checkRequest = async (rawReq: QuotaRequestLike): Promise<QuotaCheckResult> => {
     const req = normalizeRequest(rawReq);
-    const now = clock();
+    // Window arithmetic runs on the monotonic clock (L-DEEP-2); the wall
+    // clock is read once per request for the operator event timestamp.
+    const now = monoClock();
+    const wallNow = clock();
     const identity: QuotaIdentity = (await options.resolveIdentity?.(req)) ?? {};
     const ip = resolveIp(req, identity, options.trustedIpHeader);
     const tierName = identity.tier ?? options.defaultTier ?? "anonymous";
@@ -399,7 +412,7 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
         tier: tierName,
         limit,
         retryAfterSeconds,
-        timestamp: new Date(now).toISOString(),
+        timestamp: new Date(wallNow).toISOString(),
       });
       const message =
         kind === "rate_limit_exceeded"
