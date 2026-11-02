@@ -17,6 +17,8 @@ export * from "./tier2-active/calibration-manifest";
 export * from "./tier2-active/evidence-attribution";
 export * from "./tier2-active/enforcement-tiering";
 export * from "./tier2-active/protected-cohorts";
+export * from "./tier2-active/action-budget";
+export * from "./tier2-active/action-cohort";
 export * from "./tier2-active/cursor-v2";
 export * from "./tier2-active/cusum-tripwire";
 export * from "./tier2-active/evidence-reviewer";
