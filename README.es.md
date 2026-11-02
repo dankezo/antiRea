@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![cobertura de líneas de dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-296%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
 
 antiRea ayuda a auditar lo que expone un sitio web, aplicar cuotas de velocidad y paginación en el servidor, mover la lógica crítica al servidor y aplicar controles canary o de marca de agua donde corresponda. **No puede** impedir que usuarios o agentes inspeccionen el código entregado a su navegador.
 
@@ -30,19 +30,15 @@ npm install @dannyphan190/anti-rea
 
 También se puede instalar mediante [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Novedades de v2.6.0
+## Novedades de v2.6.1
 
-La versión corta: antiRea antes medía los *datos* que salen de su aplicación. Ahora también mide las *acciones* - exportaciones, búsquedas pesadas, reclamos de promociones - para que una multitud de cuentas ya no pueda agotar una función costosa solo con que cada una se mantenga cortésmente por debajo de su propio límite. Los usuarios normales no deberían notar nada.
+Una versión de parche pequeña: una auditoría de seguridad independiente de la v2.6.0 encontró tres errores, y los tres están corregidos. Para los usuarios normales, el funcionamiento de antiRea no cambia en nada: no hay pasos de actualización ni ajustes nuevos.
 
-- **Cada acción costosa recibe una etiqueta de precio - fijada por usted.** Usted dice cuánto cuesta una exportación o una búsqueda pesada; cada cuenta recibe un presupuesto, y un equipo completo puede compartir un único límite que queda fijado desde el momento en que lo declara.
-- **Los equipos que se reparten el trabajo siguen siendo detectados.** Las cuentas que se dividen en silencio el mismo trabajo - o que se abalanzan todas sobre la misma promoción - se agrupan y se marcan juntas, incluso cuando ninguna cuenta individual hace nada indebido.
-- **Los atacantes completan mucho menos y mucho más lento.** En nuestra prueba de laboratorio, un grupo sin protección terminó 80 de 80 trabajos en menos de un segundo. Con protección, terminó 16 de 80 (20%), y cada una de sus 24 cuentas terminó inscrita en verificaciones adicionales.
-- **Los equipos reales siguen trabajando.** Un equipo declarado de 6 terminó 40 de 40 trabajos con cero fricción. Un equipo similar no declarado tampoco perdió trabajo y nunca fue bloqueado de forma estricta - en el peor de los casos, verificaciones adicionales y un ritmo más lento.
-- **Los usuarios comunes no sienten nada.** 8 usuarios habituales en la misma prueba: 48 de 48 acciones tuvieron éxito en el primer intento, cero consecuencias.
-- **Trampas para acciones, no solo para páginas.** Puede registrar una promoción o porción de exportación falsa que ningún usuario real ve jamás. Quien la toque se marca solo a sí mismo - los observadores quedan completamente limpios.
-- **Límites honestos.** Esto grava y ralentiza el abuso de funciones; no puede hacerlo imposible cuando los registros son gratuitos e ilimitados. Y no dice nada sobre los errores de su propia lógica de negocio - precios incorrectos, carreras de inventario, permisos rotos son errores de código, no algo que un medidor pueda arreglar.
+- **Un "número de recibo" prestado ya no funciona.** Cada reserva lleva una clave de idempotencia - piense en ella como el número de recibo de "esto ya lo pagué". Antes, cualquiera que conociera el número de recibo de otra cuenta podía presentarlo como propio y gastar del presupuesto de esa cuenta. Ahora el recibo se contrasta con aquello para lo que se emitió la primera vez, en ambos libros de registro; si no coincide, se rechaza, y las reservas escritas por versiones anteriores, que no llevan la nueva huella, se cierran de forma segura durante los pocos minutos que les quedan de vida.
+- **Una base de datos rota ya no puede tumbar su aplicación.** Cuando el almacenamiento detrás de los libros se corrompía o devolvía datos basura, el SDK lanzaba errores en bruto directamente a su manejo de peticiones: en la prueba en vivo de la auditoría, un almacenamiento muerto mató el proceso anfitrión en su primera petición. Ahora el SDK responde con un rechazo limpio (una decisión estilo HTTP 429 "store unavailable") y su proceso sigue vivo.
+- **Los ID de registro enormes vuelven a ser baratos.** El libro guardaba una lista con una casilla por cada ID posible, así que un solo registro con ID 100.000.000 inflaba el estado guardado a 16,7 MB. Ahora usa una lista dispersa que crece con el número de registros que usted realmente tiene: ese mismo caso tarda 3 ms y 1.745 bytes de estado (antes 1.439 ms), y los estados guardados por versiones anteriores siguen cargando.
 
-Informe técnico completo con cada mecanismo y medición: [Análisis detallado de v2.6.0](docs/v2.6.0-deep-dive.es.md).
+Informe técnico completo: [Análisis detallado de v2.6.1](docs/v2.6.1-deep-dive.es.md). La capa de presupuesto de acciones nueva en v2.6.0 está cubierta en el [Análisis detallado de v2.6.0](docs/v2.6.0-deep-dive.es.md) y en el registro de cambios.
 
 ## Entorno de pruebas comparativas en el navegador
 
@@ -106,7 +102,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compila, ejecuta **298 pruebas automatizadas** (296 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compila, ejecuta **305 pruebas automatizadas** (303 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
 
 ## Cómo integrar el SDK
 
