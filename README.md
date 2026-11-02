@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -30,15 +30,16 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.6.1
+## New in v2.6.2
 
-A small patch release: an independent security audit of v2.6.0 found three bugs, and all three are fixed. Nothing about how antiRea works changes for normal users - no upgrade steps, no new settings.
+A small patch release about clocks. antiRea's time windows used to be measured with the server's wall clock - the one that can jump when the machine syncs its time or an admin changes it. Those jumps could bend your limits. They no longer can. Nothing else changes: no upgrade steps, no new settings.
 
-- **A borrowed "receipt number" no longer works.** Every reservation carries an idempotency key - think of it as a receipt number for "I already paid for this". Before, anyone who learned another account's receipt number could present it as their own and spend from that account's budget. Now the receipt is checked against what it was first issued for, on both ledgers; a mismatch is refused, and reservations written by older versions (which carry no fingerprint yet) fail closed for the few minutes they have left to live.
-- **A broken database can no longer crash your app.** If the storage behind the ledgers broke or returned garbage, the SDK used to throw raw errors into your request handling - in the audit's live test, a dead store killed the host process on its very first request. Now the SDK answers with a clean refusal instead (an HTTP 429 "store unavailable" style decision) and your process stays up.
-- **Huge record IDs are cheap again.** The ledger used to keep a checklist with one box for every possible ID, so a single record with ID 100,000,000 bloated the saved state to 16.7 MB. It now keeps a sparse checklist that only grows with the number of records you actually have: that same case takes 3 ms and 1,745 bytes of state (was 1,439 ms), and states saved by older versions still load.
+- **A clock jump forward no longer hands out a double budget.** If the server clock leapt 5 minutes ahead, a spent 60-second window looked "expired", so one account could take 200 records in 10 real seconds - double its budget. Measured in the lab on the previous version; now the window only counts real elapsed time and the extra batch is refused.
+- **A clock jump backward no longer locks out honest users.** The same leap in the other direction kept a finished window "closed" for 5 extra minutes, blocking normal users for no reason. Now windows end on schedule.
+- **Real deadlines still use the real clock.** Signed links that expire at a set time, daily caps and calendar rules keep working exactly as before - only the stopwatch-style timers changed.
+- **The test suite grew to prove it:** 322 tests, 320 passing, including new tests that replay both clock jumps against every timer in the package.
 
-Full technical write-up: [v2.6.1 deep dive](docs/v2.6.1-deep-dive.md). The action-budget layer that was new in v2.6.0 is covered in the [v2.6.0 deep dive](docs/v2.6.0-deep-dive.md) and the changelog.
+Full technical write-up: [v2.6.2 deep dive](docs/v2.6.2-deep-dive.md). The three audit fixes in v2.6.1 are covered in the [v2.6.1 deep dive](docs/v2.6.1-deep-dive.md) and the changelog.
 
 ## Browser benchmark harness
 
@@ -102,7 +103,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **305 automated tests** (303 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **322 automated tests** (320 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
