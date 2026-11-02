@@ -18,6 +18,11 @@
  * request (429, kind `store_capacity_exceeded`) instead of silently dropping
  * an unexpired window and weakening the quota guarantee under load.
  *
+ * A supplied store that THROWS (dead backend) or returns malformed data
+ * fails closed the same way: `checkRequest` answers 429 with kind
+ * `store_unavailable` and never propagates the store's exception into
+ * the host's request path.
+ *
  * A request whose identity cannot be resolved at all (no account, no API key
  * and no determinable IP — for example a misnamed `trustedIpHeader` behind a
  * proxy) is NOT exempt: by default it is counted against a single shared
@@ -61,7 +66,8 @@ export type QuotaExceededKind =
   | "rate_limit_exceeded"
   | "page_size_exceeded"
   | "max_page_exceeded"
-  | "store_capacity_exceeded";
+  | "store_capacity_exceeded"
+  | "store_unavailable";
 
 export interface QuotaExceededEvent {
   kind: QuotaExceededKind;
@@ -400,9 +406,11 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
           ? "Too many requests; slow down and retry after the indicated interval."
           : kind === "store_capacity_exceeded"
             ? "Quota store is at capacity; the request was rejected rather than admitted unaccounted."
-            : kind === "page_size_exceeded"
-              ? `Requested page size exceeds the ${tierName} tier maximum of ${tier.maxPageSize}.`
-              : `Requested page exceeds the ${tierName} tier maximum depth of ${tier.maxPage}.`;
+            : kind === "store_unavailable"
+              ? "Quota store unavailable; the request was rejected rather than admitted unaccounted."
+              : kind === "page_size_exceeded"
+                ? `Requested page size exceeds the ${tierName} tier maximum of ${tier.maxPageSize}.`
+                : `Requested page exceeds the ${tierName} tier maximum depth of ${tier.maxPage}.`;
       return {
         allowed: false,
         status: 429,
@@ -443,9 +451,22 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
 
     // 2. Sliding-window rate check across every resolved dimension. The first
     //    exceeded dimension (account > apiKey > ip) is the reported one.
+    //    A store that throws (dead backend) or answers malformed data
+    //    fails closed with a structured `store_unavailable` rejection:
+    //    the exception must never escape checkRequest into the host's
+    //    request path, where an unwrapped async handler would turn it
+    //    into a process-killing unhandled rejection (F-06).
     const snapshots = new Map<string, QuotaWindowSnapshot>();
     for (const { dimension, key } of dimensions) {
-      const snapshot = await store.peek(key, now, tier.windowMs);
+      let snapshot: QuotaWindowSnapshot;
+      try {
+        snapshot = await store.peek(key, now, tier.windowMs);
+        if (!snapshot || typeof snapshot.count !== "number" || !Number.isFinite(snapshot.count)) {
+          throw new Error("quota store returned a malformed snapshot");
+        }
+      } catch {
+        return reject("store_unavailable", dimension, tier.maxRequests, windowRetryAfter, parsed.pagination);
+      }
       snapshots.set(key, snapshot);
       if (snapshot.count >= tier.maxRequests) {
         const oldest = snapshot.oldest ?? now;
@@ -459,7 +480,12 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
     //    A store refusal (full of unexpired windows) fails closed: the
     //    request is rejected rather than admitted without accounting.
     for (const { dimension, key } of dimensions) {
-      const recorded = await store.record(key, now, tier.windowMs);
+      let recorded: boolean | void;
+      try {
+        recorded = await store.record(key, now, tier.windowMs);
+      } catch {
+        return reject("store_unavailable", dimension, tier.maxRequests, windowRetryAfter, parsed.pagination);
+      }
       if (recorded === false) {
         return reject("store_capacity_exceeded", dimension, tier.maxRequests, windowRetryAfter, parsed.pagination);
       }

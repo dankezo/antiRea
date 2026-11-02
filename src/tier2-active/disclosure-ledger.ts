@@ -52,63 +52,172 @@
  */
 
 /* ------------------------------------------------------------------------ */
-/* Exact bitmap helpers (record ids are non-negative integers).             */
+/* Store failure type: every public entry converts store problems into a   */
+/* structured `store_conflict` refusal instead of throwing (F-06).         */
 /* ------------------------------------------------------------------------ */
 
-function bitmapByteLength(maxId: number): number {
-  return Math.floor(maxId / 8) + 1;
-}
-
-function bitmapFromBase64(value: string | undefined): Uint8Array {
-  if (!value) return new Uint8Array(0);
-  try {
-    const bin = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
-    return Uint8Array.from(bin, ch => ch.charCodeAt(0));
-  } catch {
-    return new Uint8Array(0);
+class LedgerStoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LedgerStoreError";
   }
 }
 
-function bitmapToBase64(bytes: Uint8Array): string {
+/* ------------------------------------------------------------------------ */
+/* Exact bitmap helpers (record ids are non-negative integers).             */
+/*                                                                          */
+/* The bitmap is SPARSE and chunked (F-07): a Map from chunk index to a     */
+/* fixed 1024-byte chunk covering 8192 ids. Stored size and reserve latency */
+/* therefore grow with the number of ids actually present - never with the  */
+/* VALUE of the largest id. The <= 2.6.0 dense encoding (one byte per 8 ids */
+/* up to the max id, so a single id of 10^8 produced a 16.7 MB state and    */
+/* id 2^53-1 threw RangeError) made state size a host-killing function of   */
+/* the host's id space; snowflake/int64 ids now cost one chunk each.        */
+/*                                                                          */
+/* Wire formats: new states serialize as "s1." + base64url of             */
+/* [uint32LE chunkIndex | 1024 chunk bytes]*. States written by older       */
+/* versions (plain base64url of the dense byte array) still decode.         */
+/* ------------------------------------------------------------------------ */
+
+const BITMAP_CHUNK_BITS = 8192;
+const BITMAP_CHUNK_BYTES = BITMAP_CHUNK_BITS / 8;
+const SPARSE_BITMAP_PREFIX = "s1.";
+
+type Bitmap = Map<number, Uint8Array>;
+
+function emptyBitmap(): Bitmap {
+  return new Map();
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
   let bin = "";
   const STEP = 0x4000;
   for (let i = 0; i < bytes.length; i += STEP) bin += String.fromCharCode(...bytes.subarray(i, i + STEP));
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function bitmapHas(bytes: Uint8Array, id: number): boolean {
-  const byte = bytes[Math.floor(id / 8)];
-  return byte !== undefined && (byte & (1 << (id % 8))) !== 0;
+function base64UrlToBytesStrict(value: string): Uint8Array {
+  try {
+    const bin = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(bin, ch => ch.charCodeAt(0));
+  } catch {
+    throw new LedgerStoreError("store_conflict: unparsable bitmap in stored ledger state");
+  }
 }
 
-function bitmapWithIds(base: Uint8Array, ids: readonly number[]): Uint8Array {
-  if (ids.length === 0) return base;
-  let max = 0;
-  for (const id of ids) if (id > max) max = id;
-  const needed = bitmapByteLength(max);
-  const out = new Uint8Array(Math.max(needed, base.length));
-  out.set(base);
-  for (const id of ids) {
-    const idx = Math.floor(id / 8);
-    out[idx] = (out[idx] ?? 0) | (1 << (id % 8));
+function bitmapFromBase64(value: string | undefined): Bitmap {
+  const out: Bitmap = new Map();
+  if (!value) return out;
+  if (value.startsWith(SPARSE_BITMAP_PREFIX)) {
+    const payload = base64UrlToBytesStrict(value.slice(SPARSE_BITMAP_PREFIX.length));
+    const stride = 4 + BITMAP_CHUNK_BYTES;
+    if (payload.length % stride !== 0) {
+      throw new LedgerStoreError("store_conflict: malformed sparse bitmap in stored ledger state");
+    }
+    const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+    for (let offset = 0; offset < payload.length; offset += stride) {
+      out.set(view.getUint32(offset, true), payload.slice(offset + 4, offset + stride));
+    }
+    return out;
+  }
+  // Legacy dense encoding written by <= 2.6.0: byte i holds ids 8i..8i+7.
+  let dense: Uint8Array;
+  try {
+    const bin = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
+    dense = Uint8Array.from(bin, ch => ch.charCodeAt(0));
+  } catch {
+    return out;
+  }
+  for (let start = 0; start < dense.length; start += BITMAP_CHUNK_BYTES) {
+    const slice = dense.subarray(start, Math.min(start + BITMAP_CHUNK_BYTES, dense.length));
+    let any = false;
+    for (const byte of slice) if (byte !== 0) { any = true; break; }
+    if (!any) continue;
+    const chunk = new Uint8Array(BITMAP_CHUNK_BYTES);
+    chunk.set(slice);
+    out.set(start / BITMAP_CHUNK_BYTES, chunk);
   }
   return out;
 }
 
-function bitmapPopcount(bytes: Uint8Array): number {
+function bitmapToBase64(bitmap: Bitmap): string {
+  if (bitmap.size === 0) return "";
+  const entries = [...bitmap.entries()].sort((a, b) => a[0] - b[0]);
+  const stride = 4 + BITMAP_CHUNK_BYTES;
+  const payload = new Uint8Array(entries.length * stride);
+  const view = new DataView(payload.buffer);
+  let offset = 0;
+  for (const [index, chunk] of entries) {
+    view.setUint32(offset, index, true);
+    offset += 4;
+    payload.set(chunk, offset);
+    offset += BITMAP_CHUNK_BYTES;
+  }
+  return SPARSE_BITMAP_PREFIX + bytesToBase64Url(payload);
+}
+
+function bitmapHas(bitmap: Bitmap, id: number): boolean {
+  const chunk = bitmap.get(Math.floor(id / BITMAP_CHUNK_BITS));
+  if (!chunk) return false;
+  const bit = id % BITMAP_CHUNK_BITS;
+  return ((chunk[Math.floor(bit / 8)] ?? 0) & (1 << (bit % 8))) !== 0;
+}
+
+function bitmapWithIds(base: Bitmap, ids: readonly number[]): Bitmap {
+  if (ids.length === 0) return base;
+  const out: Bitmap = new Map(base);
+  const copied = new Set<number>();
+  for (const id of ids) {
+    const chunkIndex = Math.floor(id / BITMAP_CHUNK_BITS);
+    let chunk = out.get(chunkIndex);
+    if (!chunk) {
+      chunk = new Uint8Array(BITMAP_CHUNK_BYTES);
+      out.set(chunkIndex, chunk);
+    } else if (!copied.has(chunkIndex)) {
+      // Copy-on-write: never mutate a chunk shared with `base`.
+      chunk = chunk.slice();
+      out.set(chunkIndex, chunk);
+      copied.add(chunkIndex);
+    }
+    const bit = id % BITMAP_CHUNK_BITS;
+    chunk[Math.floor(bit / 8)] = (chunk[Math.floor(bit / 8)] ?? 0) | (1 << (bit % 8));
+  }
+  return out;
+}
+
+function bitmapUnion(a: Bitmap, b: Bitmap): Bitmap {
+  if (a.size === 0) return b;
+  if (b.size === 0) return a;
+  const out: Bitmap = new Map(a);
+  for (const [index, chunkB] of b) {
+    const chunkA = out.get(index);
+    if (!chunkA) {
+      out.set(index, chunkB);
+      continue;
+    }
+    const merged = new Uint8Array(BITMAP_CHUNK_BYTES);
+    for (let i = 0; i < BITMAP_CHUNK_BYTES; i++) merged[i] = (chunkA[i] ?? 0) | (chunkB[i] ?? 0);
+    out.set(index, merged);
+  }
+  return out;
+}
+
+function bitmapPopcount(bitmap: Bitmap): number {
   let n = 0;
-  for (const byte of bytes) {
-    let b = byte;
-    while (b) {
-      b &= b - 1;
-      n++;
+  for (const chunk of bitmap.values()) {
+    for (const byte of chunk) {
+      let b = byte;
+      while (b) {
+        b &= b - 1;
+        n++;
+      }
     }
   }
   return n;
 }
 
 /** Ids present in `ids` but not in `bitmap` - the genuinely new disclosure. */
-function bitmapNewIds(bitmap: Uint8Array, ids: readonly number[]): number[] {
+function bitmapNewIds(bitmap: Bitmap, ids: readonly number[]): number[] {
   const seen = new Set<number>();
   const out: number[] = [];
   for (const id of ids) {
@@ -118,6 +227,30 @@ function bitmapNewIds(bitmap: Uint8Array, ids: readonly number[]): number[] {
     }
   }
   return out;
+}
+
+/**
+ * Fingerprint of the request an idempotency key was first used with
+ * (F-01): subject + long flag + count-only amount + the exact record id
+ * set, hashed with 64-bit FNV-1a over a canonical string. A replay is
+ * honored only when its fingerprint matches the stored one exactly.
+ */
+function reserveRequestFingerprint(
+  subject: string,
+  ids: readonly number[],
+  anonymousCount: number,
+  long: boolean,
+): string {
+  const sorted = [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const canonical = `${subject}\n${long ? "long" : "std"}\n${anonymousCount}\n${sorted.join(",")}`;
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (let i = 0; i < canonical.length; i++) {
+    hash ^= BigInt(canonical.charCodeAt(i));
+    hash = (hash * prime) & mask;
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -135,6 +268,14 @@ export interface LedgerReservation {
   expiresAtMs: number;
   /** Long reservations (slow exports) live on the host-authorized path. */
   long: boolean;
+  /**
+   * Fingerprint of the reserve request that created this reservation
+   * under an idempotency key (F-01). A replay of the key is honored
+   * only when its own fingerprint matches; reservations written by
+   * older versions carry no fingerprint and their keys fail closed
+   * (`idempotency_conflict`) for the rest of their short TTL.
+   */
+  idemFingerprint?: string;
 }
 
 export interface LedgerBucketState {
@@ -208,6 +349,76 @@ function emptyState(bucket: LedgerBucketState): DisclosureLedgerState {
 
 function cloneState(state: DisclosureLedgerState): DisclosureLedgerState {
   return JSON.parse(JSON.stringify(state)) as DisclosureLedgerState;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Shape validation for state read back from a store (F-06): a store
+ * holding truncated JSON, valid JSON of the wrong shape, or a bitmap
+ * payload that does not decode must surface as a structured
+ * `store_conflict` refusal from every public entry - never as a
+ * SyntaxError/TypeError escaping into the host.
+ */
+function isValidLedgerState(value: unknown): value is DisclosureLedgerState {
+  if (!isPlainRecord(value)) return false;
+  if (!isFiniteNumber(value.version)) return false;
+  if (typeof value.unionBitmap !== "string") return false;
+  if (!isFiniteNumber(value.anonymousServed)) return false;
+  if (!isPlainRecord(value.reservations)) return false;
+  for (const reservation of Object.values(value.reservations)) {
+    if (!isPlainRecord(reservation)) return false;
+    if (typeof reservation.id !== "string" || typeof reservation.subject !== "string") return false;
+    if (typeof reservation.idsBitmap !== "string") return false;
+    if (!isFiniteNumber(reservation.count)) return false;
+    if (!isFiniteNumber(reservation.createdAtMs) || !isFiniteNumber(reservation.expiresAtMs)) return false;
+    try {
+      bitmapFromBase64(reservation.idsBitmap);
+    } catch {
+      return false;
+    }
+  }
+  if (!isPlainRecord(value.bucket)) return false;
+  if (!isFiniteNumber(value.bucket.tokens) || !isFiniteNumber(value.bucket.lastRefillMs)) return false;
+  if (!isFiniteNumber(value.bucket.burst) || !isFiniteNumber(value.bucket.refillPerSecond)) return false;
+  if (!isPlainRecord(value.evidence)) return false;
+  for (const evidenceValue of Object.values(value.evidence)) {
+    if (!isFiniteNumber(evidenceValue)) return false;
+  }
+  if (!isPlainRecord(value.idempotency)) return false;
+  for (const reservationId of Object.values(value.idempotency)) {
+    if (typeof reservationId !== "string") return false;
+  }
+  if (value.registry !== null) {
+    if (!Array.isArray(value.registry)) return false;
+    for (const member of value.registry) if (typeof member !== "string") return false;
+  }
+  if (!isFiniteNumber(value.nextReservationSeq)) return false;
+  try {
+    bitmapFromBase64(value.unionBitmap);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+function parseStoredState(raw: string): DisclosureLedgerState {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new LedgerStoreError("store_conflict: stored ledger state is not valid JSON");
+  }
+  if (!isValidLedgerState(parsed)) {
+    throw new LedgerStoreError("store_conflict: stored ledger state has an invalid shape");
+  }
+  return parsed;
 }
 
 /**
@@ -335,6 +546,16 @@ export interface ReserveDisclosureRequest {
   longReservation?: boolean;
   /** Host authorization for the long path (slow exports). */
   hostAuthorizedLong?: boolean;
+  /**
+   * Idempotency key for safe retries of the same logical serve. Keys
+   * MUST be generated by the host and be unguessable (e.g. a random
+   * UUID per serve): a replay is honored - `duplicate: true`, charged
+   * once - ONLY when subject and payload (record ids, count, long
+   * flag) match the original request exactly. A replay whose subject
+   * or payload differs is refused `idempotency_conflict` and is never
+   * charged to the original subject, so a guessed key buys an
+   * attacker nothing (F-01).
+   */
   idempotencyKey?: string;
 }
 
@@ -346,6 +567,7 @@ export type ReserveRefusalReason =
   | "cohort_reservation_cap"
   | "unregistered_subject"
   | "long_reservation_not_authorized"
+  | "idempotency_conflict"
   | "store_conflict";
 
 export interface ReserveDisclosureResult {
@@ -376,26 +598,34 @@ export interface LedgerSnapshot {
   bucketTokens: number;
   registry: { declared: boolean; members: number };
   evidence: Record<string, number>;
+  /**
+   * Set when the snapshot could not be read from the store (F-06):
+   * the remaining fields then describe an EMPTY ledger and must not
+   * be trusted as the real state.
+   */
+  storeError?: string;
 }
 
 export interface DisclosureLedger {
   readonly mode: LedgerMode;
   /** Plain-language statement of what this ledger does and does not guarantee. */
   readonly enforcementNote: string;
-  declareRegistry(subjects: string[]): Promise<{ registered: number }>;
+  declareRegistry(subjects: string[]): Promise<{ registered: number; reason?: string }>;
   checkRegistryCompleteness(expected?: string[]): Promise<{
     declared: boolean;
     complete: boolean;
     registered: number;
     missing: string[];
+    /** Set when the registry could not be read from the store (F-06). */
+    storeError?: string;
   }>;
   reserveDisclosure(request: ReserveDisclosureRequest): Promise<ReserveDisclosureResult>;
   commitReservation(reservationId: string): Promise<{ committed: boolean; reason?: string }>;
-  releaseReservation(reservationId: string): Promise<{ released: boolean }>;
+  releaseReservation(reservationId: string): Promise<{ released: boolean; reason?: string }>;
   /** Eagerly expire reservations whose TTL has passed. */
-  sweepExpired(): Promise<{ expired: number }>;
+  sweepExpired(): Promise<{ expired: number; reason?: string }>;
   /** Accumulate a named evidence value inside the same CAS transaction. */
-  recordEvidence(key: string, delta: number): Promise<{ value: number; enforced: boolean }>;
+  recordEvidence(key: string, delta: number): Promise<{ value: number; enforced: boolean; reason?: string }>;
   snapshot(): Promise<LedgerSnapshot>;
 }
 
@@ -430,8 +660,7 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
   async function readState(): Promise<DisclosureLedgerState> {
     const raw = await store.get(storeKey(ledgerId));
     if (!raw) return emptyState(initialBucket());
-    const parsed = JSON.parse(raw) as DisclosureLedgerState;
-    return parsed;
+    return parseStoredState(raw);
   }
 
   /**
@@ -448,19 +677,30 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
         const current = await readState();
         let captured: T | undefined;
         let wrote = false;
+        let corruptState = false;
         const result = await store.transactLedger(ledgerId, current.version, state => {
           const base = state ?? emptyState(initialBucket());
+          if (!isValidLedgerState(base)) {
+            // The store's own copy of the state is corrupt even though
+            // the get-path read looked fine (or raced): abort without
+            // writing and surface a structured store failure (F-06).
+            corruptState = true;
+            return null;
+          }
           const outcome = fn(cloneState(base));
           captured = outcome.value;
           if (outcome.state === null) return null;
           wrote = true;
           return outcome.state;
         });
+        if (corruptState) {
+          throw new LedgerStoreError("store_conflict: stored ledger state has an invalid shape");
+        }
         if (result.conflict) continue;
         void wrote;
         return captured as T;
       }
-      throw new Error("disclosure ledger: transaction kept conflicting after retries");
+      throw new LedgerStoreError("store_conflict: transaction kept conflicting after retries");
     }
     const state = await readState();
     const outcome = fn(state);
@@ -484,13 +724,10 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     return expired;
   }
 
-  function effectiveBitmap(state: DisclosureLedgerState): Uint8Array {
+  function effectiveBitmap(state: DisclosureLedgerState): Bitmap {
     let bitmap = bitmapFromBase64(state.unionBitmap);
     for (const reservation of Object.values(state.reservations)) {
-      const held = bitmapFromBase64(reservation.idsBitmap);
-      const merged = new Uint8Array(Math.max(bitmap.length, held.length));
-      for (let i = 0; i < merged.length; i++) merged[i] = (bitmap[i] ?? 0) | (held[i] ?? 0);
-      bitmap = merged;
+      bitmap = bitmapUnion(bitmap, bitmapFromBase64(reservation.idsBitmap));
     }
     return bitmap;
   }
@@ -520,14 +757,29 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
 
     async declareRegistry(subjects) {
       const unique = [...new Set(subjects)];
-      return mutate(state => {
-        state.registry = unique;
-        return { state, value: { registered: unique.length } };
-      });
+      try {
+        return await mutate(state => {
+          state.registry = unique;
+          return { state, value: { registered: unique.length } };
+        });
+      } catch {
+        return { registered: 0, reason: "store_conflict" };
+      }
     },
 
     async checkRegistryCompleteness(expected) {
-      const state = await readState();
+      let state: DisclosureLedgerState;
+      try {
+        state = await readState();
+      } catch {
+        return {
+          declared: false,
+          complete: false,
+          registered: 0,
+          missing: expected ? [...expected] : [],
+          storeError: "store_conflict",
+        };
+      }
       if (!state.registry) {
         return { declared: false, complete: false, registered: 0, missing: expected ? [...expected] : [] };
       }
@@ -544,7 +796,8 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     async reserveDisclosure(request) {
       const atMs = now();
       const enforced = mode === "enforce";
-      return mutate<ReserveDisclosureResult>(state => {
+      try {
+        return await mutate<ReserveDisclosureResult>(state => {
         const refuse = (reason: ReserveRefusalReason, extra?: Partial<ReserveDisclosureResult>): { state: DisclosureLedgerState | null; value: ReserveDisclosureResult } => ({
           state: null,
           value: { allowed: false, enforced, mode, reason, ...extra },
@@ -552,10 +805,33 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
 
         expireReservations(state, atMs);
 
+        // Normalized request payload (state-independent, computed once):
+        // the idempotency fingerprint below is taken over exactly these
+        // values, and the reservation created later stores it.
+        const requestedIds = [...new Set((request.recordIds ?? []).filter(id => Number.isFinite(id) && id >= 0).map(id => Math.floor(id)))];
+        const anonymousRequested = Math.max(0, Math.floor(request.count ?? 0));
+        const long = request.longReservation === true;
+        const idemFingerprint = request.idempotencyKey
+          ? reserveRequestFingerprint(request.subject, requestedIds, anonymousRequested, long)
+          : undefined;
+
         if (request.idempotencyKey) {
           const existingId = state.idempotency[request.idempotencyKey];
           const existing = existingId ? state.reservations[existingId] : undefined;
           if (existing) {
+            // F-01: a replay is honored ONLY when it is the same
+            // subject presenting the same payload. Any mismatch -
+            // including a reservation written before fingerprints
+            // existed - is refused and never charged to the original
+            // subject; the registry and ceiling checks below are not
+            // what protects this branch.
+            if (
+              existing.subject !== request.subject ||
+              existing.idemFingerprint === undefined ||
+              existing.idemFingerprint !== idemFingerprint
+            ) {
+              return refuse("idempotency_conflict");
+            }
             return {
               state: null,
               value: {
@@ -576,11 +852,7 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
           auditFlag = "unregistered_subject";
         }
 
-        const long = request.longReservation === true;
         if (long && !request.hostAuthorizedLong) return refuse("long_reservation_not_authorized");
-
-        const requestedIds = [...new Set((request.recordIds ?? []).filter(id => Number.isFinite(id) && id >= 0).map(id => Math.floor(id)))];
-        const anonymousRequested = Math.max(0, Math.floor(request.count ?? 0));
 
         const subjectReservations = Object.values(state.reservations).filter(r => r.subject === request.subject);
         if (subjectReservations.length >= maxOutstanding) return refuse("too_many_outstanding");
@@ -622,11 +894,12 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
         const reservation: LedgerReservation = {
           id: `res_${seq}`,
           subject: request.subject,
-          idsBitmap: bitmapToBase64(bitmapWithIds(new Uint8Array(0), newIds)),
+          idsBitmap: bitmapToBase64(bitmapWithIds(emptyBitmap(), newIds)),
           count: newRecords,
           createdAtMs: atMs,
           expiresAtMs: atMs + (long ? longTtlMs : ttlMs),
           long,
+          ...(idemFingerprint !== undefined ? { idemFingerprint } : {}),
         };
         state.reservations[reservation.id] = reservation;
         if (request.idempotencyKey) state.idempotency[request.idempotencyKey] = reservation.id;
@@ -641,67 +914,94 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
             ...(auditFlag ? { auditFlag } : {}),
           },
         };
-      });
+        });
+      } catch {
+        // F-06: store failures (dead backend, corrupt content, CAS
+        // exhaustion) refuse fail-closed instead of throwing into the
+        // host's request path.
+        return { allowed: false, enforced, mode, reason: "store_conflict" };
+      }
     },
 
     async commitReservation(reservationId) {
-      return mutate<{ committed: boolean; reason?: string }>(state => {
-        expireReservations(state, now());
-        const reservation = state.reservations[reservationId];
-        if (!reservation) return { state: null, value: { committed: false, reason: "unknown_or_expired_reservation" } };
-        const held = bitmapFromBase64(reservation.idsBitmap);
-        const union = bitmapFromBase64(state.unionBitmap);
-        const merged = new Uint8Array(Math.max(union.length, held.length));
-        for (let i = 0; i < merged.length; i++) merged[i] = (union[i] ?? 0) | (held[i] ?? 0);
-        state.unionBitmap = bitmapToBase64(merged);
-        state.anonymousServed += reservation.count - bitmapPopcount(held);
-        delete state.reservations[reservationId];
-        return { state, value: { committed: true } };
-      });
+      try {
+        return await mutate<{ committed: boolean; reason?: string }>(state => {
+          expireReservations(state, now());
+          const reservation = state.reservations[reservationId];
+          if (!reservation) return { state: null, value: { committed: false, reason: "unknown_or_expired_reservation" } };
+          const held = bitmapFromBase64(reservation.idsBitmap);
+          state.unionBitmap = bitmapToBase64(bitmapUnion(bitmapFromBase64(state.unionBitmap), held));
+          state.anonymousServed += reservation.count - bitmapPopcount(held);
+          delete state.reservations[reservationId];
+          return { state, value: { committed: true } };
+        });
+      } catch {
+        return { committed: false, reason: "store_conflict" };
+      }
     },
 
     async releaseReservation(reservationId) {
-      return mutate<{ released: boolean }>(state => {
-        if (!state.reservations[reservationId]) return { state: null, value: { released: false } };
-        delete state.reservations[reservationId];
-        return { state, value: { released: true } };
-      });
+      try {
+        return await mutate<{ released: boolean; reason?: string }>(state => {
+          if (!state.reservations[reservationId]) return { state: null, value: { released: false } };
+          delete state.reservations[reservationId];
+          return { state, value: { released: true } };
+        });
+      } catch {
+        return { released: false, reason: "store_conflict" };
+      }
     },
 
     async sweepExpired() {
-      return mutate(state => {
-        const expired = expireReservations(state, now());
-        return { state: expired > 0 ? state : null, value: { expired } };
-      });
+      try {
+        return await mutate(state => {
+          const expired = expireReservations(state, now());
+          return { state: expired > 0 ? state : null, value: { expired } };
+        });
+      } catch {
+        return { expired: 0, reason: "store_conflict" };
+      }
     },
 
     async recordEvidence(key, delta) {
-      return mutate(state => {
-        const value = (state.evidence[key] ?? 0) + delta;
-        state.evidence[key] = value;
-        return { state, value: { value, enforced: mode === "enforce" } };
-      });
+      try {
+        return await mutate(state => {
+          const value = (state.evidence[key] ?? 0) + delta;
+          state.evidence[key] = value;
+          return { state, value: { value, enforced: mode === "enforce" } };
+        });
+      } catch {
+        return { value: 0, enforced: mode === "enforce", reason: "store_conflict" };
+      }
     },
 
     async snapshot() {
-      const state = await readState();
-      const atMs = now();
-      const view = cloneState(state);
-      expireReservations(view, atMs);
-      refillBucket(view, atMs);
-      const totals = reservedTotals(view);
-      return {
-        ledgerId,
-        mode,
-        version: view.version,
-        ceilingLimit,
-        committedRecords: bitmapPopcount(bitmapFromBase64(view.unionBitmap)) + view.anonymousServed,
-        reservedRecords: totals.total,
-        outstandingReservations: Object.keys(view.reservations).length,
-        bucketTokens: Math.floor(view.bucket.tokens),
-        registry: { declared: view.registry !== null, members: view.registry?.length ?? 0 },
-        evidence: { ...view.evidence },
+      const buildSnapshot = (state: DisclosureLedgerState): LedgerSnapshot => {
+        const atMs = now();
+        const view = cloneState(state);
+        expireReservations(view, atMs);
+        refillBucket(view, atMs);
+        const totals = reservedTotals(view);
+        return {
+          ledgerId,
+          mode,
+          version: view.version,
+          ceilingLimit,
+          committedRecords: bitmapPopcount(bitmapFromBase64(view.unionBitmap)) + view.anonymousServed,
+          reservedRecords: totals.total,
+          outstandingReservations: Object.keys(view.reservations).length,
+          bucketTokens: Math.floor(view.bucket.tokens),
+          registry: { declared: view.registry !== null, members: view.registry?.length ?? 0 },
+          evidence: { ...view.evidence },
+        };
       };
+      try {
+        return buildSnapshot(await readState());
+      } catch {
+        // F-06: never throw out of a read path; the snapshot is marked
+        // so the host can tell it describes an empty ledger, not theirs.
+        return { ...buildSnapshot(emptyState(initialBucket())), storeError: "store_conflict" };
+      }
     },
   };
 }
