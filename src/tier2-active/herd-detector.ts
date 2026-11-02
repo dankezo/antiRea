@@ -32,13 +32,46 @@
  * - Grouping v2 - coverage complement. Signup chaining is blind to herds
  *   whose identities were registered dispersedly (the lab's aged-dispersed
  *   arm extracted 10,000/10,000 unflagged under v1 alone). V2 ignores
- *   signup time: over the rolling `activityWindowMs`, two identities link
- *   (union-find) when both are recently co-active and their served-record
- *   sets are strongly complementary - each at least `minOwnRecords`
- *   distinct, pairwise union at least `unionFloor`, pairwise Jaccard at
- *   most `linkOverlapCeiling`. Legitimate collaborators overlap (the
+ *   signup time: over the rolling `activityWindowMs`, identities link
+ *   (union-find) when they are recently co-active and their served-record
+ *   sets are strongly complementary - each side at least `minOwnRecords`
+ *   distinct, union at least `unionFloor`, Jaccard at most
+ *   `linkOverlapCeiling`. Legitimate collaborators overlap (the
  *   lab's dense onboarding team had pairwise Jaccard far above the
  *   ceiling and formed zero links); herds partition, so they link.
+ *   Candidate generation is LEADER-based (2.5.0): an active identity's
+ *   coverage group is compared against the other coverage GROUPS'
+ *   aggregate sets (one aggregate bitmap + refcount map per group),
+ *   never against every other identity, and a merge decision is the
+ *   same complementarity test applied to the two aggregates. A
+ *   singleton group is the degenerate case, so two ungrouped
+ *   identities still link exactly when the old pairwise test linked
+ *   them; a formed group then absorbs further complementary identities
+ *   directly, which is the shape a dispersed herd actually takes.
+ *
+ * Late-joiner / materiality re-announcement (2.5.0): a flag used to be
+ * a single snapshot of whoever was in the group at flag time, and the
+ * classic rounds showed the cost - the slicing crew's first flag
+ * landed when only 8 of its 18 identities had signed up, and the ID
+ * walk's first flag landed when every walker was still below the
+ * friction-materiality floor, so both flags consequenced nobody new
+ * ever again. A flagged group now remembers each announced member's
+ * unique coverage at announcement time (the materiality floor is
+ * derived as 1/12 of the combined flag floor - the same derivation
+ * as `HERD_FRICTION_MIN_UNIQUE_RECORDS`, 25 at the defaults). When a
+ * member who is not settled - a LATE JOINER (never announced) or a
+ * PENDING partial contributor (announced with 0 < unique < floor) -
+ * crosses that floor inside a still-flagged group, the detector
+ * emits a SUPPLEMENTARY flag snapshot (`supplementary: true`, same
+ * mechanism, full current member list) so the host's response
+ * reaches them. Members announced at exactly 0 unique coverage are
+ * settled-inactive: they were named in the flag snapshot itself, so
+ * they never re-trigger one - and members whose unique coverage
+ * stays below the floor (the bystander profile: coverage duplicated
+ * by others) are never re-announced either. A group with no new
+ * material member emits nothing extra - the once-per-window
+ * discipline is preserved for groups whose membership and
+ * materiality are stable.
  *
  * Scoring uses the lab's feature set over a group: signup cluster (v1
  * only; the v2 score drops the cluster weight WITHOUT renormalizing,
@@ -78,22 +111,36 @@
  * longer enter group aggregates, so size `maxStoredKeysPerIdentity`
  * above the host's per-identity budget cap). Group union refcount maps
  * hold at most one entry per distinct stored key of their members.
- * Pair-evaluation throttle entries are capped at `maxPairEntries`.
- * Identities are capped at `maxIdentities` with least-recently-active
- * eviction (group aggregates are rebuilt from the remaining members'
- * stored keys). The block bitmap used to pre-filter pair evaluations
- * partitions the HASH space (1024 blocks, 128 bytes per identity)
- * instead of the lab's index space, with the same contract: two sets
- * sharing no block have an intersection of exactly zero.
+ * Leader-scan throttle state is one scalar per identity (its stored
+ * size at the last scan). Identities are capped at `maxIdentities`
+ * with least-recently-active eviction (group aggregates are rebuilt
+ * from the remaining members' stored keys). The block bitmap used to
+ * pre-filter candidate evaluations partitions the HASH space (1024
+ * blocks, 128 bytes per identity, plus one aggregate bitmap per
+ * coverage group) instead of the lab's index space, with the same
+ * contract: two sets sharing no block have an intersection of
+ * exactly zero.
  *
- * Scaling bound, stated plainly (measured in the lab, C5): grouping v2
- * keeps per-pair throttle state - the pair space is O(N^2) in tracked
- * identities and candidate enumeration is O(N) per record-bearing
- * event - so this exact-pairwise design is honest to roughly hundreds
- * of concurrent identities, not thousands. The production shape for
- * larger sites is leader clustering (compare each identity against a
- * small number of open groups' aggregate bitmaps); it is named here,
- * NOT implemented, and no claim is made for it.
+ * Scaling bound, stated plainly: grouping v2's leader design (2.5.0)
+ * keeps NO per-pair state - the state the lab's exact-pairwise design
+ * (C5) grew quadratically until its throttle cap. Candidate
+ * enumeration is O(number of coverage groups) per growth-triggered
+ * scan of one identity (a scan runs only once that identity's stored
+ * set has grown by `recheckGrowth` since its last scan), each
+ * candidate is pre-filtered by a 128-byte aggregate bitmap AND, and
+ * the exact intersection iterates the smaller aggregate's stored
+ * keys. Group count is at most the identity count and collapses as
+ * complementary identities merge, so the herd case - the case this
+ * detector exists for - gets cheaper as it succeeds; the worst case
+ * is a large population of mutually-overlapping legitimate users who
+ * never merge, where enumeration stays O(N) per scan with a small
+ * constant (bitmap AND + an intersection bounded by the smaller
+ * set). Load evidence is in the 2.5.0 study report
+ * (RESULTS-V242-PHASE3.md): the pairwise build needed >120 s for
+ * 1,000 identities x 60 records in the bench harness (it did not
+ * finish inside the measurement window), the leader build processes
+ * the same stream in seconds - the exact numbers and the bench's
+ * limits are stated there, not here, so they cannot drift.
  *
  * Contiguity needs dataset order, which arbitrary record ids do not
  * carry: supply `recordIndex` to map an id to its ordinal position
@@ -170,11 +217,34 @@ export interface HerdFlagSnapshot {
   mechanism: "v1-ip" | "v2-coverage";
   /** Member identity keys at flag time. */
   members: string[];
+  /**
+   * Distinct records each member holds in the group state at flag
+   * time (the member's stored-key count in the flagging group).
+   */
+  memberCoverage: Record<string, number>;
+  /**
+   * Distinct records that ONLY that member serves in the group:
+   * keys in the group's combined refcount map whose refcount is
+   * exactly 1 and which belong to that member. A member whose whole
+   * coverage is duplicated by others has a unique coverage of 0.
+   */
+  memberUniqueCoverage: Record<string, number>;
   /** Combined DISTINCT records served to the group at flag time. */
   combinedCoverage: number;
   score: number;
   features: HerdFeatures;
   band: HerdResponseBand;
+  /**
+   * True on a SUPPLEMENTARY re-announcement: the group had already
+   * flagged, and this snapshot exists because a member who was not
+   * yet announced with material unique coverage (a late joiner, or a
+   * member below the materiality floor at flag time) crossed that
+   * floor inside the flagged group. Absent on the initial flag.
+   * Hosts should treat a supplementary snapshot exactly like an
+   * initial one - the members it newly reaches are precisely the
+   * ones the initial snapshot could not consequence.
+   */
+  supplementary?: boolean;
   /** ISO-8601 timestamp from the detector clock. */
   timestamp: string;
 }
@@ -241,8 +311,24 @@ export interface HerdDetectorOptions {
   unionFloor?: number;
   /** V2 link gate: minimum distinct records per identity before it can link. Defaults to 50 (lab). */
   minOwnRecords?: number;
-  /** V2 evaluation throttle: a pair is re-evaluated only after the smaller set grows by this many records. Defaults to 25 (lab). */
+  /** V2 scan throttle: an identity's coverage group is re-evaluated against the group leaders only after its stored set grows by this many records. Defaults to 25 (lab). */
   recheckGrowth?: number;
+  /**
+   * Materiality floor for supplementary re-announcement: a member of
+   * a flagged group is (re-)announced once its UNIQUE coverage in
+   * that group reaches this many records. Default: 1/12 of
+   * `combinedCoverageFloor`, rounded up (25 at the shipped defaults -
+   * the `HERD_FRICTION_MIN_UNIQUE_RECORDS` derivation).
+   */
+  lateJoinerMinUniqueRecords?: number;
+  /**
+   * Coalescing window for supplementary re-announcements: at most
+   * one supplementary flag per group per this many milliseconds.
+   * Members crossing the materiality floor inside the window stay
+   * pending and are announced by the next supplementary after it -
+   * a bounded delay, never a loss. Defaults to 5,000.
+   */
+  supplementaryCooldownMs?: number;
   /** Tiling at/above which a flag's band is `budget_cut_supported`. Defaults to 0.5. */
   tilingCutThreshold?: number;
   /** Partial weight overrides over `DEFAULT_HERD_WEIGHTS`. */
@@ -251,7 +337,11 @@ export interface HerdDetectorOptions {
   maxIdentities?: number;
   /** Cap on stored record keys per identity. Defaults to 4,096. Size it above the host's per-identity budget cap. */
   maxStoredKeysPerIdentity?: number;
-  /** Cap on v2 pair-evaluation throttle entries. Defaults to 200,000. */
+  /**
+   * @deprecated Accepted for compatibility and ignored since 2.5.0:
+   * the leader-based grouping keeps no per-pair throttle state, so
+   * there is no pair-entry store left to cap.
+   */
   maxPairEntries?: number;
   /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
   now?: () => number;
@@ -377,6 +467,8 @@ interface IdentityState {
   largestRun: number;
   /** Hash-space block bitmap over `keys`, for the pair pre-filter. */
   bitmap: BigUint64Array;
+  /** Stored-set size at this identity's last leader scan (grouping v2 throttle). */
+  lastLeaderScanSize: number;
   lastActive: number;
   ipGroupId?: number;
   cohortGroupId?: number;
@@ -391,6 +483,10 @@ interface ChainedGroup {
   combined: Map<string, number>;
   sumSizes: number;
   flagged: boolean;
+  /** Per-member unique coverage at its last flag announcement (see the header's re-announcement paragraph). */
+  announcedUnique: Map<string, number>;
+  /** Timestamp of the group's last flag emission (initial or supplementary); drives the supplementary coalescing cooldown. */
+  lastFlagAt: number;
   lastActivity: number;
   lastScore: number;
   maxScore: number;
@@ -401,8 +497,14 @@ interface CoverageGroup {
   id: number;
   members: Set<string>;
   combined: Map<string, number>;
+  /** OR of member block bitmaps: the leader aggregate's pre-filter sketch. */
+  bitmap: BigUint64Array;
   sumSizes: number;
   flagged: boolean;
+  /** Per-member unique coverage at its last flag announcement (see the header's re-announcement paragraph). */
+  announcedUnique: Map<string, number>;
+  /** Timestamp of the group's last flag emission (initial or supplementary); drives the supplementary coalescing cooldown. */
+  lastFlagAt: number;
   lastActivity: number;
   lastScore: number;
   maxScore: number;
@@ -427,7 +529,21 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
   const tilingCutThreshold = options.tilingCutThreshold ?? 0.5;
   const maxIdentities = Math.max(10, Math.floor(options.maxIdentities ?? 2000) || 2000);
   const maxStoredKeys = Math.max(16, Math.floor(options.maxStoredKeysPerIdentity ?? 4096) || 4096);
-  const maxPairEntries = Math.max(100, Math.floor(options.maxPairEntries ?? 200_000) || 200_000);
+  /** Materiality floor for supplementary re-announcement (1/12 of the flag floor by default). */
+  const lateJoinMaterial = Math.max(
+    1,
+    Math.floor(options.lateJoinerMinUniqueRecords ?? Math.ceil(Math.max(1, combinedFloor) / 12)) || 1,
+  );
+  /**
+   * Coalescing window for supplementary re-announcements: members who
+   * cross the materiality floor in a burst (a rotation herd's walkers
+   * typically cross within milliseconds of each other) are announced
+   * TOGETHER by the first supplementary flag after the window, not by
+   * one flag per member. Members crossing during the window stay
+   * pending and are picked up by the next supplementary - the delay
+   * is bounded by this window, never a loss.
+   */
+  const supplementaryCooldownMs = Math.max(0, options.supplementaryCooldownMs ?? 5_000);
   const clock = options.now ?? (() => Date.now());
 
   const identities = new Map<string, IdentityState>();
@@ -436,8 +552,6 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
   const parent = new Map<string, string>();
   /** Coverage aggregates keyed by union-find ROOT identity. */
   const coverageGroups = new Map<string, CoverageGroup>();
-  /** Pair throttle entries: `a\u0001b` (sorted) -> smaller set size at last full evaluation. */
-  const pairs = new Map<string, number>();
   let groupSeq = 0;
 
   const distinctOf = (st: IdentityState): number => st.keys.size + st.overflowDistinct;
@@ -515,6 +629,15 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       weights.capPressure * features.capPressure +
       (includeCluster && features.cluster !== null ? weights.cluster * features.cluster : 0));
 
+  /** Distinct records only this member serves inside the group's combined refcount map. */
+  const uniqueOf = (member: string, combinedMap: Map<string, number>): number => {
+    const st = identities.get(member);
+    if (!st) return 0;
+    let unique = 0;
+    for (const key of st.keys) if (combinedMap.get(key) === 1) unique++;
+    return unique;
+  };
+
   const emitFlag = (
     mechanism: "v1-ip" | "v2-coverage",
     groupId: number,
@@ -523,15 +646,32 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     score: number,
     features: HerdFeatures,
     now: number,
+    combinedMap: Map<string, number>,
+    supplementary = false,
   ): HerdFlagSnapshot => {
+    const memberCoverage: Record<string, number> = {};
+    const memberUniqueCoverage: Record<string, number> = {};
+    for (const member of members) {
+      const st = identities.get(member);
+      if (!st) {
+        memberCoverage[member] = 0;
+        memberUniqueCoverage[member] = 0;
+        continue;
+      }
+      memberCoverage[member] = st.keys.size;
+      memberUniqueCoverage[member] = uniqueOf(member, combinedMap);
+    }
     const snapshot: HerdFlagSnapshot = {
       groupId,
       mechanism,
       members: [...members],
+      memberCoverage,
+      memberUniqueCoverage,
       combinedCoverage: combined,
       score,
       features,
       band: features.tiling >= tilingCutThreshold ? "budget_cut_supported" : "graduated_only",
+      ...(supplementary ? { supplementary: true } : {}),
       timestamp: new Date(now).toISOString(),
     };
     if (options.onFlag) {
@@ -542,6 +682,88 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         /* Operator wiring must never break request handling. */
       }
     }
+    return snapshot;
+  };
+
+  /** A member's announcement state is SETTLED when it needs no re-announcement. */
+  const announcementSettled = (announcedAt: number | undefined): boolean =>
+    announcedAt !== undefined && (announcedAt === 0 || announcedAt >= lateJoinMaterial);
+
+  /**
+   * Record a flag emission on the group: each announced member's
+   * unique coverage AT THIS SNAPSHOT is remembered. A member is then
+   * in one of three states - settled-material (announced at or above
+   * the floor), settled-inactive (announced at exactly 0: it was in
+   * the snapshot the host received, and the once-per-window
+   * discipline covers it), or PENDING (announced with partial unique
+   * coverage, 0 < u < floor: the classic ID-walk shape, whose first
+   * flag targeted nobody because every member sat below the friction
+   * floor). Only pending members and never-announced members can
+   * trigger a supplementary flag.
+   */
+  const markAnnounced = (
+    group: { announcedUnique: Map<string, number> },
+    snapshot: HerdFlagSnapshot,
+  ): void => {
+    for (const member of snapshot.members) {
+      if (announcementSettled(group.announcedUnique.get(member))) continue;
+      group.announcedUnique.set(member, snapshot.memberUniqueCoverage[member] ?? 0);
+    }
+  };
+
+  /**
+   * Supplementary re-announcement for a flagged group: emit a new
+   * flag iff at least one member has reached the materiality floor
+   * while not settled - a late joiner (never announced) or a pending
+   * partial contributor. Settled-inactive members (announced at 0)
+   * never trigger one: they were named in the flag snapshot itself,
+   * and re-firing for them would break the once-per-window contract
+   * every quiet group relies on. The gates are re-checked against
+   * the group's CURRENT score/coverage, so a group that no longer
+   * qualifies emits nothing.
+   */
+  const maybeSupplementary = (
+    mechanism: "v1-ip" | "v2-coverage",
+    group: {
+      id: number;
+      members: Set<string>;
+      combined: Map<string, number>;
+      flagged: boolean;
+      announcedUnique: Map<string, number>;
+      lastFlagAt: number;
+    },
+    combined: number,
+    score: number,
+    features: HerdFeatures,
+    now: number,
+  ): HerdFlagSnapshot | undefined => {
+    if (!group.flagged) return undefined;
+    if (now - group.lastFlagAt < supplementaryCooldownMs) return undefined;
+    if (group.members.size < flagMinMembers || combined < combinedFloor || score < flagThreshold) {
+      return undefined;
+    }
+    let hasNewMaterial = false;
+    for (const member of group.members) {
+      if (announcementSettled(group.announcedUnique.get(member))) continue;
+      if (uniqueOf(member, group.combined) >= lateJoinMaterial) {
+        hasNewMaterial = true;
+        break;
+      }
+    }
+    if (!hasNewMaterial) return undefined;
+    const snapshot = emitFlag(
+      mechanism,
+      group.id,
+      [...group.members],
+      combined,
+      score,
+      features,
+      now,
+      group.combined,
+      true,
+    );
+    group.lastFlagAt = now;
+    markAnnounced(group, snapshot);
     return snapshot;
   };
 
@@ -581,6 +803,8 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         combined: new Map<string, number>(),
         sumSizes: 0,
         flagged: false,
+        announcedUnique: new Map<string, number>(),
+        lastFlagAt: 0,
         lastActivity: signupTs,
         lastScore: 0,
         maxScore: 0,
@@ -618,8 +842,11 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       id: ++groupSeq,
       members: new Set<string>([st.identity]),
       combined: new Map<string, number>(),
+      bitmap: new BigUint64Array(st.bitmap),
       sumSizes: 0,
       flagged: false,
+      announcedUnique: new Map<string, number>(),
+      lastFlagAt: 0,
       lastActivity: st.lastActive,
       lastScore: 0,
       maxScore: 0,
@@ -639,6 +866,16 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     for (const member of small.members) big.members.add(member);
     big.sumSizes += small.sumSizes;
     for (const [key, count] of small.combined) big.combined.set(key, (big.combined.get(key) ?? 0) + count);
+    for (let i = 0; i < BITMAP_WORDS; i++) {
+      big.bitmap[i] = (big.bitmap[i] as bigint) | (small.bitmap[i] as bigint);
+    }
+    for (const [member, announcedAt] of small.announcedUnique) {
+      if (!announcementSettled(big.announcedUnique.get(member)) || !big.announcedUnique.has(member)) {
+        big.announcedUnique.set(member, announcedAt);
+      }
+    }
+    if (small.lastActivity > big.lastActivity) big.lastActivity = small.lastActivity;
+    if (small.lastFlagAt > big.lastFlagAt) big.lastFlagAt = small.lastFlagAt;
     if (small.maxScore > big.maxScore) big.maxScore = small.maxScore;
     if (small.flagged && !big.flagged) {
       big.flagged = true;
@@ -656,8 +893,6 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     return shared;
   };
 
-  const pairKeyOf = (a: string, b: string): string => (a < b ? `${a}\u0001${b}` : `${b}\u0001${a}`);
-
   /* ------------------------------ eviction -------------------------------- */
 
   const rebuildChained = (group: ChainedGroup): void => {
@@ -673,11 +908,15 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     const group = coverageGroups.get(root);
     if (!group) return;
     group.combined.clear();
+    group.bitmap = new BigUint64Array(BITMAP_WORDS);
     group.sumSizes = 0;
     for (const member of group.members) {
       const st = identities.get(member);
       if (!st) continue;
       group.sumSizes += st.keys.size;
+      for (let i = 0; i < BITMAP_WORDS; i++) {
+        group.bitmap[i] = (group.bitmap[i] as bigint) | (st.bitmap[i] as bigint);
+      }
       for (const key of st.keys) group.combined.set(key, (group.combined.get(key) ?? 0) + 1);
     }
   };
@@ -689,6 +928,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       if (groupId === undefined) continue;
       const group = chainedGroups.get(groupId);
       if (group && group.members.delete(identity)) {
+        group.announcedUnique.delete(identity);
         if (group.members.size === 0) chainedGroups.delete(groupId);
         else rebuildChained(group);
       }
@@ -697,6 +937,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       const root = findRoot(identity);
       const group = coverageGroups.get(root);
       if (group && group.members.delete(identity)) {
+        group.announcedUnique.delete(identity);
         if (group.members.size === 0) {
           coverageGroups.delete(root);
         } else {
@@ -713,10 +954,6 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         }
       }
       parent.delete(identity);
-    }
-    for (const key of [...pairs.keys()]) {
-      const [a, b] = key.split("\u0001");
-      if (a === identity || b === identity) pairs.delete(key);
     }
     identities.delete(identity);
   };
@@ -740,6 +977,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       indices: new Set<number>(),
       largestRun: 0,
       bitmap: new BigUint64Array(BITMAP_WORDS),
+      lastLeaderScanSize: 0,
       lastActive: now,
     };
     identities.set(identity, st);
@@ -814,7 +1052,11 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       if (groupId === undefined) continue;
       const group = chainedGroups.get(groupId);
       if (!group) continue;
-      if (group.flagged && now - group.lastActivity > activityWindowMs) group.flagged = false; // new window: re-arm
+      if (group.flagged && now - group.lastActivity > activityWindowMs) {
+        group.flagged = false; // new window: re-arm
+        group.announcedUnique.clear();
+        group.lastFlagAt = 0;
+      }
       group.lastActivity = now;
       const members = [...group.members];
       const features = computeFeatures(members, group.combined.size, group.sumSizes, now, true);
@@ -830,57 +1072,82 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         score >= flagThreshold
       ) {
         group.flagged = true;
-        const snapshot = emitFlag("v1-ip", group.id, members, group.combined.size, score, features, now);
+        group.lastFlagAt = now;
+        const snapshot = emitFlag("v1-ip", group.id, members, group.combined.size, score, features, now, group.combined);
+        markAnnounced(group, snapshot);
         if (!flag) flag = snapshot;
+      } else if (group.kind === "ip" && group.flagged) {
+        const supplementary = maybeSupplementary("v1-ip", group, group.combined.size, score, features, now);
+        if (supplementary && !flag) flag = supplementary;
       }
     }
 
-    // Grouping v2: fold, evaluate pairs, score the coverage group.
+    // Grouping v2: fold, leader scan, score the coverage group.
     const freshNode = !parent.has(st.identity);
     const root0 = ensureCoverageNode(st);
     const agg0 = coverageGroups.get(root0) as CoverageGroup;
     if (!freshNode && newKeys.length > 0) {
       agg0.sumSizes += newKeys.length;
-      for (const key of newKeys) agg0.combined.set(key, (agg0.combined.get(key) ?? 0) + 1);
+      for (const key of newKeys) {
+        agg0.combined.set(key, (agg0.combined.get(key) ?? 0) + 1);
+        const block = blockOfKey(key);
+        agg0.bitmap[block >> 6] = (agg0.bitmap[block >> 6] as bigint) | (1n << BigInt(block & 63));
+      }
     }
-    for (const other of identities.keys()) {
-      if (other === st.identity) continue;
-      const ost = identities.get(other) as IdentityState;
-      if (ost.keys.size === 0) continue;
-      const otherRoot = parent.has(other) ? findRoot(other) : null;
-      if (otherRoot !== null && otherRoot === findRoot(st.identity)) continue; // already grouped
-      const curMin = Math.min(st.keys.size, ost.keys.size);
-      if (curMin < minOwnRecords) continue;
-      if (now - ost.lastActive > activityWindowMs) continue;
-      if (now - ost.lastActive > coactLinkMs) continue;
-      const pairKey = pairKeyOf(st.identity, other);
-      const lastChecked = pairs.get(pairKey);
-      if (lastChecked !== undefined && curMin - lastChecked < recheckGrowth) continue;
-      let inter: number;
-      let union: number;
-      if (sharedBlocks(st.bitmap, ost.bitmap) === 0) {
-        inter = 0;
-        union = st.keys.size + ost.keys.size;
-      } else {
-        const [small, big] = st.keys.size <= ost.keys.size ? [st.keys, ost.keys] : [ost.keys, st.keys];
-        inter = 0;
-        for (const key of small) if (big.has(key)) inter++;
-        union = st.keys.size + ost.keys.size - inter;
-      }
-      if (pairs.size >= maxPairEntries && !pairs.has(pairKey)) {
-        const oldestPair = pairs.keys().next().value;
-        if (oldestPair !== undefined) pairs.delete(oldestPair);
-      }
-      pairs.set(pairKey, curMin);
-      if (union >= unionFloor && inter / Math.max(1, union) <= linkOverlapCeiling) {
-        const ra = ensureCoverageNode(st);
-        const rb = ensureCoverageNode(ost);
-        if (ra !== rb) mergeCoverage(ra, rb);
+    /*
+     * Leader scan (2.5.0): this identity's coverage group is compared
+     * against the other coverage GROUPS' aggregates, not against
+     * every other identity. The scan is throttled per identity - it
+     * runs only once the identity's stored set has grown by
+     * `recheckGrowth` since its last scan (or on its first eligible
+     * event) - and each candidate group is pre-filtered by its
+     * aggregate bitmap: groups sharing no hash block with this group
+     * have an exact intersection of zero by construction. The merge
+     * test itself is the lab's complementarity test applied to the
+     * two aggregates (both sides past `minOwnRecords` combined,
+     * union past `unionFloor`, Jaccard at most `linkOverlapCeiling`,
+     * other group co-active inside `coactLinkMs`); for two singleton
+     * groups it is exactly the old pairwise test.
+     */
+    const scanDue =
+      agg0.combined.size >= minOwnRecords &&
+      (st.lastLeaderScanSize === 0 || st.keys.size - st.lastLeaderScanSize >= recheckGrowth);
+    if (scanDue) {
+      st.lastLeaderScanSize = st.keys.size;
+      for (const otherRoot of [...coverageGroups.keys()]) {
+        const ownRoot = findRoot(st.identity);
+        if (otherRoot === ownRoot) continue;
+        const other = coverageGroups.get(otherRoot);
+        if (!other) continue; // merged away during this scan
+        if (other.combined.size < minOwnRecords) continue;
+        if (now - other.lastActivity > activityWindowMs) continue;
+        if (now - other.lastActivity > coactLinkMs) continue;
+        const own = coverageGroups.get(ownRoot) as CoverageGroup;
+        if (own.combined.size < minOwnRecords) continue;
+        let inter: number;
+        if (sharedBlocks(own.bitmap, other.bitmap) === 0) {
+          inter = 0;
+        } else {
+          const [small, big] =
+            own.combined.size <= other.combined.size
+              ? [own.combined, other.combined]
+              : [other.combined, own.combined];
+          inter = 0;
+          for (const key of small.keys()) if (big.has(key)) inter++;
+        }
+        const union = own.combined.size + other.combined.size - inter;
+        if (union >= unionFloor && inter / Math.max(1, union) <= linkOverlapCeiling) {
+          mergeCoverage(ownRoot, otherRoot);
+        }
       }
     }
     const root = findRoot(st.identity);
     const agg = coverageGroups.get(root) as CoverageGroup;
-    if (agg.flagged && now - agg.lastActivity > activityWindowMs) agg.flagged = false; // new window: re-arm
+    if (agg.flagged && now - agg.lastActivity > activityWindowMs) {
+      agg.flagged = false; // new window: re-arm
+      agg.announcedUnique.clear();
+      agg.lastFlagAt = 0;
+    }
     agg.lastActivity = now;
     const v2Members = [...agg.members];
     const v2Features = computeFeatures(v2Members, agg.combined.size, agg.sumSizes, now, false);
@@ -890,8 +1157,13 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     if (v2Score > agg.maxScore) agg.maxScore = v2Score;
     if (!agg.flagged && v2Members.length >= flagMinMembers && agg.combined.size >= combinedFloor && v2Score >= flagThreshold) {
       agg.flagged = true;
-      const snapshot = emitFlag("v2-coverage", agg.id, v2Members, agg.combined.size, v2Score, v2Features, now);
+      agg.lastFlagAt = now;
+      const snapshot = emitFlag("v2-coverage", agg.id, v2Members, agg.combined.size, v2Score, v2Features, now, agg.combined);
+      markAnnounced(agg, snapshot);
       if (!flag) flag = snapshot;
+    } else if (agg.flagged) {
+      const supplementary = maybeSupplementary("v2-coverage", agg, agg.combined.size, v2Score, v2Features, now);
+      if (supplementary && !flag) flag = supplementary;
     }
 
     return flag ? { recorded: true, flag } : { recorded: true };
@@ -932,7 +1204,6 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       chainedGroups.clear();
       parent.clear();
       coverageGroups.clear();
-      pairs.clear();
       return;
     }
     removeIdentity(identity);
