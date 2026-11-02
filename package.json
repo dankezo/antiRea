@@ -1,6 +1,6 @@
 {
   "name": "@dannyphan190/anti-rea",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "private": false,
   "description": "Evidence-led web anti-cloning toolkit: server-side quota/pagination guards, Web Bot Auth (RFC 9421) signed-agent verification, canary traps, a Python/FastAPI quota-guard port, controlled twin-SaaS benchmark and REA envelope guidance.",
   "type": "commonjs",

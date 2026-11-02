@@ -456,3 +456,39 @@ test('quota guard counts unresolvable identities against a shared unknown bucket
     assert.equal((await legacy.checkRequest(mockReq('/api/items'))).allowed, true);
   }
 });
+
+test('quota guard: a dead or malformed store fails closed with store_unavailable, never throws (F-06)', async () => {
+  // The audit's live scenario: a store whose backend is down. Pre-fix
+  // the exception escaped checkRequest and killed a naively wired
+  // host process at the first request (unhandled rejection).
+  const deadStore = {
+    async peek() { throw new Error('store backend down'); },
+    async record() { throw new Error('store backend down'); },
+  };
+  const guard = sdk.createQuotaGuard({ store: deadStore });
+  const rejected = await guard.checkRequest(mockReq('/api/items'));
+  assert.equal(rejected.allowed, false);
+  assert.equal(rejected.status, 429);
+  assert.equal(rejected.body.error, 'store_unavailable');
+
+  // Peek works, record dies mid-flight: still a structured rejection.
+  const recordDiesStore = {
+    peek: (key, now, windowMs) => sdk.createInMemoryQuotaStore().peek(key, now, windowMs),
+    async record() { throw new Error('store backend down'); },
+  };
+  const guard2 = sdk.createQuotaGuard({ store: recordDiesStore });
+  const rejected2 = await guard2.checkRequest(mockReq('/api/items'));
+  assert.equal(rejected2.allowed, false);
+  assert.equal(rejected2.status, 429);
+  assert.equal(rejected2.body.error, 'store_unavailable');
+
+  // Malformed snapshot data is a store failure too, not a free pass.
+  const malformedStore = {
+    peek: () => ({ count: 'many' }),
+    record: () => true,
+  };
+  const guard3 = sdk.createQuotaGuard({ store: malformedStore });
+  const rejected3 = await guard3.checkRequest(mockReq('/api/items'));
+  assert.equal(rejected3.allowed, false);
+  assert.equal(rejected3.body.error, 'store_unavailable');
+});
