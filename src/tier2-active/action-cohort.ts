@@ -96,6 +96,8 @@
  * shapes, not detection rates against adaptive agents.
  */
 
+import { monoNowMs } from "../internal/mono-clock";
+
 /* ------------------------------------------------------------------------ */
 /* Canary action registry                                                    */
 /* ------------------------------------------------------------------------ */
@@ -197,6 +199,16 @@ export interface ActionCohortTrackerOptions {
   onFlag?: (snapshot: ActionCohortFlagSnapshot) => Promise<void> | void;
   /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
   now?: () => number;
+  /**
+   * Monotonic clock for the window arithmetic (L-DEEP-2): event
+   * pruning, taint lifetime and the supplementary cooldown are
+   * measured on this clock and are immune to wall-clock steps.
+   * Events carrying a host `ts` stay in the host's time domain
+   * throughout (their monotonic twin mirrors `ts`). When only `now`
+   * is given, the injected clock drives both domains (pre-patch
+   * behavior).
+   */
+  monoNow?: () => number;
   /** Trailing activity window: only identities active inside it group, and taints live for it. Default 900_000 (15 min). */
   windowMs?: number;
   /** Complement join gate: maximum cluster overlap ratio after adding an identity. Default 0.10. */
@@ -390,6 +402,8 @@ interface MemberEvent {
   targetKey: string;
   cost: number;
   ts: number;
+  /** Monotonic twin of `ts` (L-DEEP-2): window pruning reads this clock. */
+  tsMono: number;
 }
 
 interface MemberData {
@@ -416,6 +430,8 @@ interface ComplementCluster {
   flagged: boolean;
   announced: Map<string, AnnouncedState>;
   lastFlagAt: number;
+  /** Monotonic twin of `lastFlagAt` (L-DEEP-2): the supplementary cooldown reads this clock. */
+  lastFlagAtMono: number;
 }
 
 interface SharedTargetGroup {
@@ -426,18 +442,24 @@ interface SharedTargetGroup {
   flagged: boolean;
   announced: Map<string, AnnouncedState>;
   lastFlagAt: number;
+  /** Monotonic twin of `lastFlagAt` (L-DEEP-2). */
+  lastFlagAtMono: number;
 }
 
 interface SubjectState {
   subject: string;
-  events: { action: string; targetKey?: string; cost: number; ts: number }[];
+  events: { action: string; targetKey?: string; cost: number; ts: number; tsMono: number }[];
   lastActive: number;
 }
+
+/** Internal taint record: the public `ActionTaint` shape plus its monotonic twin (never exposed). */
+type InternalTaint = ActionTaint & { tsMono: number };
 
 export function createActionCohortTracker(
   options: ActionCohortTrackerOptions = {},
 ): ActionCohortTracker {
   const clock = options.now ?? (() => Date.now());
+  const monoClock = options.monoNow ?? (options.now ? clock : monoNowMs);
   const windowMs = Math.max(1, options.windowMs ?? 900_000);
   const linkOverlapCeiling = options.linkOverlapCeiling ?? 0.1;
   const flagMinMembers = Math.max(1, Math.floor(options.flagMinMembers ?? 8) || 8);
@@ -454,7 +476,7 @@ export function createActionCohortTracker(
   const subjects = new Map<string, SubjectState>();
   const clustersByAction = new Map<string, ComplementCluster[]>();
   const sharedGroups = new Map<string, SharedTargetGroup>();
-  const taintList: ActionTaint[] = [];
+  const taintList: InternalTaint[] = [];
   let groupSeq = 0;
 
   const isProtected = (subject: string): boolean => {
@@ -528,24 +550,24 @@ export function createActionCohortTracker(
 
   /* ------------------------------ pruning -------------------------------- */
 
-  const pruneSubject = (state: SubjectState, atMs: number): void => {
-    const cutoff = atMs - windowMs;
-    state.events = state.events.filter(event => event.ts > cutoff);
+  const pruneSubject = (state: SubjectState, atMonoMs: number): void => {
+    const cutoff = atMonoMs - windowMs;
+    state.events = state.events.filter(event => event.tsMono > cutoff);
   };
 
-  const subjectWindowCost = (subject: string, atMs: number): number => {
+  const subjectWindowCost = (subject: string, atMonoMs: number): number => {
     const state = subjects.get(subject);
     if (!state) return 0;
-    pruneSubject(state, atMs);
+    pruneSubject(state, atMonoMs);
     let sum = 0;
     for (const event of state.events) sum += event.cost;
     return sum;
   };
 
-  const pruneCluster = (cluster: ComplementCluster, atMs: number): void => {
-    const cutoff = atMs - windowMs;
+  const pruneCluster = (cluster: ComplementCluster, atMonoMs: number): void => {
+    const cutoff = atMonoMs - windowMs;
     for (const [subject, member] of [...cluster.members]) {
-      member.events = member.events.filter(event => event.ts > cutoff);
+      member.events = member.events.filter(event => event.tsMono > cutoff);
       if (member.events.length === 0) {
         cluster.members.delete(subject);
         cluster.announced.delete(subject);
@@ -556,13 +578,14 @@ export function createActionCohortTracker(
       cluster.flagged = false;
       cluster.announced.clear();
       cluster.lastFlagAt = 0;
+      cluster.lastFlagAtMono = 0;
     }
   };
 
-  const pruneShared = (group: SharedTargetGroup, atMs: number): void => {
-    const cutoff = atMs - windowMs;
+  const pruneShared = (group: SharedTargetGroup, atMonoMs: number): void => {
+    const cutoff = atMonoMs - windowMs;
     for (const [subject, member] of [...group.members]) {
-      member.events = member.events.filter(event => event.ts > cutoff);
+      member.events = member.events.filter(event => event.tsMono > cutoff);
       if (member.events.length === 0) {
         group.members.delete(subject);
         group.announced.delete(subject);
@@ -574,13 +597,14 @@ export function createActionCohortTracker(
       group.flagged = false;
       group.announced.clear();
       group.lastFlagAt = 0;
+      group.lastFlagAtMono = 0;
     }
   };
 
-  const pruneTaints = (atMs: number): void => {
-    const cutoff = atMs - windowMs;
+  const pruneTaints = (atMonoMs: number): void => {
+    const cutoff = atMonoMs - windowMs;
     for (let i = taintList.length - 1; i >= 0; i--) {
-      if ((taintList[i] as ActionTaint).ts <= cutoff) taintList.splice(i, 1);
+      if ((taintList[i] as InternalTaint).tsMono <= cutoff) taintList.splice(i, 1);
     }
   };
 
@@ -598,9 +622,9 @@ export function createActionCohortTracker(
     action: string,
     memberSet: Set<string>,
     groupTargets: Set<string>,
-    atMs: number,
+    atMonoMs: number,
   ): string[] => {
-    pruneTaints(atMs);
+    pruneTaints(atMonoMs);
     const out = new Set<string>();
     for (const taint of taintList) {
       if (taint.action !== action) continue;
@@ -610,7 +634,7 @@ export function createActionCohortTracker(
       }
       const state = subjects.get(taint.subject);
       if (!state) continue;
-      pruneSubject(state, atMs);
+      pruneSubject(state, atMonoMs);
       const intersects = state.events.some(
         event => event.action === action && event.targetKey !== undefined && groupTargets.has(event.targetKey),
       );
@@ -629,6 +653,7 @@ export function createActionCohortTracker(
     action: string,
     groupTargets: Set<string>,
     atMs: number,
+    atMonoMs: number,
     supplementary: boolean,
   ): ActionCohortFlagSnapshot => {
     const memberCost: Record<string, number> = {};
@@ -650,7 +675,7 @@ export function createActionCohortTracker(
       memberUniqueTargetCounts,
       aggregateCost,
       targetCoverage,
-      taintedMembers: taintedFor(action, new Set(memberNames), groupTargets, atMs),
+      taintedMembers: taintedFor(action, new Set(memberNames), groupTargets, atMonoMs),
       protectedMembers: memberNames.filter(isProtected),
       ...(supplementary ? { supplementary: true } : {}),
       timestamp: new Date(atMs).toISOString(),
@@ -680,12 +705,12 @@ export function createActionCohortTracker(
   };
 
   /** Dilution gate: at least 60% of members individually at/below their allowance (integer arithmetic: count*5 >= members*3). */
-  const dilutionPasses = (cluster: ComplementCluster, atMs: number): boolean => {
+  const dilutionPasses = (cluster: ComplementCluster, atMonoMs: number): boolean => {
     const members = [...cluster.members.keys()];
     if (members.length === 0) return false;
     let atOrBelow = 0;
     for (const member of members) {
-      if (subjectWindowCost(member, atMs) <= allowanceOf(member)) atOrBelow++;
+      if (subjectWindowCost(member, atMonoMs) <= allowanceOf(member)) atOrBelow++;
     }
     return atOrBelow * 5 >= members.length * 3;
   };
@@ -693,6 +718,7 @@ export function createActionCohortTracker(
   const evaluateComplement = (
     cluster: ComplementCluster,
     atMs: number,
+    atMonoMs: number,
   ): ActionCohortFlagSnapshot | undefined => {
     if (cluster.members.size === 0) return undefined;
     const aggregate = clusterAggregate(cluster);
@@ -701,11 +727,12 @@ export function createActionCohortTracker(
       cluster.members.size >= flagMinMembers &&
       aggregate >= flagAggregateCost &&
       coverage >= flagTargetCoverage &&
-      dilutionPasses(cluster, atMs);
+      dilutionPasses(cluster, atMonoMs);
     if (!cluster.flagged) {
       if (!gatesPass) return undefined;
       cluster.flagged = true;
       cluster.lastFlagAt = atMs;
+      cluster.lastFlagAtMono = atMonoMs;
       const snapshot = buildSnapshot(
         cluster.id,
         "complement",
@@ -716,13 +743,14 @@ export function createActionCohortTracker(
         cluster.action,
         new Set(cluster.refcount.keys()),
         atMs,
+        atMonoMs,
         false,
       );
       markAnnounced(cluster.announced, snapshot);
       return snapshot;
     }
     // Supplementary re-announcement (herd discipline).
-    if (atMs - cluster.lastFlagAt < supplementaryCooldownMs) return undefined;
+    if (atMonoMs - cluster.lastFlagAtMono < supplementaryCooldownMs) return undefined;
     if (!gatesPass) return undefined;
     let hasNewMaterial = false;
     for (const member of cluster.members.values()) {
@@ -734,6 +762,7 @@ export function createActionCohortTracker(
     }
     if (!hasNewMaterial) return undefined;
     cluster.lastFlagAt = atMs;
+    cluster.lastFlagAtMono = atMonoMs;
     const snapshot = buildSnapshot(
       cluster.id,
       "complement",
@@ -744,6 +773,7 @@ export function createActionCohortTracker(
       cluster.action,
       new Set(cluster.refcount.keys()),
       atMs,
+      atMonoMs,
       true,
     );
     markAnnounced(cluster.announced, snapshot);
@@ -753,6 +783,7 @@ export function createActionCohortTracker(
   const evaluateShared = (
     group: SharedTargetGroup,
     atMs: number,
+    atMonoMs: number,
   ): ActionCohortFlagSnapshot | undefined => {
     if (group.members.size === 0) return undefined;
     const aggregate = groupAggregate(group);
@@ -762,6 +793,7 @@ export function createActionCohortTracker(
       if (!gatesPass) return undefined;
       group.flagged = true;
       group.lastFlagAt = atMs;
+      group.lastFlagAtMono = atMonoMs;
       const snapshot = buildSnapshot(
         group.id,
         "shared-target",
@@ -772,12 +804,13 @@ export function createActionCohortTracker(
         group.action,
         targets,
         atMs,
+        atMonoMs,
         false,
       );
       markAnnounced(group.announced, snapshot);
       return snapshot;
     }
-    if (atMs - group.lastFlagAt < supplementaryCooldownMs) return undefined;
+    if (atMonoMs - group.lastFlagAtMono < supplementaryCooldownMs) return undefined;
     if (!gatesPass) return undefined;
     let hasNewMaterial = false;
     for (const member of group.members.values()) {
@@ -789,6 +822,7 @@ export function createActionCohortTracker(
     }
     if (!hasNewMaterial) return undefined;
     group.lastFlagAt = atMs;
+    group.lastFlagAtMono = atMonoMs;
     const snapshot = buildSnapshot(
       group.id,
       "shared-target",
@@ -799,6 +833,7 @@ export function createActionCohortTracker(
       group.action,
       targets,
       atMs,
+      atMonoMs,
       true,
     );
     markAnnounced(group.announced, snapshot);
@@ -820,7 +855,10 @@ export function createActionCohortTracker(
       if (!dst.announced.has(subject)) dst.announced.set(subject, announced);
     }
     if (src.flagged && !dst.flagged) dst.flagged = true;
-    if (src.lastFlagAt > dst.lastFlagAt) dst.lastFlagAt = src.lastFlagAt;
+    if (src.lastFlagAt > dst.lastFlagAt) {
+      dst.lastFlagAt = src.lastFlagAt;
+      dst.lastFlagAtMono = src.lastFlagAtMono;
+    }
     src.members.clear();
     src.announced.clear();
     rebuildCluster(src);
@@ -880,7 +918,11 @@ export function createActionCohortTracker(
     ) {
       return { recorded: false };
     }
-    const atMs = typeof event.ts === "number" && Number.isFinite(event.ts) ? event.ts : clock();
+    const hasTs = typeof event.ts === "number" && Number.isFinite(event.ts);
+    const atMs = hasTs ? (event.ts as number) : clock();
+    // Host-ts events stay in the host's time domain (twin mirrors ts);
+    // internal-clock events stamp the monotonic twin (L-DEEP-2).
+    const atMonoMs = hasTs ? atMs : monoClock();
     const cost = typeof event.cost === "number" && Number.isFinite(event.cost) ? Math.max(0, event.cost) : 0;
 
     let subjectState = subjects.get(event.subject);
@@ -888,12 +930,13 @@ export function createActionCohortTracker(
       subjectState = { subject: event.subject, events: [], lastActive: atMs };
       subjects.set(event.subject, subjectState);
     }
-    pruneSubject(subjectState, atMs);
+    pruneSubject(subjectState, atMonoMs);
     subjectState.events.push({
       action: event.action,
       ...(event.targetKey !== undefined ? { targetKey: event.targetKey } : {}),
       cost,
       ts: atMs,
+      tsMono: atMonoMs,
     });
     subjectState.lastActive = atMs;
 
@@ -901,15 +944,16 @@ export function createActionCohortTracker(
     // the toucher only - never splashed onto anyone else, and a
     // protected subject's own hit taints that subject alone.
     if (event.targetKey !== undefined && isCanary(event.action, event.targetKey)) {
-      pruneTaints(atMs);
+      pruneTaints(atMonoMs);
       const existing = taintList.findIndex(
         taint => taint.subject === event.subject && taint.action === event.action && taint.targetKey === event.targetKey,
       );
-      const taint: ActionTaint = {
+      const taint: InternalTaint = {
         subject: event.subject,
         action: event.action,
         targetKey: event.targetKey,
         ts: atMs,
+        tsMono: atMonoMs,
       };
       if (existing >= 0) taintList[existing] = taint;
       else taintList.push(taint);
@@ -925,7 +969,7 @@ export function createActionCohortTracker(
       clusters = [];
       clustersByAction.set(event.action, clusters);
     }
-    for (const cluster of [...clusters]) pruneCluster(cluster, atMs);
+    for (const cluster of [...clusters]) pruneCluster(cluster, atMonoMs);
     for (let i = clusters.length - 1; i >= 0; i--) {
       if ((clusters[i] as ComplementCluster).members.size === 0) clusters.splice(i, 1);
     }
@@ -940,22 +984,23 @@ export function createActionCohortTracker(
         flagged: false,
         announced: new Map<string, AnnouncedState>(),
         lastFlagAt: 0,
+        lastFlagAtMono: 0,
       };
       own.members.set(event.subject, newMember(event.subject));
       clusters.push(own);
     }
     const ownMember = own.members.get(event.subject) as MemberData;
-    ownMember.events.push({ targetKey, cost, ts: atMs });
+    ownMember.events.push({ targetKey, cost, ts: atMs, tsMono: atMonoMs });
     rebuildMember(ownMember);
     rebuildCluster(own);
     own = attemptMerges(clusters, own);
-    const complementFlag = evaluateComplement(own, atMs);
+    const complementFlag = evaluateComplement(own, atMs, atMonoMs);
     if (complementFlag) flag = complementFlag;
 
     /* Shared-target grouping (same targetKey, any number of subjects). */
     const sharedKey = `${event.action}\0${targetKey}`;
     let shared = sharedGroups.get(sharedKey);
-    if (shared) pruneShared(shared, atMs);
+    if (shared) pruneShared(shared, atMonoMs);
     if (shared && shared.members.size === 0) {
       sharedGroups.delete(sharedKey);
       shared = undefined;
@@ -969,6 +1014,7 @@ export function createActionCohortTracker(
         flagged: false,
         announced: new Map<string, AnnouncedState>(),
         lastFlagAt: 0,
+        lastFlagAtMono: 0,
       };
       sharedGroups.set(sharedKey, shared);
     }
@@ -977,9 +1023,9 @@ export function createActionCohortTracker(
       sharedMember = newMember(event.subject);
       shared.members.set(event.subject, sharedMember);
     }
-    sharedMember.events.push({ targetKey, cost, ts: atMs });
+    sharedMember.events.push({ targetKey, cost, ts: atMs, tsMono: atMonoMs });
     rebuildMember(sharedMember);
-    const sharedFlag = evaluateShared(shared, atMs);
+    const sharedFlag = evaluateShared(shared, atMs, atMonoMs);
     if (sharedFlag && !flag) flag = sharedFlag;
 
     return flag ? { recorded: true, flag } : { recorded: true };
@@ -1123,8 +1169,14 @@ export function createActionCohortTracker(
     groups,
     reset,
     taints() {
-      pruneTaints(clock());
-      return taintList.map(taint => ({ ...taint }));
+      pruneTaints(monoClock());
+      // Project the public shape only: the monotonic twin never leaks.
+      return taintList.map(taint => ({
+        subject: taint.subject,
+        action: taint.action,
+        targetKey: taint.targetKey,
+        ts: taint.ts,
+      }));
     },
     actionFrictionTargets(snapshot, opts = {}) {
       return actionFrictionTargets(snapshot, {
