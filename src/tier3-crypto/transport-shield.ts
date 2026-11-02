@@ -4,6 +4,8 @@
  * can recover it and plaintext; this is NOT anti-reverse-engineering protection.
  * HTTPS/TLS remains mandatory. Do not put raw global keys in frontend bundles.
  */
+import { monoNowMs } from "../internal/mono-clock";
+
 export interface EncryptedEnvelope {
   version: 1;
   iv: string;
@@ -30,6 +32,13 @@ export interface OpenEnvelopeOptions {
 export interface ReplayGuardOptions {
   /** Default TTL in ms when caller does not supply one (default: 300_000 = 5 minutes). */
   ttlMs?: number;
+  /**
+   * Monotonic clock for the guard's TTL bookkeeping (L-DEEP-2). Expiry
+   * values are internal to the guard and never exposed, so the whole
+   * ledger of seen nonces lives on a clock that never steps. Defaults
+   * to the shared monotonic source; injectable for tests.
+   */
+  monoNow?: () => number;
   /**
    * Maximum cached nonces in memory (default: 10_000). The bound fails
    * closed: only expired entries are evicted, and once the cache is full of
@@ -134,9 +143,10 @@ export const verifyTransportEnvelope = decryptPayload;
 export function createInMemoryReplayGuard(options: ReplayGuardOptions = {}): OpenEnvelopeOptions["markNonceOnce"] {
   const defaultTtlMs = Math.max(1000, options.ttlMs ?? 300_000);
   const maxEntries = Math.max(100, options.maxEntries ?? 10_000);
+  const monoClock = options.monoNow ?? monoNowMs;
   const seen = new Map<string, number>();
   return (key, ttlMs) => {
-    const now = Date.now();
+    const now = monoClock();
     const effectiveTtl = Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : defaultTtlMs;
     for (const [k, expiry] of seen) {
       if (expiry <= now) seen.delete(k);

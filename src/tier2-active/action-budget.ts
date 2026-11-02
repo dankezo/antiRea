@@ -92,6 +92,7 @@ import {
   type EnforcementContext,
   type SoftBudgetStepDownResult,
 } from "./enforcement-tiering";
+import { monoNowMs } from "../internal/mono-clock";
 
 /* ------------------------------------------------------------------------ */
 /* State (all of it lives inside the one CAS transaction)                    */
@@ -184,6 +185,20 @@ export interface ActionBudgetOptions {
     longTtlMs?: number;
   };
   now?: () => number;
+  /**
+   * Monotonic clock for the hybrid interval rules (L-DEEP-2): bucket
+   * refill credits are clamped to the time a bucket needs to fill (a
+   * no-op on a healthy clock); a reservation created BY THIS PROCESS
+   * also dies at its monotonic TTL, whichever of wall-expiry /
+   * mono-TTL comes first; and a subject/cohort window created or
+   * rolled BY THIS PROCESS also rolls at its monotonic length,
+   * whichever comes first. Persisted state keeps wall-clock fields
+   * only - reservations and windows restored from the store or
+   * written by another process have no monotonic mirror and follow
+   * the wall clock alone. When only `now` is given, the injected
+   * clock drives both domains (pre-patch behavior).
+   */
+  monoNow?: () => number;
 }
 
 export interface ReserveActionRequest {
@@ -478,6 +493,21 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
   const cohortOutstandingCap = options.reservation?.cohortOutstandingCap;
   const longTtlMs = Math.max(ttlMs, options.reservation?.longTtlMs ?? 900_000);
   const now = options.now ?? Date.now;
+  const monoNowFn = options.monoNow ?? (options.now ? now : monoNowMs);
+  /**
+   * Monotonic creation stamps for reservations THIS process created
+   * (L-DEEP-2 hybrid rule): reservation id -> { creation instant on
+   * the monotonic clock, TTL granted }. Never persisted.
+   */
+  const ownReservationMono = new Map<string, { createdMonoMs: number; ttlMs: number }>();
+  /**
+   * Monotonic anchors for windows THIS process created or rolled
+   * (L-DEEP-2): `subject:<id>` / `cohort:<id>` -> { wall start,
+   * monotonic start }. An anchor applies only while the persisted
+   * window still starts at the anchored wall instant; a window
+   * another process rolled is foreign and follows the wall alone.
+   */
+  const windowAnchors = new Map<string, { startWallMs: number; startMonoMs: number }>();
   const mode: ActionBudgetMode =
     store.supportsTransactions && store.transactLedger ? "enforce" : "audit_only";
   const enforcementNote =
@@ -608,8 +638,12 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
 
   /** Tokens a bucket holds at `atMs`, without mutating it. */
   function refilledTokens(bucket: ActionBucketState, atMs: number): number {
-    const elapsedMs = Math.max(0, atMs - bucket.lastRefillMs);
+    let elapsedMs = Math.max(0, atMs - bucket.lastRefillMs);
     if (elapsedMs <= 0 || bucket.refillPerSecond <= 0) return bucket.tokens;
+    // L-DEEP-2 hybrid clamp: never credit more elapsed time than the
+    // bucket needs to reach full (no-op on a healthy clock).
+    const msToFull = ((bucket.burst - bucket.tokens) / bucket.refillPerSecond) * 1000;
+    elapsedMs = Math.min(elapsedMs, Math.max(0, msToFull));
     return Math.min(bucket.burst, bucket.tokens + (elapsedMs / 1000) * bucket.refillPerSecond);
   }
 
@@ -629,34 +663,69 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     state: ActionBudgetState,
     subject: string,
     atMs: number,
+    atMonoMs: number,
+    trackAnchor: boolean,
   ): ActionSubjectWindow {
+    const anchorKey = `subject:${subject}`;
     let window_ = state.subjects[subject];
     if (!window_) {
       window_ = { windowStartMs: atMs, committedCost: 0, reservedCost: 0 };
       state.subjects[subject] = window_;
+      if (trackAnchor) windowAnchors.set(anchorKey, { startWallMs: atMs, startMonoMs: atMonoMs });
       return window_;
     }
-    if (atMs - window_.windowStartMs >= windowMs) {
+    // Hybrid roll (L-DEEP-2): the wall deadline, or - for a window
+    // this process anchored - its monotonic length, whichever first.
+    const anchor = windowAnchors.get(anchorKey);
+    const monoExpired =
+      anchor !== undefined &&
+      anchor.startWallMs === window_.windowStartMs &&
+      atMonoMs - anchor.startMonoMs >= windowMs;
+    if (atMs - window_.windowStartMs >= windowMs || monoExpired) {
       window_.windowStartMs = atMs;
       window_.committedCost = 0;
       window_.reservedCost = sumReserved(state, r => r.subject === subject);
+      if (trackAnchor) windowAnchors.set(anchorKey, { startWallMs: atMs, startMonoMs: atMonoMs });
     }
     return window_;
   }
 
   /** Roll a declared cohort's window if it has expired (same recompute discipline). */
-  function ensureCohortWindow(state: ActionBudgetState, cohort: DeclaredActionCohortState, atMs: number): void {
-    if (atMs - cohort.windowStartMs >= windowMs) {
+  function ensureCohortWindow(
+    state: ActionBudgetState,
+    cohortId: string,
+    cohort: DeclaredActionCohortState,
+    atMs: number,
+    atMonoMs: number,
+    trackAnchor: boolean,
+  ): void {
+    const anchorKey = `cohort:${cohortId}`;
+    const anchor = windowAnchors.get(anchorKey);
+    const monoExpired =
+      anchor !== undefined &&
+      anchor.startWallMs === cohort.windowStartMs &&
+      atMonoMs - anchor.startMonoMs >= windowMs;
+    if (atMs - cohort.windowStartMs >= windowMs || monoExpired) {
       cohort.windowStartMs = atMs;
       cohort.committedCost = 0;
       cohort.reservedCost = sumReserved(state, r => r.cohortId !== undefined && state.declaredCohorts[r.cohortId] === cohort);
+      if (trackAnchor) windowAnchors.set(anchorKey, { startWallMs: atMs, startMonoMs: atMonoMs });
     }
   }
 
-  function expireReservations(state: ActionBudgetState, atMs: number): number {
+  function expireReservations(
+    state: ActionBudgetState,
+    atMs: number,
+    atMonoMs: number,
+    pruneMono: boolean,
+  ): number {
     let expired = 0;
     for (const [id, reservation] of Object.entries(state.reservations)) {
-      if (reservation.expiresAtMs <= atMs) {
+      // Hybrid rule (L-DEEP-2): a reservation created by this process
+      // dies at whichever comes first - wall expiry or monotonic TTL.
+      const own = ownReservationMono.get(id);
+      const monoExpired = own !== undefined && atMonoMs - own.createdMonoMs >= own.ttlMs;
+      if (reservation.expiresAtMs <= atMs || monoExpired) {
         const window_ = state.subjects[reservation.subject];
         if (window_) window_.reservedCost = Math.max(0, window_.reservedCost - reservation.cost);
         if (reservation.cohortId) {
@@ -664,6 +733,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           if (cohort) cohort.reservedCost = Math.max(0, cohort.reservedCost - reservation.cost);
         }
         delete state.reservations[id];
+        if (pruneMono) ownReservationMono.delete(id);
         expired++;
       }
     }
@@ -710,12 +780,13 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
 
     async reserveAction(req) {
       const atMs = now();
+      const atMonoMs = monoNowFn();
       const enforced = mode === "enforce";
       const tablePrice = prices[req.action];
       const rawCost = req.cost ?? tablePrice ?? 0;
       const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : 0;
       try {
-        return await mutate<ReserveActionResult>(state => {
+        const result = await mutate<ReserveActionResult>(state => {
           const refuse = (
             reason: ReserveActionRefusalReason,
             extra?: Partial<ReserveActionResult>,
@@ -728,7 +799,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
 
           // Lazy sweep: stale reservations free their subject/cohort
           // reserved cost before any check runs (ledger discipline).
-          expireReservations(state, atMs);
+          expireReservations(state, atMs, atMonoMs, true);
 
           if (req.idempotencyKey) {
             const existingId = state.idempotency[req.idempotencyKey];
@@ -764,7 +835,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
             cohort = state.declaredCohorts[req.cohortId];
             if (!cohort) return refuse("unknown_cohort");
             if (!cohort.subjects.includes(req.subject)) return refuse("unregistered_subject");
-            ensureCohortWindow(state, cohort, atMs);
+            ensureCohortWindow(state, req.cohortId, cohort, atMs, atMonoMs, true);
             if (cohort.committedCost + cohort.reservedCost + cost > cohort.ceilingCostPerWindow) {
               return refuse("cohort_ceiling_exceeded");
             }
@@ -786,7 +857,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           }
 
           // Per-subject allowance for this window.
-          const subjectWindow = ensureSubjectWindow(state, req.subject, atMs);
+          const subjectWindow = ensureSubjectWindow(state, req.subject, atMs, atMonoMs, true);
           const allowance = effectiveAllowance(state, req.subject);
           if (subjectWindow.committedCost + subjectWindow.reservedCost + cost > allowance) {
             return refuse("subject_budget_exceeded");
@@ -844,6 +915,15 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
             value: { allowed: true, enforced, mode, reservationId: reservation.id, cost },
           };
         });
+        if (result.allowed && result.reservationId && !result.duplicate) {
+          // This process created the reservation: stamp its monotonic
+          // creation instant so the hybrid expiry rule can see it.
+          ownReservationMono.set(result.reservationId, {
+            createdMonoMs: atMonoMs,
+            ttlMs: req.longReservation === true ? longTtlMs : ttlMs,
+          });
+        }
+        return result;
       } catch (error) {
         if (error instanceof StoreConflictError || error instanceof StoreDataError) {
           return { allowed: false, enforced, mode, reason: "store_conflict", cost };
@@ -853,21 +933,22 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     },
 
     async commitAction(reservationId) {
+      const atMonoMs = monoNowFn();
       try {
-        return await mutate<{ committed: boolean; reason?: string }>(state => {
+        const result = await mutate<{ committed: boolean; reason?: string }>(state => {
         const atMs = now();
-        expireReservations(state, atMs);
+        expireReservations(state, atMs, atMonoMs, true);
         const reservation = state.reservations[reservationId];
         if (!reservation) {
           return { state: null, value: { committed: false, reason: "unknown_or_expired_reservation" } };
         }
-        const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs);
+        const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs, atMonoMs, true);
         subjectWindow.committedCost += reservation.cost;
         subjectWindow.reservedCost = Math.max(0, subjectWindow.reservedCost - reservation.cost);
         if (reservation.cohortId) {
           const cohort = state.declaredCohorts[reservation.cohortId];
           if (cohort) {
-            ensureCohortWindow(state, cohort, atMs);
+            ensureCohortWindow(state, reservation.cohortId, cohort, atMs, atMonoMs, true);
             cohort.committedCost += reservation.cost;
             cohort.reservedCost = Math.max(0, cohort.reservedCost - reservation.cost);
           }
@@ -876,6 +957,8 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           syncOverrides(state);
           return { state, value: { committed: true } };
         });
+        if (result.committed) ownReservationMono.delete(reservationId);
+        return result;
       } catch (error) {
         if (isStoreFailure(error)) return { committed: false, reason: "store_conflict" };
         throw error;
@@ -883,17 +966,18 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     },
 
     async releaseAction(reservationId) {
+      const atMonoMs = monoNowFn();
       try {
-        return await mutate<{ released: boolean; reason?: string }>(state => {
+        const result = await mutate<{ released: boolean; reason?: string }>(state => {
           const atMs = now();
           const reservation = state.reservations[reservationId];
           if (!reservation) return { state: null, value: { released: false } };
-          const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs);
+          const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs, atMonoMs, true);
           subjectWindow.reservedCost = Math.max(0, subjectWindow.reservedCost - reservation.cost);
           if (reservation.cohortId) {
             const cohort = state.declaredCohorts[reservation.cohortId];
             if (cohort) {
-              ensureCohortWindow(state, cohort, atMs);
+              ensureCohortWindow(state, reservation.cohortId, cohort, atMs, atMonoMs, true);
               cohort.reservedCost = Math.max(0, cohort.reservedCost - reservation.cost);
             }
           }
@@ -901,6 +985,8 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           syncOverrides(state);
           return { state, value: { released: true } };
         });
+        if (result.released) ownReservationMono.delete(reservationId);
+        return result;
       } catch (error) {
         if (isStoreFailure(error)) return { released: false, reason: "store_conflict" };
         throw error;
@@ -910,7 +996,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     async sweepExpired() {
       try {
         return await mutate(state => {
-          const expired = expireReservations(state, now());
+          const expired = expireReservations(state, now(), monoNowFn(), true);
           return { state: expired > 0 ? state : null, value: { expired } };
         });
       } catch (error) {
@@ -921,8 +1007,12 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
 
     async declareActionCohort(req) {
       const unique = [...new Set(req.subjects)];
+      const declareWallMs = now();
+      const declareMonoMs = monoNowFn();
+      let createdNewCohort = false;
       try {
-        return await mutate(state => {
+        const result = await mutate(state => {
+        createdNewCohort = false;
         const existing = state.declaredCohorts[req.cohortId];
         if (existing) {
           // Re-declaration updates membership and ceiling but does NOT
@@ -931,10 +1021,11 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           existing.subjects = unique;
           existing.ceilingCostPerWindow = Math.max(0, req.ceilingCostPerWindow);
         } else {
+          createdNewCohort = true;
           state.declaredCohorts[req.cohortId] = {
             subjects: unique,
             ceilingCostPerWindow: Math.max(0, req.ceilingCostPerWindow),
-            windowStartMs: now(),
+            windowStartMs: declareWallMs,
             committedCost: 0,
             reservedCost: 0,
           };
@@ -942,6 +1033,14 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           syncOverrides(state);
           return { state, value: { registered: unique.length } };
         });
+        if (createdNewCohort) {
+          // This process created the cohort window: anchor it (L-DEEP-2).
+          windowAnchors.set(`cohort:${req.cohortId}`, {
+            startWallMs: declareWallMs,
+            startMonoMs: declareMonoMs,
+          });
+        }
+        return result;
       } catch (error) {
         if (isStoreFailure(error)) return { registered: 0, reason: "store_conflict" };
         throw error;
@@ -1014,9 +1113,15 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     async snapshot() {
       const buildSnapshot = (view: ActionBudgetState): ActionBudgetSnapshot => {
         const atMs = now();
-        expireReservations(view, atMs);
-        for (const subject of Object.keys(view.subjects)) ensureSubjectWindow(view, subject, atMs);
-        for (const cohort of Object.values(view.declaredCohorts)) ensureCohortWindow(view, cohort, atMs);
+        const atMonoMs = monoNowFn();
+        // View-only: anchors and the mono mirror map are read, never written.
+        expireReservations(view, atMs, atMonoMs, false);
+        for (const subject of Object.keys(view.subjects)) {
+          ensureSubjectWindow(view, subject, atMs, atMonoMs, false);
+        }
+        for (const [cohortId, cohort] of Object.entries(view.declaredCohorts)) {
+          ensureCohortWindow(view, cohortId, cohort, atMs, atMonoMs, false);
+        }
         refillBucket(view.bucket, atMs);
         syncOverrides(view);
         let committedCost = 0;

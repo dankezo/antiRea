@@ -13,9 +13,11 @@ export class BehaviorShield {
   private active = false;
   private announced = new Set<string>();
   constructor(private options: BehaviorShieldOptions) {}
-  private click = () => this.clickEvents.push(Date.now());
+  // L-DEEP-2: timestamps here are pure intervals (events per minute), so
+  // they come from performance.now() - Date.now() can step under the user.
+  private click = () => this.clickEvents.push(performance.now());
   private tick = () => {
-    const now = Date.now(), cutoff = now - 60000;
+    const now = performance.now(), cutoff = now - 60000;
     const path = window.location.pathname; // ignore query strings (often sensitive)
     if (path !== this.currentPath) { this.currentPath = path; this.routeEvents.push(now); }
     this.routeEvents = this.routeEvents.filter(t => t >= cutoff);
