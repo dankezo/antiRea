@@ -154,6 +154,7 @@ import {
 } from "./calibration-manifest";
 import { clampEnforcement, type CohortOrigin } from "./enforcement-tiering";
 import { mergeCohortBucketStates } from "./disclosure-ledger";
+import { monoNowMs } from "../internal/mono-clock";
 
 export type CusumStreamName = "adjacency" | "tiling" | "cold" | "velocity";
 export type CusumMode = "observe" | "enforce";
@@ -403,6 +404,15 @@ export interface CusumTripwireOptions {
    */
   isProtected?: (identity: string) => boolean;
   now?: () => number;
+  /**
+   * Monotonic clock for the cohort pacing bucket's refill arithmetic
+   * (L-DEEP-2) - the only interval this engine measures on its own
+   * clock. Formation windows and epoch rotation run over event
+   * timestamps (host time domain) and are untouched. When only `now`
+   * is given, the injected clock drives both domains (pre-patch
+   * behavior).
+   */
+  monoNow?: () => number;
 }
 
 export interface CusumTripwire {
@@ -441,6 +451,8 @@ interface CohortState {
   ceilingArmed: boolean;
   bucketTokens: number;
   bucketLastRefillMs: number;
+  /** Monotonic twin of `bucketLastRefillMs` (L-DEEP-2): refill elapsed time is measured on this clock. */
+  bucketLastRefillMonoMs: number;
   /** Net LLR attributed to each member over the current score window. */
   contributions: Map<string, number>;
 }
@@ -492,6 +504,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   const formationWindowMs = Math.max(0, options.formation?.windowMs ?? 60_000);
   const formationRecheckGrowth = Math.max(1, options.formation?.recheckGrowth ?? 25);
   const now = options.now ?? Date.now;
+  const monoNowFn = options.monoNow ?? (options.now ? now : monoNowMs);
 
   const declaredGroupOf = new Map<string, number>();
   (options.declaredCohorts ?? []).forEach((group, index) => {
@@ -555,8 +568,8 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
 
   const bucketRate = (size: number): number => bucketRateBase * Math.pow(Math.max(1, size), bucketRateExponent);
 
-  const refill = (cohort: CohortState, atMs: number): void => {
-    const elapsed = Math.max(0, atMs - cohort.bucketLastRefillMs);
+  const refill = (cohort: CohortState, atMs: number, atMonoMs: number): void => {
+    const elapsed = Math.max(0, atMonoMs - cohort.bucketLastRefillMonoMs);
     if (elapsed > 0) {
       cohort.bucketTokens = Math.min(
         bucketBurst,
@@ -564,9 +577,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       );
     }
     cohort.bucketLastRefillMs = atMs;
+    cohort.bucketLastRefillMonoMs = atMonoMs;
   };
 
-  const ensureCohort = (root: string, atMs: number): CohortState => {
+  const ensureCohort = (root: string, atMs: number, atMonoMs: number): CohortState => {
     let cohort = cohorts.get(root);
     if (!cohort) {
       const members = membersOf(root);
@@ -580,6 +594,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         ceilingArmed: false,
         bucketTokens: bucketBurst,
         bucketLastRefillMs: atMs,
+        bucketLastRefillMonoMs: atMonoMs,
         contributions: new Map(),
       };
       cohorts.set(root, cohort);
@@ -588,10 +603,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   };
 
   /** Union-find merge with R6 rules: singleton scores discarded, bucket min-merged. */
-  const mergeIdentities = (a: string, b: string, atMs: number): CohortState => {
+  const mergeIdentities = (a: string, b: string, atMs: number, atMonoMs: number): CohortState => {
     const rootA = find(a);
     const rootB = find(b);
-    if (rootA === rootB) return ensureCohort(rootA, atMs);
+    if (rootA === rootB) return ensureCohort(rootA, atMs, atMonoMs);
     const cohortA = cohorts.get(rootA);
     const cohortB = cohorts.get(rootB);
     // Larger component keeps the root; its accumulator continues.
@@ -600,7 +615,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     const [keepRoot, dropRoot, keep, drop] =
       sizeA >= sizeB ? [rootA, rootB, cohortA, cohortB] : [rootB, rootA, cohortB, cohortA];
     parent.set(dropRoot, keepRoot);
-    const merged = ensureCohort(keepRoot, atMs);
+    const merged = ensureCohort(keepRoot, atMs, atMonoMs);
     const mergeContributions = (into: CohortState, from: CohortState): void => {
       for (const [member, value] of from.contributions) {
         into.contributions.set(member, (into.contributions.get(member) ?? 0) + value);
@@ -620,6 +635,9 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       );
       merged.bucketTokens = mergedBucket.tokens;
       merged.bucketLastRefillMs = mergedBucket.lastRefillMs;
+      // The monotonic refill anchor merges by the same "latest wins"
+      // rule the merged bucket's lastRefillMs follows.
+      merged.bucketLastRefillMonoMs = Math.max(keep.bucketLastRefillMonoMs, drop.bucketLastRefillMonoMs);
     } else if (!keep && drop) {
       merged.score = drop.score;
       merged.flagged = drop.flagged;
@@ -628,6 +646,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       merged.ceilingArmed = drop.ceilingArmed;
       merged.bucketTokens = drop.bucketTokens;
       merged.bucketLastRefillMs = drop.bucketLastRefillMs;
+      merged.bucketLastRefillMonoMs = drop.bucketLastRefillMonoMs;
       merged.contributions = new Map(drop.contributions);
     }
     cohorts.delete(dropRoot);
@@ -688,7 +707,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
    * re-evaluated only once its smaller side has grown by at least
    * formationRecheckGrowth since the last full evaluation.
    */
-  const evaluateFormation = (identity: string, ts: number): void => {
+  const evaluateFormation = (identity: string, ts: number, tsMono: number): void => {
     if (!formationSlice && !formationColdWalk) return;
     const self = identities.get(identity);
     if (!self) return;
@@ -710,7 +729,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
               const { intersection, union } = setOverlap(self.served, other.served);
               const jaccard = union > 0 ? intersection / union : 0;
               if (jaccard <= formationMaxOverlap && union >= formationMinUnion) {
-                mergeIdentities(identity, otherId, ts);
+                mergeIdentities(identity, otherId, ts, tsMono);
               }
             }
           }
@@ -732,7 +751,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
             const { intersection, union } = setOverlap(self.coldSet, other.coldSet);
             const jaccard = union > 0 ? intersection / union : 0;
             if (jaccard <= formationMaxOverlap && union >= formationMinUnion) {
-              mergeIdentities(identity, otherId, ts);
+              mergeIdentities(identity, otherId, ts, tsMono);
             }
           }
         }
@@ -740,8 +759,8 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     }
   };
 
-  const snapshotOf = (cohort: CohortState, atMs: number): CampaignSnapshot => {
-    refill(cohort, atMs);
+  const snapshotOf = (cohort: CohortState, atMs: number, atMonoMs: number): CampaignSnapshot => {
+    refill(cohort, atMs, atMonoMs);
     // A snapshot must never under-report an armed declared ceiling.
     maybeArmDeclaredCeiling(cohort, atMs);
     const union = unionRecords(cohort);
@@ -861,18 +880,22 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
    */
   {
     const armTs = now();
+    const armMono = monoNowFn();
     for (const group of options.declaredCohorts ?? []) {
       const members = [...new Set(group)].filter(member => member.length > 0);
       if (members.length === 0) continue;
       for (const member of members) identityState(member);
-      let cohort = ensureCohort(find(members[0] as string), armTs);
-      for (const member of members.slice(1)) cohort = mergeIdentities(members[0] as string, member, armTs);
+      let cohort = ensureCohort(find(members[0] as string), armTs, armMono);
+      for (const member of members.slice(1)) cohort = mergeIdentities(members[0] as string, member, armTs, armMono);
       maybeArmDeclaredCeiling(cohort, armTs);
     }
   }
 
   async function observe(event: CusumEvent): Promise<CusumDecision> {
     const ts = event.ts ?? now();
+    // Internal-clock events also stamp the monotonic twin; host-ts
+    // events stay in the host's time domain (their twin mirrors ts).
+    const tsMono = event.ts !== undefined ? ts : monoNowFn();
     const identity = event.identity;
     if (options.isExempt && options.isExempt(identity)) {
       return {
@@ -904,7 +927,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     let cohort = cohortOf(identity);
     if (event.echoFrom && event.echoFrom !== identity) {
       identityState(event.echoFrom);
-      cohort = mergeIdentities(identity, event.echoFrom, ts);
+      cohort = mergeIdentities(identity, event.echoFrom, ts, tsMono);
     }
     if (streams.adjacency && event.predicate) {
       const p = event.predicate;
@@ -928,7 +951,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           predicateRing.push({ identity, field: p.field, l, u });
           if (predicateRing.length > 256) predicateRing.splice(0, predicateRing.length - 256);
           if (abutting.length > 0) {
-            for (const other of abutting) cohort = mergeIdentities(identity, other, ts);
+            for (const other of abutting) cohort = mergeIdentities(identity, other, ts, tsMono);
             if (event.recordIds) {
               for (const id of event.recordIds) if (id >= p.min && id <= p.max) state.explained.add(id);
             }
@@ -1001,7 +1024,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
      * just-updated served / cold state, BEFORE scoring, so the
      * current event belongs to the new cohort when a merge fires -
      * the same ordering adjacency merges already use. */
-    evaluateFormation(identity, ts);
+    evaluateFormation(identity, ts, tsMono);
 
     /* Refresh cohort membership after possible merges. */
     cohort = cohortOf(identity);
@@ -1083,7 +1106,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           action = resolved.action;
           clampedReason = resolved.clampedReason;
         }
-        if (options.onCampaignFlag) options.onCampaignFlag(snapshotOf(cohort, ts));
+        if (options.onCampaignFlag) options.onCampaignFlag(snapshotOf(cohort, ts, tsMono));
       } else if (cohort.flagged) {
         if (mode === "observe") {
           action = "logged";
@@ -1161,6 +1184,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
 
   async function checkServe(identity: string, requested: number) {
     const ts = now();
+    const tsMono = monoNowFn();
     const cohort = cohortOf(identity);
     if (!cohort || mode === "observe") return { allowed: requested };
     // An armed declared ceiling enforces WITHOUT a flag: the cohort
@@ -1201,7 +1225,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     if (cohort.ceilingActive && unionNow >= ceilingLimit) {
       return { allowed: 0, cohortId: cohort.id, reason: "campaign_ceiling" };
     }
-    refill(cohort, ts);
+    refill(cohort, ts, tsMono);
     const allowed = Math.min(requested, Math.floor(cohort.bucketTokens));
     cohort.bucketTokens -= allowed;
     if (allowed < requested) {
@@ -1220,7 +1244,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     observe,
     checkServe,
     async getSnapshot(cohortId) {
-      for (const cohort of cohorts.values()) if (cohort.id === cohortId) return snapshotOf(cohort, now());
+      for (const cohort of cohorts.values()) if (cohort.id === cohortId) return snapshotOf(cohort, now(), monoNowFn());
       return null;
     },
     async snapshotFor(identity) {
@@ -1228,7 +1252,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       // A cohort snapshot normally needs a pair - except an armed
       // declared cohort, whose state (armed, capped) is meaningful
       // even for a single-member declared group.
-      return cohort && (cohort.members.size >= 2 || cohort.ceilingArmed) ? snapshotOf(cohort, now()) : null;
+      return cohort && (cohort.members.size >= 2 || cohort.ceilingArmed) ? snapshotOf(cohort, now(), monoNowFn()) : null;
     },
     async clearCohort(cohortId) {
       for (const cohort of cohorts.values()) {
