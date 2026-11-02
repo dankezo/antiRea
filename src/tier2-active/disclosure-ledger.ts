@@ -51,6 +51,8 @@
  * bitmap/base64 helpers below are runtime-agnostic).
  */
 
+import { monoNowMs } from "../internal/mono-clock";
+
 /* ------------------------------------------------------------------------ */
 /* Store failure type: every public entry converts store problems into a   */
 /* structured `store_conflict` refusal instead of throwing (F-06).         */
@@ -534,6 +536,19 @@ export interface DisclosureLedgerOptions {
   /** Default "fail_closed" once a registry is declared. */
   unregisteredPolicy?: "fail_closed" | "audit_only";
   now?: () => number;
+  /**
+   * Monotonic clock for the hybrid interval rules (L-DEEP-2): the
+   * bucket refill's credited interval is clamped to the time the
+   * bucket needs to fill (a no-op on a healthy clock), and a
+   * reservation created BY THIS PROCESS also dies at its monotonic
+   * TTL, whichever of wall-expiry / mono-TTL comes first. Persisted
+   * state keeps wall-clock deadlines only - a reservation restored
+   * from the store or written by another process has no monotonic
+   * mirror and follows the wall clock alone. When only `now` is
+   * given, the injected clock drives both domains (pre-patch
+   * behavior).
+   */
+  monoNow?: () => number;
 }
 
 export interface ReserveDisclosureRequest {
@@ -644,6 +659,15 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
   const longTtlMs = Math.max(ttlMs, options.reservation?.longTtlMs ?? 900_000);
   const unregisteredPolicy = options.unregisteredPolicy ?? "fail_closed";
   const now = options.now ?? Date.now;
+  const monoNowFn = options.monoNow ?? (options.now ? now : monoNowMs);
+  /**
+   * Monotonic creation stamps for reservations THIS process created
+   * (L-DEEP-2 hybrid rule): reservation id -> { creation instant on
+   * the monotonic clock, TTL granted }. Never persisted - a
+   * reservation restored from the store or written by another process
+   * has no entry and follows its wall expiry alone.
+   */
+  const ownReservationMono = new Map<string, { createdMonoMs: number; ttlMs: number }>();
   const mode: LedgerMode = store.supportsTransactions && store.transactLedger ? "enforce" : "audit_only";
   const enforcementNote =
     mode === "enforce"
@@ -708,11 +732,22 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     return outcome.value;
   }
 
-  function expireReservations(state: DisclosureLedgerState, atMs: number): number {
+  function expireReservations(
+    state: DisclosureLedgerState,
+    atMs: number,
+    atMonoMs: number,
+    pruneMono: boolean,
+  ): number {
     let expired = 0;
     for (const [id, reservation] of Object.entries(state.reservations)) {
-      if (reservation.expiresAtMs <= atMs) {
+      // Hybrid rule (L-DEEP-2): a reservation created by this process
+      // dies at whichever comes first - its wall expiry, or its TTL
+      // measured on the monotonic clock.
+      const own = ownReservationMono.get(id);
+      const monoExpired = own !== undefined && atMonoMs - own.createdMonoMs >= own.ttlMs;
+      if (reservation.expiresAtMs <= atMs || monoExpired) {
         delete state.reservations[id];
+        if (pruneMono) ownReservationMono.delete(id);
         expired++;
       }
     }
@@ -744,8 +779,14 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
 
   function refillBucket(state: DisclosureLedgerState, atMs: number): void {
     const bucket = state.bucket;
-    const elapsedMs = Math.max(0, atMs - bucket.lastRefillMs);
+    let elapsedMs = Math.max(0, atMs - bucket.lastRefillMs);
     if (elapsedMs > 0 && bucket.refillPerSecond > 0) {
+      // L-DEEP-2 hybrid clamp: never credit more elapsed time than
+      // the bucket needs to reach full. A no-op on a healthy clock
+      // (tokens cap at burst either way); it makes the step behavior
+      // explicit instead of implicit.
+      const msToFull = ((bucket.burst - bucket.tokens) / bucket.refillPerSecond) * 1000;
+      elapsedMs = Math.min(elapsedMs, Math.max(0, msToFull));
       bucket.tokens = Math.min(bucket.burst, bucket.tokens + (elapsedMs / 1000) * bucket.refillPerSecond);
     }
     bucket.lastRefillMs = atMs;
@@ -795,15 +836,16 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
 
     async reserveDisclosure(request) {
       const atMs = now();
+      const atMonoMs = monoNowFn();
       const enforced = mode === "enforce";
       try {
-        return await mutate<ReserveDisclosureResult>(state => {
+        const result = await mutate<ReserveDisclosureResult>(state => {
         const refuse = (reason: ReserveRefusalReason, extra?: Partial<ReserveDisclosureResult>): { state: DisclosureLedgerState | null; value: ReserveDisclosureResult } => ({
           state: null,
           value: { allowed: false, enforced, mode, reason, ...extra },
         });
 
-        expireReservations(state, atMs);
+        expireReservations(state, atMs, atMonoMs, true);
 
         // Normalized request payload (state-independent, computed once):
         // the idempotency fingerprint below is taken over exactly these
@@ -915,6 +957,15 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
           },
         };
         });
+        if (result.allowed && result.reservationId && !result.duplicate) {
+          // This process created the reservation: stamp its monotonic
+          // creation instant so the hybrid expiry rule can see it.
+          ownReservationMono.set(result.reservationId, {
+            createdMonoMs: atMonoMs,
+            ttlMs: request.longReservation === true ? longTtlMs : ttlMs,
+          });
+        }
+        return result;
       } catch {
         // F-06: store failures (dead backend, corrupt content, CAS
         // exhaustion) refuse fail-closed instead of throwing into the
@@ -924,9 +975,10 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     },
 
     async commitReservation(reservationId) {
+      const atMonoMs = monoNowFn();
       try {
-        return await mutate<{ committed: boolean; reason?: string }>(state => {
-          expireReservations(state, now());
+        const result = await mutate<{ committed: boolean; reason?: string }>(state => {
+          expireReservations(state, now(), atMonoMs, true);
           const reservation = state.reservations[reservationId];
           if (!reservation) return { state: null, value: { committed: false, reason: "unknown_or_expired_reservation" } };
           const held = bitmapFromBase64(reservation.idsBitmap);
@@ -935,6 +987,8 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
           delete state.reservations[reservationId];
           return { state, value: { committed: true } };
         });
+        if (result.committed) ownReservationMono.delete(reservationId);
+        return result;
       } catch {
         return { committed: false, reason: "store_conflict" };
       }
@@ -942,11 +996,13 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
 
     async releaseReservation(reservationId) {
       try {
-        return await mutate<{ released: boolean; reason?: string }>(state => {
+        const result = await mutate<{ released: boolean; reason?: string }>(state => {
           if (!state.reservations[reservationId]) return { state: null, value: { released: false } };
           delete state.reservations[reservationId];
           return { state, value: { released: true } };
         });
+        if (result.released) ownReservationMono.delete(reservationId);
+        return result;
       } catch {
         return { released: false, reason: "store_conflict" };
       }
@@ -955,7 +1011,7 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     async sweepExpired() {
       try {
         return await mutate(state => {
-          const expired = expireReservations(state, now());
+          const expired = expireReservations(state, now(), monoNowFn(), true);
           return { state: expired > 0 ? state : null, value: { expired } };
         });
       } catch {
@@ -979,7 +1035,8 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
       const buildSnapshot = (state: DisclosureLedgerState): LedgerSnapshot => {
         const atMs = now();
         const view = cloneState(state);
-        expireReservations(view, atMs);
+        // View-only expiry: the monotonic mirror map is NOT pruned here.
+        expireReservations(view, atMs, monoNowFn(), false);
         refillBucket(view, atMs);
         const totals = reservedTotals(view);
         return {
