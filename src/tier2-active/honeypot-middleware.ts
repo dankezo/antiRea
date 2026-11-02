@@ -1,4 +1,6 @@
 /** Canary routes emit alerts only; do not use them for automated banning or poisoned schemas. */
+import { resolveIntervalClock } from "../internal/mono-clock";
+
 export const CANARY_ENDPOINTS = [
   "/api/v1/internal/schema-export",
   "/api/v1/internal/prompt-registry",
@@ -188,6 +190,16 @@ export interface CanaryMazeOptions {
   dripMs?: number;
   /** Extra seed material mixed into page generation; changing it reshapes the maze. */
   seed?: string;
+  /** Wall clock override - mainly for tests. Feeds the UTC daily budget only (L-DEEP-2). */
+  now?: () => number;
+  /**
+   * Monotonic clock for the per-IP window arithmetic (L-DEEP-2). The maze
+   * previously read `Date.now()` directly with no injection point; the
+   * per-IP window now runs on this clock and is immune to wall-clock
+   * steps. When only `now` is given, the injected clock drives both
+   * domains (pre-patch behavior).
+   */
+  monoNow?: () => number;
 }
 
 export interface CanaryMazeResult extends CanaryResult {
@@ -311,26 +323,27 @@ export function createCanaryMaze(opts: CanaryMazeOptions = {}): {
   const overCapStatus: 404 | 429 = opts.overCapStatus === 429 ? 429 : 404;
   const dripMs = clampInt(opts.dripMs, 0, 0, 65_000);
   const seedMaterial = opts.seed ?? "canary-maze";
+  const { wall: wallClock, mono: monoClock } = resolveIntervalClock(opts);
 
   // Bounded per-IP window counters, pruned with the same discipline as the
   // Web Bot Auth in-memory nonce store: expired entries go first, then the
   // oldest insertions, and the map never grows past MAX_IP_ENTRIES.
   const MAX_IP_ENTRIES = 10_000;
-  const ipWindows = new Map<string, { start: number; count: number }>();
-  const hitIpBudget = (key: string, now: number): boolean => {
+  const ipWindows = new Map<string, { start: number; startMono: number; count: number }>();
+  const hitIpBudget = (key: string, now: number, nowMono: number): boolean => {
     let entry = ipWindows.get(key);
-    if (entry && now - entry.start >= windowMs) {
+    if (entry && nowMono - entry.startMono >= windowMs) {
       ipWindows.delete(key);
       entry = undefined;
     }
     if (!entry) {
       if (ipWindows.size >= MAX_IP_ENTRIES) {
         for (const [k, v] of ipWindows) {
-          if (now - v.start >= windowMs || ipWindows.size >= MAX_IP_ENTRIES) ipWindows.delete(k);
+          if (nowMono - v.startMono >= windowMs || ipWindows.size >= MAX_IP_ENTRIES) ipWindows.delete(k);
           if (ipWindows.size < MAX_IP_ENTRIES) break;
         }
       }
-      entry = { start: now, count: 0 };
+      entry = { start: now, startMono: nowMono, count: 0 };
       ipWindows.set(key, entry);
     }
     entry.count += 1;
@@ -366,8 +379,11 @@ export function createCanaryMaze(opts: CanaryMazeOptions = {}): {
       : readRemoteAddress(request);
     // Caps are evaluated BEFORE the alert fires, so the alert payload's
     // `capped` flag always reflects the enforced outcome of this hit.
-    const now = Date.now();
-    const capped = !hitIpBudget(ip ?? "unknown", now) || !hitDailyBudget(now);
+    // The wall clock feeds only the UTC daily budget (a calendar rule);
+    // the per-IP window runs on the monotonic clock (L-DEEP-2).
+    const now = wallClock();
+    const nowMono = monoClock();
+    const capped = !hitIpBudget(ip ?? "unknown", now, nowMono) || !hitDailyBudget(now);
     try {
       await opts.onAlert?.({
         path,
