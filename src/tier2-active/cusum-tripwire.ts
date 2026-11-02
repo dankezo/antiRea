@@ -289,6 +289,13 @@ export interface CampaignSnapshot {
   consequenceFloorRecords: number;
   ceilingLimit: number;
   bucketTokens: number;
+  /**
+   * Live state sizes of the engine (F-10): identities and cohorts
+   * currently held, plus formation pair-throttle entries across both
+   * pair maps - the operator-visible proof that identity state is
+   * capped (`maxIdentities`) instead of growing without bound.
+   */
+  stateSizes?: { identities: number; cohorts: number; pairThrottles: number };
   calibrationVersion: string;
   uncalibrated: boolean;
   notice: string;
@@ -413,6 +420,15 @@ export interface CusumTripwireOptions {
    * behavior).
    */
   monoNow?: () => number;
+  /**
+   * Cap on identity state held at once (F-10): when a new identity
+   * would exceed the cap, the least-recently-active identity is
+   * evicted - its served/cold state, singleton score and cohort
+   * membership are dropped. Host-declared cohort members are evicted
+   * last (the host named them deliberately). Mirrors the herd
+   * detector's `maxIdentities`. Default 2000, minimum 10.
+   */
+  maxIdentities?: number;
 }
 
 export interface CusumTripwire {
@@ -453,6 +469,13 @@ interface CohortState {
   bucketLastRefillMs: number;
   /** Monotonic twin of `bucketLastRefillMs` (L-DEEP-2): refill elapsed time is measured on this clock. */
   bucketLastRefillMonoMs: number;
+  /**
+   * A crossing happened whose `onCampaignFlag` delivery has not yet
+   * succeeded (the host callback threw). Delivery is retried on the
+   * next observe / snapshot of this cohort; epoch rotation and
+   * `clearCohort` retire the pending notification with the flag.
+   */
+  flagNotificationPending: boolean;
   /** Net LLR attributed to each member over the current score window. */
   contributions: Map<string, number>;
 }
@@ -487,6 +510,9 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   const bucketRateBase = options.bucket?.rateBase ?? 3.5;
   const bucketRateExponent = options.bucket?.rateExponent ?? 0.15;
   const epochMs = Math.max(1, options.epochMs ?? 86_400_000);
+  const maxIdentities = Math.max(10, Math.floor(options.maxIdentities ?? 2000) || 2000);
+  /** Backstop size for each formation pair-throttle map (F-10). */
+  const pairThrottleCap = Math.max(1024, maxIdentities * 4);
   const minMemberRecords = Math.max(1, options.gates?.minMemberRecords ?? 150);
   const minCohortSum = Math.max(1, options.gates?.minCohortSum ?? 1200);
   // Consequence floor: defaults to the tiling per-member gate (the
@@ -516,13 +542,33 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   const cohorts = new Map<string, CohortState>();
   const singletonScores = new Map<string, number>();
   const predicateRing: PredicateEntry[] = [];
-  /** Formation pair throttles: sorted pair key -> smaller side size at last full evaluation. */
-  const slicePairLastChecked = new Map<string, number>();
-  const coldPairLastChecked = new Map<string, number>();
+  /**
+   * Formation pair throttles: sorted pair key -> { smaller side size,
+   * evaluation timestamp } at last full evaluation. Entries expire
+   * after the formation window (F-10 TTL) and each map is size-capped,
+   * so pair state cannot grow without bound either.
+   */
+  const slicePairLastChecked = new Map<string, { size: number; atMs: number }>();
+  const coldPairLastChecked = new Map<string, { size: number; atMs: number }>();
 
   const identityState = (identity: string): IdentityState => {
     let state = identities.get(identity);
     if (!state) {
+      // Bound the state (F-10): at the cap, evict least-recently-active
+      // identities until there is room - host-declared cohort members
+      // are evicted last, since the host named them deliberately.
+      while (identities.size >= maxIdentities) {
+        let victim: string | undefined;
+        for (const candidate of identities.keys()) {
+          if (!declaredGroupOf.has(candidate)) {
+            victim = candidate;
+            break;
+          }
+        }
+        victim ??= identities.keys().next().value as string | undefined;
+        if (victim === undefined || victim === identity) break;
+        removeIdentity(victim);
+      }
       state = {
         served: new Set(),
         introduced: new Set(),
@@ -535,6 +581,11 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         lastColdTs: Number.NEGATIVE_INFINITY,
         lastActiveTs: Number.NEGATIVE_INFINITY,
       };
+      identities.set(identity, state);
+    } else {
+      // LRU refresh: activity is what protects an identity from
+      // eviction, so a hit re-inserts it at the newest end (F-10).
+      identities.delete(identity);
       identities.set(identity, state);
     }
     return state;
@@ -566,9 +617,88 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
 
   const cohortIdFor = (members: string[]): string => `coh:${[...members].sort()[0] ?? "empty"}`;
 
+  /** Read a pair-throttle entry, expiring it past the formation window (F-10). */
+  const pairThrottleGet = (
+    map: Map<string, { size: number; atMs: number }>,
+    key: string,
+    ts: number,
+  ): number | undefined => {
+    const entry = map.get(key);
+    if (!entry) return undefined;
+    if (ts - entry.atMs > formationWindowMs) {
+      map.delete(key);
+      return undefined;
+    }
+    return entry.size;
+  };
+
+  /** Write a pair-throttle entry, pruning oldest-inserted entries beyond the cap (F-10). */
+  const pairThrottleSet = (
+    map: Map<string, { size: number; atMs: number }>,
+    key: string,
+    size: number,
+    ts: number,
+  ): void => {
+    map.set(key, { size, atMs: ts });
+    if (map.size > pairThrottleCap) {
+      for (const oldestKey of map.keys()) {
+        if (map.size <= pairThrottleCap) break;
+        map.delete(oldestKey);
+      }
+    }
+  };
+
+  /**
+   * Evict one identity entirely (F-10): its served/cold state,
+   * singleton score, pair throttles and predicate-ring entries go
+   * with it, and its cohort (if any) loses the member. If the
+   * evicted identity was the union-find root, another member is
+   * promoted and the cohort re-keyed - the same surgery
+   * mergeIdentities performs when it retires a root.
+   */
+  const removeIdentity = (victim: string): void => {
+    const root = find(victim);
+    identities.delete(victim);
+    singletonScores.delete(victim);
+    for (let i = predicateRing.length - 1; i >= 0; i--) {
+      if ((predicateRing[i] as PredicateEntry).identity === victim) predicateRing.splice(i, 1);
+    }
+    for (const map of [slicePairLastChecked, coldPairLastChecked]) {
+      for (const key of [...map.keys()]) {
+        if (key.split("\u0001").includes(victim)) map.delete(key);
+      }
+    }
+    const cohort = cohorts.get(root);
+    if (cohort) {
+      cohort.members.delete(victim);
+      cohort.contributions.delete(victim);
+      if (cohort.members.size === 0) {
+        cohorts.delete(root);
+      } else if (root === victim) {
+        const newRoot = [...cohort.members].sort()[0] as string;
+        cohorts.delete(root);
+        cohorts.set(newRoot, cohort);
+        cohort.id = cohortIdFor([...cohort.members]);
+        for (const [id, pointed] of [...parent.entries()]) {
+          if (pointed === victim) parent.set(id, newRoot);
+        }
+        parent.set(newRoot, newRoot);
+      } else {
+        for (const [id, pointed] of [...parent.entries()]) {
+          if (pointed === victim) parent.set(id, root);
+        }
+      }
+    }
+    parent.delete(victim);
+  };
+
   const bucketRate = (size: number): number => bucketRateBase * Math.pow(Math.max(1, size), bucketRateExponent);
 
   const refill = (cohort: CohortState, atMs: number, atMonoMs: number): void => {
+    // Self-heal (F-09): a non-finite token count can never be cleansed
+    // by the Math.min below (every comparison with NaN is false), so a
+    // poisoned bucket resets to full instead of refusing forever.
+    if (!Number.isFinite(cohort.bucketTokens)) cohort.bucketTokens = bucketBurst;
     const elapsed = Math.max(0, atMonoMs - cohort.bucketLastRefillMonoMs);
     if (elapsed > 0) {
       cohort.bucketTokens = Math.min(
@@ -576,6 +706,9 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         cohort.bucketTokens + (elapsed / 1000) * bucketRate(cohort.members.size),
       );
     }
+    // The bucket invariant is [0, burst]; clamp defensively so a bad
+    // debit can neither negative-poison nor inflate the bucket.
+    cohort.bucketTokens = Math.min(bucketBurst, Math.max(0, cohort.bucketTokens));
     cohort.bucketLastRefillMs = atMs;
     cohort.bucketLastRefillMonoMs = atMonoMs;
   };
@@ -595,6 +728,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         bucketTokens: bucketBurst,
         bucketLastRefillMs: atMs,
         bucketLastRefillMonoMs: atMonoMs,
+        flagNotificationPending: false,
         contributions: new Map(),
       };
       cohorts.set(root, cohort);
@@ -624,6 +758,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     if (keep && drop) {
       merged.score = keep.score;
       merged.flagged = keep.flagged || drop.flagged;
+      merged.flagNotificationPending = keep.flagNotificationPending || drop.flagNotificationPending;
       merged.flaggedAtMs = Math.max(keep.flaggedAtMs, drop.flaggedAtMs);
       merged.ceilingActive = keep.ceilingActive || drop.ceilingActive;
       merged.ceilingArmed = keep.ceilingArmed || drop.ceilingArmed;
@@ -641,6 +776,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     } else if (!keep && drop) {
       merged.score = drop.score;
       merged.flagged = drop.flagged;
+      merged.flagNotificationPending = drop.flagNotificationPending;
       merged.flaggedAtMs = drop.flaggedAtMs;
       merged.ceilingActive = drop.ceilingActive;
       merged.ceilingArmed = drop.ceilingArmed;
@@ -723,9 +859,9 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
             Math.abs(ts - other.lastActiveTs) <= formationWindowMs
           ) {
             const key = pairKeyOf(identity, otherId);
-            const lastChecked = slicePairLastChecked.get(key);
+            const lastChecked = pairThrottleGet(slicePairLastChecked, key, ts);
             if (lastChecked === undefined || curMin - lastChecked >= formationRecheckGrowth) {
-              slicePairLastChecked.set(key, curMin);
+              pairThrottleSet(slicePairLastChecked, key, curMin, ts);
               const { intersection, union } = setOverlap(self.served, other.served);
               const jaccard = union > 0 ? intersection / union : 0;
               if (jaccard <= formationMaxOverlap && union >= formationMinUnion) {
@@ -745,9 +881,9 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           coldDensity(other) >= formationMinRangeDensity
         ) {
           const key = pairKeyOf(identity, otherId);
-          const lastChecked = coldPairLastChecked.get(key);
+          const lastChecked = pairThrottleGet(coldPairLastChecked, key, ts);
           if (lastChecked === undefined || curMin - lastChecked >= formationRecheckGrowth) {
-            coldPairLastChecked.set(key, curMin);
+            pairThrottleSet(coldPairLastChecked, key, curMin, ts);
             const { intersection, union } = setOverlap(self.coldSet, other.coldSet);
             const jaccard = union > 0 ? intersection / union : 0;
             if (jaccard <= formationMaxOverlap && union >= formationMinUnion) {
@@ -756,6 +892,32 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           }
         }
       }
+    }
+  };
+
+  /*
+   * Host callbacks are never trusted to behave (F-08): a throwing
+   * `isExempt` / `isProtected` predicate is treated as if the
+   * predicate were absent (the subject is not exempt / not
+   * protected) and the error is swallowed - the sibling engines
+   * (herd, flow, action-cohort) already wrap host callbacks this
+   * way, and an exception escaping observe() / checkServe() would
+   * land in the host's request path.
+   */
+  const safeIsExempt = (identity: string): boolean => {
+    if (!options.isExempt) return false;
+    try {
+      return options.isExempt(identity) === true;
+    } catch {
+      return false;
+    }
+  };
+  const safeIsProtected = (identity: string): boolean => {
+    if (!options.isProtected) return false;
+    try {
+      return options.isProtected(identity) === true;
+    } catch {
+      return false;
     }
   };
 
@@ -771,7 +933,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         .filter(member => (cohort.contributions.get(member) ?? 0) > 0)
         .sort(),
       protectedMembers: [...cohort.members]
-        .filter(member => options.isProtected?.(member) === true)
+        .filter(member => safeIsProtected(member))
         .sort(),
       score: cohort.score,
       flagged: cohort.flagged,
@@ -782,10 +944,40 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       consequenceFloorRecords: minConsequenceUnion,
       ceilingLimit,
       bucketTokens: Math.floor(cohort.bucketTokens),
+      stateSizes: {
+        identities: identities.size,
+        cohorts: cohorts.size,
+        pairThrottles: slicePairLastChecked.size + coldPairLastChecked.size,
+      },
       calibrationVersion: tables.version,
       uncalibrated: tables.uncalibrated,
       notice: tables.uncalibrated ? UNCALIBRATED_AUDIT_ONLY_NOTICE : "calibrated tables supplied by host",
     };
+  };
+
+  /**
+   * Deliver a pending campaign-flag notification (F-08). The flag
+   * used to latch BEFORE the host callback ran, so a throwing
+   * `onCampaignFlag` both rejected observe() into the host's request
+   * path AND lost the notification forever (the callback only fires
+   * in the crossing branch). Now the crossing marks the notification
+   * pending and delivery is attempted here: success clears the
+   * marker, a throw keeps it, and the next observe / snapshot of the
+   * cohort retries. The snapshot handed to the callback is built
+   * fresh at each attempt.
+   */
+  const deliverFlag = (cohort: CohortState, atMs: number, atMonoMs: number): void => {
+    if (!cohort.flagNotificationPending) return;
+    if (!options.onCampaignFlag) {
+      cohort.flagNotificationPending = false;
+      return;
+    }
+    try {
+      options.onCampaignFlag(snapshotOf(cohort, atMs, atMonoMs));
+      cohort.flagNotificationPending = false;
+    } catch {
+      /* Stays pending; retried on the next observe / snapshot. */
+    }
   };
 
   const consequenceFloorReason = (union: number): string =>
@@ -897,7 +1089,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     // events stay in the host's time domain (their twin mirrors ts).
     const tsMono = event.ts !== undefined ? ts : monoNowFn();
     const identity = event.identity;
-    if (options.isExempt && options.isExempt(identity)) {
+    if (safeIsExempt(identity)) {
       return {
         identity,
         cohortId: null,
@@ -1076,11 +1268,22 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     let crossed = false;
     let action: CusumDecision["action"] = "none";
     let clampedReason: string | undefined;
+    let flagDeliveryAttempted = false;
 
     if (inCohort && cohort) {
       if (cohort.flagged && ts - cohort.flaggedAtMs > epochMs) {
         cohort.flagged = false;
         cohort.ceilingActive = false;
+        // Epoch rotation opens a NEW evidence window (F-11): the
+        // accumulator and the per-member attribution reset with the
+        // flag, so the first event of the new epoch cannot re-cross
+        // on the stale score, and friction cannot target members
+        // whose only contributions predate the rotation. (The
+        // served/union sets are facts, not an evidence window - the
+        // consequence floor keeps reading them, so they stay.)
+        cohort.score = 0;
+        cohort.contributions.clear();
+        cohort.flagNotificationPending = false;
         // Epoch rotation retires a flag, not a host declaration: an
         // armed declared ceiling survives it.
         maybeArmDeclaredCeiling(cohort, ts);
@@ -1106,7 +1309,13 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           action = resolved.action;
           clampedReason = resolved.clampedReason;
         }
-        if (options.onCampaignFlag) options.onCampaignFlag(snapshotOf(cohort, ts, tsMono));
+        // Mark first, deliver second (F-08): if the host callback
+        // throws, the notification stays pending and is retried by a
+        // later observe / snapshot instead of being lost with the
+        // latched flag - and the throw never escapes observe().
+        cohort.flagNotificationPending = true;
+        flagDeliveryAttempted = true;
+        deliverFlag(cohort, ts, tsMono);
       } else if (cohort.flagged) {
         if (mode === "observe") {
           action = "logged";
@@ -1135,12 +1344,15 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       ) {
         action = "campaign_engaged";
       }
+      // Retry a flag notification an earlier throwing callback lost
+      // (F-08) - at most one delivery attempt per observe call.
+      if (!flagDeliveryAttempted) deliverFlag(cohort, ts, tsMono);
       // Protection (protected-cohorts.ts): for an INFERRED cohort, a
       // host-declared protected subject keeps the evidence but never
       // the consequence - the decision collapses to telemetry for
       // this subject, while unprotected members are unaffected.
       const protectedHere =
-        cohortOrigin(cohort) === "inferred" && options.isProtected?.(identity) === true;
+        cohortOrigin(cohort) === "inferred" && safeIsProtected(identity);
       if (protectedHere && (action === "step_up" || action === "campaign_engaged")) {
         action = "logged";
         clampedReason =
@@ -1183,6 +1395,20 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   }
 
   async function checkServe(identity: string, requested: number) {
+    // Input discipline (F-09): a non-finite or negative `requested`
+    // must never reach the bucket arithmetic - a NaN debit poisons
+    // the cohort bucket permanently (NaN survives every refill,
+    // because Math.min never cleanses it) and a negative one mints
+    // tokens out of thin air. Refuse structurally, mutate no bucket
+    // state, and never throw into the host's serving path.
+    if (typeof requested !== "number" || !Number.isFinite(requested) || requested < 0) {
+      const cohort = cohortOf(identity);
+      return {
+        allowed: 0,
+        ...(cohort ? { cohortId: cohort.id } : {}),
+        reason: "invalid_request",
+      };
+    }
     const ts = now();
     const tsMono = monoNowFn();
     const cohort = cohortOf(identity);
@@ -1194,7 +1420,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     // A protected subject in an inferred cohort is never paced or
     // ceilinged by that cohort's inferred evidence. (Protection never
     // applies inside a host-declared cohort - see the header.)
-    if (cohortOrigin(cohort) === "inferred" && options.isProtected?.(identity) === true) {
+    if (cohortOrigin(cohort) === "inferred" && safeIsProtected(identity)) {
       return { allowed: requested };
     }
     const unionNow = unionRecords(cohort);
@@ -1244,7 +1470,16 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     observe,
     checkServe,
     async getSnapshot(cohortId) {
-      for (const cohort of cohorts.values()) if (cohort.id === cohortId) return snapshotOf(cohort, now(), monoNowFn());
+      for (const cohort of cohorts.values()) {
+        if (cohort.id === cohortId) {
+          const atMs = now();
+          const atMonoMs = monoNowFn();
+          const snapshot = snapshotOf(cohort, atMs, atMonoMs);
+          // A snapshot read is also a flag-delivery retry point (F-08).
+          deliverFlag(cohort, atMs, atMonoMs);
+          return snapshot;
+        }
+      }
       return null;
     },
     async snapshotFor(identity) {
@@ -1252,7 +1487,15 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       // A cohort snapshot normally needs a pair - except an armed
       // declared cohort, whose state (armed, capped) is meaningful
       // even for a single-member declared group.
-      return cohort && (cohort.members.size >= 2 || cohort.ceilingArmed) ? snapshotOf(cohort, now(), monoNowFn()) : null;
+      if (cohort && (cohort.members.size >= 2 || cohort.ceilingArmed)) {
+        const atMs = now();
+        const atMonoMs = monoNowFn();
+        const snapshot = snapshotOf(cohort, atMs, atMonoMs);
+        // A snapshot read is also a flag-delivery retry point (F-08).
+        deliverFlag(cohort, atMs, atMonoMs);
+        return snapshot;
+      }
+      return null;
     },
     async clearCohort(cohortId) {
       for (const cohort of cohorts.values()) {
@@ -1261,6 +1504,15 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           cohort.ceilingActive = false;
           cohort.score = 0;
           cohort.contributions.clear();
+          cohort.flagNotificationPending = false;
+          // Clearing also rehabilitates the pacing bucket (F-09): a
+          // full bucket on fresh refill anchors is the host's
+          // recovery path for a bucket damaged by bad debits - the
+          // pre-fix clear left the bucket exactly as poisoned as it
+          // found it.
+          cohort.bucketTokens = bucketBurst;
+          cohort.bucketLastRefillMs = now();
+          cohort.bucketLastRefillMonoMs = monoNowFn();
           // Note: clearing retires the flag and the score, not the
           // host's declaration - an armed declared ceiling re-arms on
           // the next snapshot / checkServe for as long as the cohort
