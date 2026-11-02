@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-244%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-275%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -18,7 +18,7 @@ antiRea helps you audit what your website exposes, enforce server-side rate/pagi
 
 **A normal web app, unprotected.** Anyone with an account can take the data home. In our tests, one account and a single export call walked away with the entire 10,000-record dataset in under 200 requests - quietly, leaving nothing unusual behind.
 
-**The same app with antiRea.** Real users notice nothing. But data is metered per record: one identity can only ever receive a capped slice (20% of the dataset in our test setup), so bulk extraction stops being an export and becomes an identity problem. Spread the work across many accounts and the herd detector flags the coordination. Measured outcome: the run that took 1 account unprotected took **18 identities, 272 requests, and got flagged twice**.
+**The same app with antiRea.** Real users notice nothing. But data is metered per record: one identity can only ever receive a capped slice (20% of the dataset in our test setup), so bulk extraction stops being an export and becomes an identity problem. Spread the work across many accounts and the herd detector flags the coordination. Measured outcome (v2.5.0 classic round): the REA-style run that took 1 account unprotected was **stopped at 5% of the dataset**, and a scripted slicing crew that insisted on finishing needed **25 identities and ~19 minutes**, flagged by both the herd detector and the evidence engine on the way.
 
 Unprotected, your data leaves **whole, free, and invisible**. Protected, it leaves **in slices, at a cost, and on the record**. The full numbers live in [Measured results](#does-it-work-measured-results) below.
 
@@ -30,22 +30,20 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.3: Data Economics & Herd Detection
+## New in v2.5.0: Coverage-Complete Herd Grouping, Canary-Echo IDs & Tiered Enforcement
 
-- **Per-record budgets:** `createRecordBudget()` caps how many *distinct records* one identity can ever receive per window, priced exports via `createExportGuard()`, and session-chained cursors (`mintCursor` / `verifyCursor`) - the layer that decides how much of your dataset a single account can take home. See the measured results below.
-- **Herd detection:** `createHerdDetector()` watches many identities at once and flags groups that jointly tile your dataset, even across different IPs; `applyHerdLadder()` cuts a flagged group's budgets. Signal layers grew too: a deterministic canary maze (`createCanaryMaze()`) and decoy routes (`createDecoyMirage()`).
-- **Carried over from v2.2:** Web Bot Auth signature verification (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) and the Python/FastAPI quota-guard port in [examples/python-fastapi](examples/python-fastapi).
+Version 2.5.0 productizes the SDK-contract design from an overnight adversarial review (the full synthesis lives in the study notes): evidence primitives, a sequential evidence engine, an exact disclosure ledger with a shared campaign ceiling, and store-bound cursors - all held to one rule, **no enforcement without a transaction, and no hard consequence on inferred evidence alone - friction, however, is on by default.** It targets consequences at the members who produced the evidence, teaches the evidence engine to form cohorts on the two shapes it was blind to, and ships the offline calibration fit tooling described at the end of this section. It also closes the grouping gap earlier classic rounds measured - a herd flag no longer stops at whoever was present when it fired - replaces the pairwise grouping with a leader-based design that scales past it, and ships canary-echo ids, a signed surface reference that links a rotation identity back to the identity it rotated from.
 
-## New in v2.4: Evidence Engine, Transactional Ledger & Tiered Enforcement
-
-v2.4 productizes the SDK-contract design from an overnight adversarial review (the full synthesis lives in the study notes): evidence primitives, a sequential evidence engine, an exact disclosure ledger with a shared campaign ceiling, and store-bound cursors - all held to one rule, **no enforcement without a transaction, and no hard consequence on inferred evidence alone - friction, however, is on by default.**
-
+- **Coverage-complete herd grouping (2.5.0):** the herd detector's coverage-complement linking is now leader-based - an identity's coverage group is compared against other groups' aggregate bitmaps and refcount maps, with no per-pair state (the pairwise design needed 131 s for a 1,000-identity stream in the lab bench; the leader design needs 1.6 s, and merges a 500-identity complementary herd into one group in 2.7 s). A flagged group also re-announces itself: when a late joiner, or a member who was below the materiality floor when the flag fired, crosses that floor (25 unique records by default), a supplementary flag fires - coalesced to at most one per 5 s per group - so consequences reach the whole herd, not just its earliest members. Measured in the v2.5.0 classic round: the slicing herd's flagged/consequenced set went from 8 of 18 phase-1 identities (2.4.0) to **18 of 18**, and the ID walk's phase 1 was held to exactly the 500-record soft floor per walker.
+- **Canary-echo ids (2.5.0):** `mintEchoId()` issues a signed synthetic reference id minted FOR one identity (HMAC integrity, a 128-bit random nonce per mint - unforgeable, not bulk-guessable), embedded into that identity's own surface via `mintEchoRecord()` or `canaryEchoLink()`. When a *different* identity presents the id back, the host resolves it with `resolveEchoFrom()` and feeds the origin into the tripwire as `echoFrom` - the two identities merge into one cohort on the spot, so rotation stops resetting the evidence clock. Measured in the v2.5.0 classic round: a rotation identity that touched the origin's echo id was merged at the touch (0 records served of its own) and the joint cohort crossed ~1 s later at 1,392 union records, both members step-up enrolled. An echo touch is a correlation signal, never proof of malice by itself - see [Limitations](docs/LIMITATIONS.md).
 - **Transactional disclosure ledger:** `createDisclosureLedger()` enforces a *shared* ceiling over a whole cohort (linked identities draw from one exact union of served records, however they rotate) through `reserveDisclosure()`, the single atomic enforcement point. The store contract is honest about its own strength: a store implementing `transactLedger()` (CAS on `ledgerVersion`, covering the union bitmap, reservations, ceiling, bucket and evidence in one transaction) gets `mode: "enforce"`; a get/put-only store gets `mode: "audit_only"` and decisions carry `enforced: false` - the SDK never claims a ceiling a racy store cannot hold. Reservations are bounded (60s TTL, at most 2 outstanding and 500 reserved records per subject by default, optional cohort cap, a separate host-authorized long-reservation path for slow exports), and a declared cohort registry fails closed for unregistered subjects, because the lab measured a partial registry silently degrading a campaign guard to per-member protection. A shipped conformance test proves parallel reservations against a slow async store never jointly overspend the ceiling.
 - **Sequential evidence (CUSUM tripwire):** `createCusumTripwire()` fuses four streams - predicate adjacency, exact-set disjoint tiling, cold-ID misses, cursor velocity - into one one-sided mixture GLR-CUSUM accumulator per cohort (zero floor, boundary `ln(1/alpha)`), replacing independent fixed thresholds that an attacker can sit under at 85% each. Tiling excludes records already explained by adjacency predicates, so correlated streams are not double-counted. **Honest default:** the bundled `r6-calib-1` tables were fitted on scripted lab traces (N_eff = 189) and ship labeled `uncalibrated: true` with the notice "uncalibrated - audit only"; the engine defaults to `enforce` mode, but ONLY at the step-up tier - an eligible crossing enrolls step-up friction and cohort pacing, and nothing harder can engage on these tables. Because the tables are uncalibrated, the default claims friction on strong scripted evidence, never detection rates; `mode: "observe"` remains available for telemetry-only deployments. Crossings are telemetry at any scale, but consequences require absolute scale: below a consequence floor of 150 exact union records by default (the tiling stream's evaluation-gate constant, host-configurable via `consequences.minUnionRecords`), a crossing enrolls nobody into step-up and paces nothing - snapshots mark it `consequenceEligible: false`.
 - **The tiering law, in code:** `clampEnforcement()` caps cohorts *inferred* from behavior at the **friction tier**: step-up plus a soft budget step-down that may lower a member's budget but never below 500 distinct records (`SOFT_BUDGET_FLOOR_RECORDS` - derived from the ledger's per-subject reservation bound; `softBudgetStepDown()` lands a demand to cut to zero exactly on that floor). Friction is the default: `defaultHerdBandResponse()` maps both herd bands to it for inferred cohorts, and the CUSUM tripwire ships in `enforce` mode. A hard ceiling requires a host-declared cohort or a calibration manifest at the top tier (`evaluateCalibrationManifest()` - model version, sample sizes, held-out FP/FN, method, attester, expiry; no boolean "calibrated" flag). The herd detector's `graduated_only` band carries zero price by construction, and `validateHerdResponseConfig()` rejects configurations that attach one - the lab prototype that priced that band (with a cold-fetch multiplier stacked on the override) hard-cut a simulated compliance team at 46% of its legitimate work, and that wiring mistake is now a startup error instead of a silent cut.
 - **Protected cohorts:** the measured false-positive shape - a small team systematically reviewing a full segment - is rare in practice and, in real organizations, a *declared* activity (audits are scheduled, pentests run under rules of engagement). So instead of weakening detection for everyone, declare them: `createProtectedCohortRegistry()` records the compliance/audit/support/pentest subjects (with reason and optional expiry), and protected subjects accrue full telemetry while receiving **zero** consequences from inferred evidence - no step-up, no budget step-down, no pacing. Protection never covers consequences the host itself authorized, nor direct per-subject evidence (a protected subject's own decoy hit still taints it).
 - **Cursor V2:** `mintCursorV2()` / `verifyCursorV2()` bind pagination to server-side authority: the payload carries only position, subject/cohort/scope binding, chain sequence and `ledgerVersion` - never LLR or evidence state - and on any conflict **the store wins**: stale or future versions and sequence mismatches are rejected, never silently upgraded. V1 cursors are unchanged.
 - **Attribution & reviewer hook:** `createEvidenceAttributor()` credits evidence to the acting subject only; cross-subject contribution needs a host-declared relationship and is capped and decayed, inferred links are observation-only, unknown links are quarantined to audit. `createReviewerChannel()` is the defender-agent idea reduced to its safe slice: a host-side reviewer (cheap model, rules, human queue) receives bounded aggregate bundles and may return schema-validated *advisory* proposals from a fixed vocabulary - it has no budget, no deny, and its output can never flow back into the evidence stream (that would count the same observations twice; a test proves the one-way property against a live tripwire).
+- **Consequence targeting (2.5.0):** friction lands on the members who produced the evidence, not on everyone standing in a flagged group. `consequenceTargets()` partitions a CUSUM snapshot into friction targets (net contribution > 0, not protected), protected members and non-contributing members; herd flags carry per-member `memberCoverage` / `memberUniqueCoverage`, and `herdFrictionTargets()` targets only members whose unique coverage is material (25+ records by default). A lawful campaign ceiling is deliberately different: it caps the cohort's TOTAL extraction over all serves - a data cap, not a per-subject punishment. Measured in the v2.5.0 classic round: the polite user and a 5-user NAT group standing inside a flagged group received zero friction, including in a dedicated cell where polite users kept browsing mid-session straight through the flag.
+- **Cohort formation + calibration tooling (2.5.0):** the tripwire now forms cohorts on the two shapes it was blind to - served-set complementarity links filtered-list slicers (a text filter has no honest range predicate, but the exact served set is always known), and cold-walk complementarity links detail-channel walkers whose cold fetches tile disjoint, range-dense ID ranges (warm fetches contribute nothing; solo walkers still never form a cohort). Decisions expose per-stream `bins` for calibration tooling, and `scripts/fit-cusum-calibration.cjs` fits opt-in LLR tables offline (leave-one-family-out over labeled lab personas): the shipped `r7-labfit-1` tables cut holdout false crossings versus `r6-calib-1` but do not beat it on both sides, so the default stays r6 and r7's sample manifest (attester: lab-simulated) evaluates to the step_down tier only.
 
 ## Browser benchmark harness
 
@@ -67,17 +65,18 @@ The goal of this project is to help app owners implement **effective measures wi
 
 ## Does it work? Measured results
 
-**Method.** We test against **Ledgerly**, a synthetic SaaS holding 10,000 records behind 120 accounts, run twice: a baseline instance with no protection and a protected instance of the *same* app with antiRea wired in. Attack runs are driven by REA 6.8.0 (`rea-agents`) and by general-purpose agents following the standard clone workflow: authenticate, enumerate, probe boundaries, paginate to full coverage, burst exports. (One finding shapes everything below: REA itself only *perceives* - it reads a running browser over CDP and sends zero requests of its own. The behavior a server can observe, meter and price is the driving workflow, so that is what the defenses target.) Polite-user control runs measure the cost to legitimate traffic. An independent benchmark of this repository was also published in [issue #1](https://github.com/dankezo/antiRea/issues/1); most claims held up under it, and every gap it found is fixed in v2.3.0.
+**Method.** We test against **Ledgerly**, a synthetic SaaS holding 10,000 records behind 120 accounts, run twice: a baseline instance with no protection and a protected instance of the *same* app with antiRea wired in. Attack runs are driven by REA 6.8.0 (`rea-agents`) and by general-purpose agents following the standard clone workflow: authenticate, enumerate, probe boundaries, paginate to full coverage, burst exports. (One finding shapes everything below: REA itself only *perceives* - it reads a running browser over CDP and sends zero requests of its own. The behavior a server can observe, meter and price is the driving workflow, so that is what the defenses target.) Polite-user control runs measure the cost to legitimate traffic. An independent benchmark of this repository was also published in [issue #1](https://github.com/dankezo/antiRea/issues/1); most claims held up under it, and the gaps it found are fixed and recorded in the changelog.
 
 | Layer | What we measured | Result |
 |---|---|---|
 | No protection (baseline) | Full extraction of the 10,000-record dataset | **160-193 requests total**; a single export call returns everything |
 | P0 quota + pagination bounds | Export and pagination abuse | Bulk export dumps rejected (HTTP 422), page size and depth capped - necessary, not sufficient on its own |
 | Record budget + export guard + chained cursors | How much one identity can take (budget set to 2,000 distinct records/day) | Per-identity ceiling held at exactly **20% of the dataset**; cross-session cursor replay blocked; full extraction now needs many identities instead of one account |
-| Herd detector | Coordinated multi-identity extraction | Scripted 6-identity herd **flagged after 301 records** of joint coverage and ladder-capped; a dispersed herd (separate IPs, staggered signups) still **flagged at 2,400 records** via coverage-complement grouping; a state-of-the-art REA-first run was stopped at roughly **15%** of the dataset |
+| Herd detector + CUSUM evidence engine | Coordinated multi-identity extraction (v2.5.0 classic round) | A REA-style identity rotation was stopped at **5%** of the dataset; slicing and ID-walk crews were flagged by BOTH detectors - the evidence engine's first crossings landed at **1,800** and **900** union records (both shapes were invisible to it before 2.5.0), and the herd flag/consequence set covered **18 of 18** phase-1 slicing identities (8 of 18 in 2.4.0). Herd flags carry per-member coverage, so zero-contribution members of a flagged group receive no friction (measured in the legitimate-users row below) |
 | Canary maze + decoy mirage | Signal quality and safety | Correctness and accessibility verified (Playwright + axe, **0 violations**), hard caps enforced (240 hits / 10 min / IP, 10,000 pages/day, then HTTP 404). These are detection layers - we claim no extraction-blocking percentage for them |
-| Full stack vs. adaptive attacker | Attacker deliberately spreads work across 18 identities and dilutes its pattern | Extraction still completed - but took **18 identities and 272 requests** instead of 1 account and 1 export call, and was **flagged twice** on the way. Both flags scored in the low-tiling band, which by design triggers graduated response only, not an automatic budget cut. This is the stack's main known limit; see [Limitations](docs/LIMITATIONS.md) |
-| Legitimate users | Dense onboarding clusters, shared-IP (NAT) cohorts, polite control runs | **Zero flags, zero added friction** in every lab and control run |
+| Shared cohort ceiling (declared cohort + ceiling-tier manifest) | Does the lawful hard-ceiling path work end-to-end? (v2.5.0 classic round; declared ceiling 600 records) | Armed at declaration and re-tested: the declared cohort's union stopped at **exactly 600 distinct records** in both runs (the crossing-gated first attempt overshot to 2,700), every one of the 18 declared walkers blocked, **710-714 ceiling refusals** per run and 0 records served past the cap, controls in the same instance unaffected (compliance 1,200/1,200, zero friction). Declared cohorts without a ceiling-tier manifest arm nothing; inferred cohorts keep the crossing-gated path; see [Limitations](docs/LIMITATIONS.md) |
+| Full stack vs. adaptive attacker | Attacker deliberately spreads work across 18 identities and dilutes its pattern (v2.5.0 classic round) | Extraction still completed via rotation - but phase 1 (18 identities) was held to **78%** after ~18 minutes of step-up friction, session expiries and soft budget step-downs, every phase-1 identity inside the flagged/consequenced set, and finishing took **25 identities and ~19 minutes** overall. The ID-walk crew's phase 1 was held to **90.0%** - exactly 500 records per walker, the soft floor for inferred cohorts - with all 18 walkers capped and 324 phase-1 session interrupts (before this round: 91.0%, 224 interrupts, 2 walkers over the floor). Rotation remains the stack's main known limit; see [Limitations](docs/LIMITATIONS.md) |
+| Legitimate users | Declared compliance team, undeclared systematic review, polite users, shared-IP (NAT) cohorts (v2.5.0 classic round, re-measured) | Declared (protected) compliance: **1,200/1,200 records, zero friction**. Undeclared systematic review: flagged and frictioned (step-up + soft step-down) but **zero data loss - 1,200/1,200 served**. Polite users and NAT groups: **zero consequences** - including polite users who kept browsing mid-session inside a group while it was being flagged (contribution targeting, new in 2.5.0) |
 
 **What this adds up to.** The stack removes the casual one-shot clone, and turns bulk extraction into an identity problem: every additional slice of the dataset costs another account and more visibility. It does not stop a determined, well-resourced rebuilder, and the real price of an identity (signup friction, verified accounts, payment) is set by you, the host - which is why budgets are enforced per identity and why herd flags distinguish "cut the budget" from "step up scrutiny" instead of firing one blunt response.
 
@@ -105,7 +104,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **246 automated tests** (244 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **277 automated tests** (275 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
@@ -235,15 +234,15 @@ herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordId
 
 Use the same identity string (`account:<id>`) in both, so a herd flag can be fed straight into `applyHerdLadder()` or a budget override.
 
-### 8. Shared Ceilings & Evidence (v2.4)
+### 8. Shared Ceilings & Evidence (v2.5.0)
 
 For cohorts, per-identity budgets dilute by rotation; a shared ceiling does not - but only if reservation is transactional. Declare the cohort, reserve before serving, commit after:
 
 ```ts
 import {
   createDisclosureLedger, createInMemoryTransactionalStore,
-  createCusumTripwire, clampEnforcement,
-  createProtectedCohortRegistry, defaultHerdBandResponse,
+  createCusumTripwire, clampEnforcement, consequenceTargets,
+  createProtectedCohortRegistry, defaultHerdBandResponse, herdFrictionTargets,
 } from "@dannyphan190/anti-rea";
 
 const ledger = createDisclosureLedger({
@@ -277,11 +276,56 @@ await tripwire.observe({ type: "list", identity: "account:123", recordIds: idsTo
 
 // Herd flags get the same default: for an inferred cohort,
 // defaultHerdBandResponse() returns friction (stepUp: true,
-// budgetStepDownFloorRecords: 500, ladder: false) on both bands -
-// partition the members through the registry before applying it.
+// budgetStepDownFloorRecords: 500, ladder: false) on both bands.
+// Apply that friction only to the members who produced the
+// evidence (2.5.0): herdFrictionTargets(snap) keeps members whose
+// unique coverage is material, consequenceTargets(snapshot)
+// keeps net contributors - then partition through the registry
+// so protected subjects stay at zero.
+
+// Canary-echo (2.5.0): mint a signed reference FOR this identity
+// and embed it in its own surface (a record, a hidden link); when
+// a different identity presents it back, link the two cohorts.
+const echoId = mintEchoId(secret, { mintedFor: "account:123" });
+const ref = mintEchoRecord(secret, { mintedFor: "account:123" });
+// ...later, on the detail route, before the record lookup:
+const echoFrom = resolveEchoFrom(secret, presentedId);
+if (echoFrom && echoFrom !== identity) {
+  await tripwire.observe({ type: "detail", identity, echoFrom });
+}
 ```
 
 With a get/put-only store the ledger reports `mode: "audit_only"` and `enforced: false` on every decision - measure first, enforce when your store can actually transact. Full semantics and limits: [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
+
+## Calibration pilot
+
+antiRea's CUSUM evidence engine ships with lab-fitted tables
+(`r6-calib-1`, labelled `uncalibrated: true`): they were fitted on
+scripted traces, not on a real user population, and the README says
+so wherever those tables are mentioned. Closing that gap needs
+exactly one thing this project cannot generate for itself - observe
+mode snapshots from a real host.
+
+**Run a calibration pilot.** If you use antiRea (or are evaluating
+it), run the CUSUM tripwire in `mode: "observe"` - crossings are
+logged and nothing is restricted - and share the resulting
+**anonymised aggregate snapshots**: cohort sizes, score and
+union-record counts at crossings, the same summary shape the SDK's
+`onCampaignFlag` callback already emits.
+
+- Only aggregated, anonymised snapshots - **no raw user data, no
+  record contents, no identifiers your users could be recognised
+  by**. Review and strip a snapshot before sending; if a field
+  looks identifying, leave it out and say so.
+- Snapshots go into the offline calibration fit; a table fitted on
+  real-population snapshots is how the `uncalibrated` label comes
+  off, with the fit method and holdout results published in the
+  changelog.
+- One host is enough to start: the first real snapshot set is the
+  first real-population data point this project has ever had.
+
+Interested, or want the snapshot format first? Email
+**dannyphan190@gmail.com**.
 
 ## Why not "block CDP" or inject malicious prompts?
 
