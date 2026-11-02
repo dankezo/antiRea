@@ -10,7 +10,11 @@
  * record budget meters RECORDS; this module meters the OPERATION
  * itself, priced in the host's own abstract cost units (the price table
  * is host-declared - the SDK never invents prices). Both layers apply;
- * neither replaces the other.
+ * neither replaces the other. An action with NO price anywhere (not in
+ * the table, no explicit cost on the request) is refused
+ * `unknown_action` by default rather than silently costing 0 (F-05);
+ * a host that prefers a fallback price sets `unknownActionCost` and
+ * sees `unpriced: true` on every result it touches.
  *
  * Construction mirrors the disclosure ledger's discipline exactly,
  * because the hard problem is the same: a per-subject allowance plus a
@@ -166,6 +170,16 @@ export interface ActionBudgetOptions {
   budgetId?: string;
   /** Host-declared price table: abstract cost units per action type. */
   prices: Record<string, number>;
+  /**
+   * Cost charged for an action with NO price - absent from `prices`
+   * and with no explicit `cost` on the request (F-05). When unset
+   * (the default), such actions are REFUSED with reason
+   * `unknown_action`: an unpriced action must never sail through
+   * every gate at cost 0 because the host forgot to price it. When
+   * set, unpriced actions are charged this cost and the result
+   * carries `unpriced: true` so the gap stays visible in audit.
+   */
+  unknownActionCost?: number;
   /** Per-subject committed + reserved cost allowance per window. Default 100. */
   subjectAllowance?: number;
   /** Subject/cohort window length. Default 60_000 ms. */
@@ -232,6 +246,7 @@ export type ReserveActionRefusalReason =
   | "cohort_reservation_cap"
   | "unregistered_subject"
   | "unknown_cohort"
+  | "unknown_action"
   | "long_reservation_not_authorized"
   | "idempotency_conflict"
   | "store_conflict";
@@ -244,6 +259,13 @@ export interface ReserveActionResult {
   reservationId?: string;
   /** The cost charged (price-table default or the explicit cost). */
   cost?: number;
+  /**
+   * True when the action had no price anywhere (not in the table, no
+   * explicit request cost) and was charged the configured
+   * `unknownActionCost` fallback instead (F-05). Never set for a
+   * deliberately zero-priced action.
+   */
+  unpriced?: boolean;
   reason?: ReserveActionRefusalReason;
   /** Set on rate_limited: when a bucket will hold enough tokens. */
   retryAfterMs?: number;
@@ -483,6 +505,10 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
   const store = options.store;
   const budgetId = options.budgetId ?? "default";
   const prices: Record<string, number> = { ...(options.prices ?? {}) };
+  const unknownActionCost =
+    options.unknownActionCost !== undefined && Number.isFinite(options.unknownActionCost)
+      ? Math.max(0, options.unknownActionCost)
+      : undefined;
   const subjectAllowance = Math.max(0, options.subjectAllowance ?? 100);
   const windowMs = Math.max(1, options.windowMs ?? 60_000);
   const burst = Math.max(1, options.bucket?.burst ?? 150);
@@ -782,9 +808,35 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       const atMs = now();
       const atMonoMs = monoNowFn();
       const enforced = mode === "enforce";
+      // Price resolution (F-05): an explicit finite host cost wins,
+      // then the price table. An action with NEITHER used to fall
+      // through to cost 0 - free forever, through every gate, with no
+      // signal - so a host that forgot to price a new action failed
+      // open in silence. The unpriced case is now explicit: refused
+      // `unknown_action` by default, or charged the configured
+      // `unknownActionCost` with `unpriced: true` on the result. A
+      // DELIBERATE zero stays possible (an explicit `cost: 0`, or a
+      // table entry priced at 0): only the absent price is refused.
+      // A non-finite explicit cost is not a price either - it falls
+      // through to the table / unpriced path instead of silently
+      // becoming 0.
       const tablePrice = prices[req.action];
-      const rawCost = req.cost ?? tablePrice ?? 0;
-      const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : 0;
+      const explicitCost =
+        typeof req.cost === "number" && Number.isFinite(req.cost) ? Math.max(0, req.cost) : undefined;
+      let cost: number;
+      let unpriced = false;
+      if (explicitCost !== undefined) {
+        cost = explicitCost;
+      } else if (tablePrice !== undefined) {
+        cost = Number.isFinite(tablePrice) ? Math.max(0, tablePrice) : 0;
+      } else if (unknownActionCost !== undefined) {
+        cost = unknownActionCost;
+        unpriced = true;
+      } else {
+        // Pure input validation: no state is read or written, so the
+        // refusal returns without opening a store transaction.
+        return { allowed: false, enforced, mode, reason: "unknown_action", cost: 0 };
+      }
       try {
         const result = await mutate<ReserveActionResult>(state => {
           const refuse = (
@@ -792,7 +844,15 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
             extra?: Partial<ReserveActionResult>,
           ): { state: ActionBudgetState | null; value: ReserveActionResult } => ({
             state: null,
-            value: { allowed: false, enforced, mode, reason, cost, ...extra },
+            value: {
+              allowed: false,
+              enforced,
+              mode,
+              reason,
+              cost,
+              ...(unpriced ? { unpriced: true } : {}),
+              ...extra,
+            },
           });
 
           syncOverrides(state);
@@ -824,6 +884,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
                   reservationId: existing.id,
                   cost: existing.cost,
                   duplicate: true,
+                  ...(unpriced ? { unpriced: true } : {}),
                 },
               };
             }
@@ -912,7 +973,14 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           if (cohort) cohort.reservedCost += cost;
           return {
             state,
-            value: { allowed: true, enforced, mode, reservationId: reservation.id, cost },
+            value: {
+              allowed: true,
+              enforced,
+              mode,
+              reservationId: reservation.id,
+              cost,
+              ...(unpriced ? { unpriced: true } : {}),
+            },
           };
         });
         if (result.allowed && result.reservationId && !result.duplicate) {
@@ -926,7 +994,14 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
         return result;
       } catch (error) {
         if (error instanceof StoreConflictError || error instanceof StoreDataError) {
-          return { allowed: false, enforced, mode, reason: "store_conflict", cost };
+          return {
+            allowed: false,
+            enforced,
+            mode,
+            reason: "store_conflict",
+            cost,
+            ...(unpriced ? { unpriced: true } : {}),
+          };
         }
         throw error;
       }
