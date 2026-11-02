@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-296%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -30,19 +30,15 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.6.0
+## New in v2.6.1
 
-The short version: antiRea used to meter the *data* leaving your app. Now it also meters the *actions* - exports, heavy searches, promo claims - so a crowd of accounts can no longer drain an expensive feature just by each staying politely under their own limit. Normal users should notice nothing.
+A small patch release: an independent security audit of v2.6.0 found three bugs, and all three are fixed. Nothing about how antiRea works changes for normal users - no upgrade steps, no new settings.
 
-- **Every expensive action gets a price tag - set by you.** You say what an export or a heavy search costs; each account gets a budget, and a whole team can share one cap that is locked in from the moment you declare it.
-- **Teams splitting the work still get spotted.** Accounts that quietly divide up the same job - or all pile onto the same promo - are grouped and flagged together, even when no single account does anything wrong.
-- **Attackers finish far less, far slower.** In our lab test, an unprotected herd finished 80 of 80 jobs in under a second. Protected, it finished 16 of 80 (20%), and every one of its 24 accounts ended up enrolled in extra checks.
-- **Real teams keep working.** A declared team of 6 finished 40 of 40 jobs with zero friction. A similar undeclared team also lost no work and was never hard-blocked - at worst, extra checks and a slower pace.
-- **Ordinary users feel nothing.** 8 regular users in the same test: 48 of 48 actions succeeded on the first try, zero consequences.
-- **Traps for actions, not just pages.** You can register a fake promo or export slice that no real user ever sees. Whoever touches it marks only themselves - bystanders stay completely clean.
-- **Honest limits.** This taxes and slows feature abuse; it cannot make it impossible when signups are free and unlimited. And it says nothing about bugs in your own business logic - wrong prices, inventory races, broken permissions are code bugs, not something a meter can fix.
+- **A borrowed "receipt number" no longer works.** Every reservation carries an idempotency key - think of it as a receipt number for "I already paid for this". Before, anyone who learned another account's receipt number could present it as their own and spend from that account's budget. Now the receipt is checked against what it was first issued for, on both ledgers; a mismatch is refused, and reservations written by older versions (which carry no fingerprint yet) fail closed for the few minutes they have left to live.
+- **A broken database can no longer crash your app.** If the storage behind the ledgers broke or returned garbage, the SDK used to throw raw errors into your request handling - in the audit's live test, a dead store killed the host process on its very first request. Now the SDK answers with a clean refusal instead (an HTTP 429 "store unavailable" style decision) and your process stays up.
+- **Huge record IDs are cheap again.** The ledger used to keep a checklist with one box for every possible ID, so a single record with ID 100,000,000 bloated the saved state to 16.7 MB. It now keeps a sparse checklist that only grows with the number of records you actually have: that same case takes 3 ms and 1,745 bytes of state (was 1,439 ms), and states saved by older versions still load.
 
-Full technical write-up with every mechanism and measurement: [v2.6.0 deep dive](docs/v2.6.0-deep-dive.md).
+Full technical write-up: [v2.6.1 deep dive](docs/v2.6.1-deep-dive.md). The action-budget layer that was new in v2.6.0 is covered in the [v2.6.0 deep dive](docs/v2.6.0-deep-dive.md) and the changelog.
 
 ## Browser benchmark harness
 
@@ -106,7 +102,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **298 automated tests** (296 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **305 automated tests** (303 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
