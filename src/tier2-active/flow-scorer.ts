@@ -60,6 +60,8 @@
  * bounded in-memory map; no external infrastructure.
  */
 
+import { resolveIntervalClock } from "../internal/mono-clock";
+
 export type FlowRouteClass = "list" | "detail" | "export" | "canary" | "decoy" | "auth" | "other";
 
 /**
@@ -179,8 +181,15 @@ export interface FlowScorerOptions {
   windowMs?: number;
   /** Cap on sessions held in memory. Defaults to 10,000. */
   maxSessions?: number;
-  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
+  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. Display timestamps only (L-DEEP-2). */
   now?: () => number;
+  /**
+   * Monotonic clock for the idle-window arithmetic (L-DEEP-2). When
+   * given, session expiry is measured on this clock and is immune to
+   * wall-clock steps. When only `now` is given, the injected clock
+   * drives both domains (pre-patch behavior).
+   */
+  monoNow?: () => number;
 }
 
 export interface FlowObservation {
@@ -204,6 +213,8 @@ export interface FlowScorer {
 interface SessionState {
   windowStart: number;
   lastSeen: number;
+  /** Monotonic twin of `lastSeen` (L-DEEP-2): idle expiry is measured on this clock. */
+  lastSeenMono: number;
   score: number;
   canary: boolean;
   decoy: boolean;
@@ -224,9 +235,10 @@ interface SessionState {
   taintsFired: Set<FlowTaintTrigger>;
 }
 
-const freshState = (now: number): SessionState => ({
+const freshState = (now: number, nowMono: number): SessionState => ({
   windowStart: now,
   lastSeen: now,
+  lastSeenMono: nowMono,
   score: 0,
   canary: false,
   decoy: false,
@@ -252,7 +264,7 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
   const high = Math.max(elevated + 1, Math.floor(options.thresholds?.high ?? 70) || 70);
   const windowMs = Math.max(1, Math.floor(options.windowMs ?? 600_000) || 600_000);
   const maxSessions = Math.max(100, Math.floor(options.maxSessions ?? 10_000) || 10_000);
-  const clock = options.now ?? (() => Date.now());
+  const { wall: clock, mono: monoClock } = resolveIntervalClock(options);
   const sessions = new Map<string, SessionState>();
 
   const kindOf = (sessionKey: string): FlowIdentityKind => {
@@ -324,8 +336,9 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
 
   const liveState = (sessionKey: string): SessionState => {
     const now = clock();
+    const nowMono = monoClock();
     let state = sessions.get(sessionKey);
-    if (state && now - state.lastSeen > windowMs) {
+    if (state && nowMono - state.lastSeenMono > windowMs) {
       sessions.delete(sessionKey);
       state = undefined;
     }
@@ -334,13 +347,14 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
         const oldestKey = sessions.keys().next().value;
         if (oldestKey !== undefined) sessions.delete(oldestKey);
       }
-      state = freshState(now);
+      state = freshState(now, nowMono);
       sessions.set(sessionKey, state);
     } else {
       sessions.delete(sessionKey);
       sessions.set(sessionKey, state);
     }
     state.lastSeen = now;
+    state.lastSeenMono = nowMono;
     return state;
   };
 
@@ -455,7 +469,7 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
       if (options.isExempt?.(sessionKey)) return 0;
       const state = sessions.get(sessionKey);
       if (!state) return 0;
-      if (clock() - state.lastSeen > windowMs) {
+      if (monoClock() - state.lastSeenMono > windowMs) {
         sessions.delete(sessionKey);
         return 0;
       }
@@ -464,7 +478,7 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
     reasons(sessionKey: string): string[] {
       const state = sessions.get(sessionKey);
       if (!state) return [];
-      if (clock() - state.lastSeen > windowMs) {
+      if (monoClock() - state.lastSeenMono > windowMs) {
         sessions.delete(sessionKey);
         return [];
       }
