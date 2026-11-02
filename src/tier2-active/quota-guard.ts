@@ -23,6 +23,17 @@
  * `store_unavailable` and never propagates the store's exception into
  * the host's request path.
  *
+ * Atomicity (F-02): with the bundled store - or any store implementing
+ * the optional `recordIfBelow` operation - the limit check and the
+ * record for a dimension are ONE store operation, so parallel requests
+ * sharing a store cannot jointly overshoot the tier limit (the
+ * pre-fix peek-then-record sequence let 12 of 12 parallel requests
+ * through a limit of 5 against a 15 ms-latency store). A store
+ * implementing only `peek`/`record` keeps that legacy sequence: it is
+ * NOT atomic across concurrent requests, and the guard says so -
+ * `atomicEnforcement` is false on the guard and on every result it
+ * returns, so the deployment can see which guarantee it actually has.
+ *
  * A request whose identity cannot be resolved at all (no account, no API key
  * and no determinable IP — for example a misnamed `trustedIpHeader` behind a
  * proxy) is NOT exempt: by default it is counted against a single shared
@@ -106,6 +117,14 @@ export interface QuotaCheckResult {
   pagination: QuotaPagination;
   tier: string;
   identity: QuotaIdentity;
+  /**
+   * True when the window store enforces the check-and-record for a
+   * dimension as one atomic operation (`recordIfBelow`), so parallel
+   * requests cannot jointly overshoot the limit. False for legacy
+   * peek/record stores (F-02): the limit then holds only
+   * sequentially, and this flag is how the deployment can tell.
+   */
+  atomicEnforcement: boolean;
 }
 
 /** Minimal structural request shape: Fetch `Request`, the canary-style mock, or a Node/Express request. */
@@ -128,6 +147,23 @@ export interface QuotaWindowSnapshot {
   oldest?: number;
 }
 
+/** Outcome of one atomic check-and-record against a sliding window. */
+export interface QuotaAtomicRecordResult {
+  /** True when the hit was recorded (the post-operation `count` includes it). */
+  recorded: boolean;
+  /**
+   * Set when the hit was refused for store CAPACITY (a new window at
+   * the store's key cap) rather than for the window limit; the guard
+   * then rejects with `store_capacity_exceeded` instead of
+   * `rate_limit_exceeded`.
+   */
+  refusal?: "capacity";
+  /** Hits inside the window after the operation. */
+  count: number;
+  /** Timestamp (ms) of the oldest hit still inside the window, if any. */
+  oldest?: number;
+}
+
 /**
  * Storage contract for sliding windows. Implementations must prune entries
  * older than `windowMs` relative to `now` inside both operations.
@@ -137,10 +173,25 @@ export interface QuotaWindowSnapshot {
  * rejects the request fail-closed (429, `store_capacity_exceeded`). Returning
  * `true` or nothing means the hit was recorded. Stores must never make room
  * by evicting unexpired windows.
+ *
+ * Atomic enforcement (F-02): a store that ALSO implements
+ * `recordIfBelow` gives the guard a single check-and-record operation -
+ * prune, compare against `limit`, and record only when below it, as one
+ * indivisible step (a Redis Lua script / ZADD-with-guard, a SQL
+ * transaction). The guard prefers it whenever present. A store with
+ * only `peek`/`record` is served by the legacy two-step sequence and
+ * the guard reports `atomicEnforcement: false`, because two instances
+ * can both peek below the limit and both record.
  */
 export interface QuotaWindowStore {
   peek(key: string, now: number, windowMs: number): Promise<QuotaWindowSnapshot> | QuotaWindowSnapshot;
   record(key: string, now: number, windowMs: number): Promise<boolean | void> | boolean | void;
+  recordIfBelow?(
+    key: string,
+    now: number,
+    windowMs: number,
+    limit: number,
+  ): Promise<QuotaAtomicRecordResult> | QuotaAtomicRecordResult;
 }
 
 export interface QuotaGuardOptions {
@@ -231,6 +282,25 @@ export function createInMemoryQuotaStore(maxEntries = 10_000): QuotaWindowStore 
       fresh.push(now);
       windows.set(key, fresh);
       return true;
+    },
+    recordIfBelow(key, now, windowMs, limit) {
+      // One indivisible step (this store is synchronous): prune,
+      // compare, record only when below the limit - the F-02 atomic
+      // path. Capacity rules mirror `record` exactly: at the key cap
+      // a NEW window is refused, never made room for by evicting a
+      // live window.
+      const isNewWindow = !windows.has(key);
+      const fresh = prune(key, now, windowMs);
+      const oldest = fresh.length ? Math.min(...fresh) : undefined;
+      if (fresh.length >= limit) return { recorded: false, count: fresh.length, oldest };
+      if (isNewWindow && windows.size >= cap) {
+        // Make room only from expired windows; never evict a live one.
+        for (const otherKey of [...windows.keys()]) prune(otherKey, now, windowMs);
+        if (windows.size >= cap) return { recorded: false, refusal: "capacity", count: fresh.length, oldest };
+      }
+      fresh.push(now);
+      windows.set(key, fresh);
+      return { recorded: true, count: fresh.length, oldest: Math.min(...fresh) };
     },
   };
 }
@@ -340,6 +410,12 @@ function parsePagination(
 export interface QuotaGuard {
   checkRequest(req: QuotaRequestLike): Promise<QuotaCheckResult>;
   readonly tiers: Record<string, QuotaTierConfig>;
+  /**
+   * True when the configured store enforces check-and-record
+   * atomically (`recordIfBelow`); false for legacy peek/record
+   * stores, whose limit holds only sequentially (F-02).
+   */
+  readonly atomicEnforcement: boolean;
 }
 
 export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
@@ -347,6 +423,9 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
   const mode = options.paginationMode ?? "reject";
   const defaultPageSize = Math.max(1, Math.floor(options.defaultPageSize ?? 20) || 20);
   const store = options.store ?? createInMemoryQuotaStore(options.maxEntries ?? 10_000);
+  // F-02: a store exposing the atomic check-and-record operation gets
+  // hard parallel enforcement; anything else is flagged, not hidden.
+  const atomicStore = typeof store.recordIfBelow === "function";
   const { wall: clock, mono: monoClock } = resolveIntervalClock(options);
 
   const tierConfig = (name: string): QuotaTierConfig => {
@@ -436,6 +515,7 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
         pagination,
         tier: tierName,
         identity: baseIdentity,
+        atomicEnforcement: atomicStore,
       };
     };
 
@@ -488,11 +568,44 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
       }
     }
 
-    // 3. Allowed: record one hit per dimension and report the tightest
-    //    remaining headroom (the primary dimension) as rate-limit metadata.
-    //    A store refusal (full of unexpired windows) fails closed: the
-    //    request is rejected rather than admitted without accounting.
+    // 3. Allowed so far: record one hit per dimension and report the
+    //    tightest remaining headroom (the primary dimension) as
+    //    rate-limit metadata. A store refusal (full of unexpired
+    //    windows) fails closed: the request is rejected rather than
+    //    admitted without accounting.
+    //    With an atomic store (F-02) the peek above stays as the
+    //    fast-path reject and the pagination/identity plumbing, but
+    //    the BINDING check is repeated inside the store operation:
+    //    between the peek and here, a concurrent request may have
+    //    filled the window, and only `recordIfBelow` sees that.
+    const atomicOutcomes = new Map<string, QuotaAtomicRecordResult>();
     for (const { dimension, key } of dimensions) {
+      if (atomicStore) {
+        let outcome: QuotaAtomicRecordResult;
+        try {
+          outcome = await store.recordIfBelow!(key, now, tier.windowMs, tier.maxRequests);
+          if (
+            !outcome ||
+            typeof outcome.recorded !== "boolean" ||
+            typeof outcome.count !== "number" ||
+            !Number.isFinite(outcome.count)
+          ) {
+            throw new Error("quota store returned a malformed atomic record result");
+          }
+        } catch {
+          return reject("store_unavailable", dimension, tier.maxRequests, windowRetryAfter, parsed.pagination);
+        }
+        atomicOutcomes.set(key, outcome);
+        if (!outcome.recorded) {
+          if (outcome.refusal === "capacity") {
+            return reject("store_capacity_exceeded", dimension, tier.maxRequests, windowRetryAfter, parsed.pagination);
+          }
+          const oldest = outcome.oldest ?? now;
+          const retryAfterSeconds = Math.max(1, Math.ceil((oldest + tier.windowMs - now) / 1000));
+          return reject("rate_limit_exceeded", dimension, tier.maxRequests, retryAfterSeconds, parsed.pagination);
+        }
+        continue;
+      }
       let recorded: boolean | void;
       try {
         recorded = await store.record(key, now, tier.windowMs);
@@ -504,9 +617,13 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
       }
     }
     const primarySnapshot = primary ? snapshots.get(primary.key) : undefined;
-    const remaining = Math.max(0, tier.maxRequests - ((primarySnapshot?.count ?? 0) + (primary ? 1 : 0)));
-    const resetEpochSeconds = primarySnapshot?.oldest
-      ? Math.ceil((primarySnapshot.oldest + tier.windowMs) / 1000)
+    const primaryOutcome = primary ? atomicOutcomes.get(primary.key) : undefined;
+    const remaining = primaryOutcome
+      ? Math.max(0, tier.maxRequests - primaryOutcome.count)
+      : Math.max(0, tier.maxRequests - ((primarySnapshot?.count ?? 0) + (primary ? 1 : 0)));
+    const resetOldest = primaryOutcome?.oldest ?? primarySnapshot?.oldest;
+    const resetEpochSeconds = resetOldest
+      ? Math.ceil((resetOldest + tier.windowMs) / 1000)
       : Math.ceil((now + tier.windowMs) / 1000);
     return {
       allowed: true,
@@ -519,10 +636,11 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
       pagination: parsed.pagination,
       tier: tierName,
       identity: baseIdentity,
+      atomicEnforcement: atomicStore,
     };
   };
 
-  return { checkRequest, tiers };
+  return { checkRequest, tiers, atomicEnforcement: atomicStore };
 }
 
 /** Minimal structural Express-style response (avoids a runtime dependency on Express). */
