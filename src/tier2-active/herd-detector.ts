@@ -160,6 +160,8 @@
  * architecture they are the same wiring. See docs/LIMITATIONS.md.
  */
 
+import { monoNowMs } from "../internal/mono-clock";
+
 export type HerdEventType = "signup" | "login" | "list" | "detail" | "export" | "page_view";
 
 export interface HerdEvent {
@@ -343,8 +345,18 @@ export interface HerdDetectorOptions {
    * there is no pair-entry store left to cap.
    */
   maxPairEntries?: number;
-  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
+  /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. Display timestamps only (L-DEEP-2). */
   now?: () => number;
+  /**
+   * Monotonic clock for the activity arithmetic (L-DEEP-2): the
+   * co-activity feature, the v2 co-activity link gates, the flagged
+   * latch's idle re-arm and the supplementary cooldown are measured
+   * on this clock and are immune to wall-clock steps. Events carrying
+   * a host `ts` stay in the host's time domain throughout (their
+   * monotonic twin mirrors `ts`). When only `now` is given, the
+   * injected clock drives both domains (pre-patch behavior).
+   */
+  monoNow?: () => number;
 }
 
 export interface HerdObservation {
@@ -470,6 +482,8 @@ interface IdentityState {
   /** Stored-set size at this identity's last leader scan (grouping v2 throttle). */
   lastLeaderScanSize: number;
   lastActive: number;
+  /** Monotonic twin of `lastActive` (L-DEEP-2): activity comparisons read this clock. */
+  lastActiveMono: number;
   ipGroupId?: number;
   cohortGroupId?: number;
 }
@@ -487,7 +501,11 @@ interface ChainedGroup {
   announcedUnique: Map<string, number>;
   /** Timestamp of the group's last flag emission (initial or supplementary); drives the supplementary coalescing cooldown. */
   lastFlagAt: number;
+  /** Monotonic twin of `lastFlagAt` (L-DEEP-2). */
+  lastFlagAtMono: number;
   lastActivity: number;
+  /** Monotonic twin of `lastActivity` (L-DEEP-2). */
+  lastActivityMono: number;
   lastScore: number;
   maxScore: number;
   lastFeatures?: HerdFeatures;
@@ -505,7 +523,11 @@ interface CoverageGroup {
   announcedUnique: Map<string, number>;
   /** Timestamp of the group's last flag emission (initial or supplementary); drives the supplementary coalescing cooldown. */
   lastFlagAt: number;
+  /** Monotonic twin of `lastFlagAt` (L-DEEP-2). */
+  lastFlagAtMono: number;
   lastActivity: number;
+  /** Monotonic twin of `lastActivity` (L-DEEP-2). */
+  lastActivityMono: number;
   lastScore: number;
   maxScore: number;
   lastFeatures?: HerdFeatures;
@@ -545,6 +567,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
    */
   const supplementaryCooldownMs = Math.max(0, options.supplementaryCooldownMs ?? 5_000);
   const clock = options.now ?? (() => Date.now());
+  const monoClock = options.monoNow ?? (options.now ? clock : monoNowMs);
 
   const identities = new Map<string, IdentityState>();
   const chainedGroups = new Map<number, ChainedGroup>();
@@ -589,6 +612,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     combined: number,
     sumSizes: number,
     now: number,
+    nowMono: number,
     includeCluster: boolean,
   ): HerdFeatures => {
     const n = members.length;
@@ -605,7 +629,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         if (st.signupTs > maxSignup) maxSignup = st.signupTs;
       }
       contSum += st.keys.size > 0 ? st.largestRun / st.keys.size : 0;
-      if (now - st.lastActive <= coActivityWindowMs) coActive++;
+      if (nowMono - st.lastActiveMono <= coActivityWindowMs) coActive++;
       if (distinctOf(st) >= 0.9 * limitOf(st)) capCount++;
     }
     const spanMin = maxSignup >= minSignup ? (maxSignup - minSignup) / MIN_MS : 0;
@@ -731,14 +755,16 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       flagged: boolean;
       announcedUnique: Map<string, number>;
       lastFlagAt: number;
+      lastFlagAtMono: number;
     },
     combined: number,
     score: number,
     features: HerdFeatures,
     now: number,
+    nowMono: number,
   ): HerdFlagSnapshot | undefined => {
     if (!group.flagged) return undefined;
-    if (now - group.lastFlagAt < supplementaryCooldownMs) return undefined;
+    if (nowMono - group.lastFlagAtMono < supplementaryCooldownMs) return undefined;
     if (group.members.size < flagMinMembers || combined < combinedFloor || score < flagThreshold) {
       return undefined;
     }
@@ -763,6 +789,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       true,
     );
     group.lastFlagAt = now;
+    group.lastFlagAtMono = nowMono;
     markAnnounced(group, snapshot);
     return snapshot;
   };
@@ -776,7 +803,13 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     }
   };
 
-  const chainInto = (kind: "ip" | "cohort", key: string, st: IdentityState, signupTs: number): ChainedGroup => {
+  const chainInto = (
+    kind: "ip" | "cohort",
+    key: string,
+    st: IdentityState,
+    signupTs: number,
+    signupMono: number,
+  ): ChainedGroup => {
     const existingId = kind === "ip" ? st.ipGroupId : st.cohortGroupId;
     if (existingId !== undefined) {
       const existing = chainedGroups.get(existingId);
@@ -805,7 +838,9 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         flagged: false,
         announcedUnique: new Map<string, number>(),
         lastFlagAt: 0,
+        lastFlagAtMono: 0,
         lastActivity: signupTs,
+        lastActivityMono: signupMono,
         lastScore: 0,
         maxScore: 0,
       };
@@ -847,7 +882,9 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       flagged: false,
       announcedUnique: new Map<string, number>(),
       lastFlagAt: 0,
+      lastFlagAtMono: 0,
       lastActivity: st.lastActive,
+      lastActivityMono: st.lastActiveMono,
       lastScore: 0,
       maxScore: 0,
     };
@@ -874,8 +911,14 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         big.announcedUnique.set(member, announcedAt);
       }
     }
-    if (small.lastActivity > big.lastActivity) big.lastActivity = small.lastActivity;
-    if (small.lastFlagAt > big.lastFlagAt) big.lastFlagAt = small.lastFlagAt;
+    if (small.lastActivity > big.lastActivity) {
+      big.lastActivity = small.lastActivity;
+      big.lastActivityMono = small.lastActivityMono;
+    }
+    if (small.lastFlagAt > big.lastFlagAt) {
+      big.lastFlagAt = small.lastFlagAt;
+      big.lastFlagAtMono = small.lastFlagAtMono;
+    }
     if (small.maxScore > big.maxScore) big.maxScore = small.maxScore;
     if (small.flagged && !big.flagged) {
       big.flagged = true;
@@ -958,7 +1001,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     identities.delete(identity);
   };
 
-  const stateFor = (identity: string, now: number): IdentityState => {
+  const stateFor = (identity: string, now: number, nowMono: number): IdentityState => {
     let st = identities.get(identity);
     if (st) {
       // Refresh LRU position.
@@ -979,6 +1022,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       bitmap: new BigUint64Array(BITMAP_WORDS),
       lastLeaderScanSize: 0,
       lastActive: now,
+      lastActiveMono: nowMono,
     };
     identities.set(identity, st);
     return st;
@@ -990,11 +1034,16 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     if (!event || typeof event.identity !== "string" || event.identity.length === 0) {
       return { recorded: false };
     }
-    const now = typeof event.ts === "number" && Number.isFinite(event.ts) ? event.ts : clock();
-    const st = stateFor(event.identity, now);
+    const hasTs = typeof event.ts === "number" && Number.isFinite(event.ts);
+    const now = hasTs ? (event.ts as number) : clock();
+    // Host-ts events stay in the host's time domain (twin mirrors ts);
+    // internal-clock events stamp the monotonic twin (L-DEEP-2).
+    const nowMono = hasTs ? now : monoClock();
+    const st = stateFor(event.identity, now, nowMono);
     if (event.ip && !st.ip) st.ip = event.ip;
     if (typeof event.budgetLimit === "number" && event.budgetLimit > 0) st.budgetLimit = event.budgetLimit;
     st.lastActive = now;
+    st.lastActiveMono = nowMono;
 
     if (event.type === "signup") {
       st.signupTs = now;
@@ -1002,8 +1051,8 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       // Grouping v1 forms on signup only (lab parity). A duplicate signup
       // for an already-grouped identity does not re-chain it; the lab
       // never exercised duplicate signups.
-      chainInto("ip", st.ip ?? "unknown", st, now);
-      chainInto("cohort", "ALL", st, now);
+      chainInto("ip", st.ip ?? "unknown", st, now, nowMono);
+      chainInto("cohort", "ALL", st, now, nowMono);
       return { recorded: true };
     }
 
@@ -1052,14 +1101,16 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       if (groupId === undefined) continue;
       const group = chainedGroups.get(groupId);
       if (!group) continue;
-      if (group.flagged && now - group.lastActivity > activityWindowMs) {
+      if (group.flagged && nowMono - group.lastActivityMono > activityWindowMs) {
         group.flagged = false; // new window: re-arm
         group.announcedUnique.clear();
         group.lastFlagAt = 0;
+        group.lastFlagAtMono = 0;
       }
       group.lastActivity = now;
+      group.lastActivityMono = nowMono;
       const members = [...group.members];
-      const features = computeFeatures(members, group.combined.size, group.sumSizes, now, true);
+      const features = computeFeatures(members, group.combined.size, group.sumSizes, now, nowMono, true);
       const score = scoreOf(features, true);
       group.lastScore = score;
       group.lastFeatures = features;
@@ -1073,11 +1124,12 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
       ) {
         group.flagged = true;
         group.lastFlagAt = now;
+        group.lastFlagAtMono = nowMono;
         const snapshot = emitFlag("v1-ip", group.id, members, group.combined.size, score, features, now, group.combined);
         markAnnounced(group, snapshot);
         if (!flag) flag = snapshot;
       } else if (group.kind === "ip" && group.flagged) {
-        const supplementary = maybeSupplementary("v1-ip", group, group.combined.size, score, features, now);
+        const supplementary = maybeSupplementary("v1-ip", group, group.combined.size, score, features, now, nowMono);
         if (supplementary && !flag) flag = supplementary;
       }
     }
@@ -1120,8 +1172,8 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         const other = coverageGroups.get(otherRoot);
         if (!other) continue; // merged away during this scan
         if (other.combined.size < minOwnRecords) continue;
-        if (now - other.lastActivity > activityWindowMs) continue;
-        if (now - other.lastActivity > coactLinkMs) continue;
+        if (nowMono - other.lastActivityMono > activityWindowMs) continue;
+        if (nowMono - other.lastActivityMono > coactLinkMs) continue;
         const own = coverageGroups.get(ownRoot) as CoverageGroup;
         if (own.combined.size < minOwnRecords) continue;
         let inter: number;
@@ -1143,14 +1195,16 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     }
     const root = findRoot(st.identity);
     const agg = coverageGroups.get(root) as CoverageGroup;
-    if (agg.flagged && now - agg.lastActivity > activityWindowMs) {
+    if (agg.flagged && nowMono - agg.lastActivityMono > activityWindowMs) {
       agg.flagged = false; // new window: re-arm
       agg.announcedUnique.clear();
       agg.lastFlagAt = 0;
+      agg.lastFlagAtMono = 0;
     }
     agg.lastActivity = now;
+    agg.lastActivityMono = nowMono;
     const v2Members = [...agg.members];
-    const v2Features = computeFeatures(v2Members, agg.combined.size, agg.sumSizes, now, false);
+    const v2Features = computeFeatures(v2Members, agg.combined.size, agg.sumSizes, now, nowMono, false);
     const v2Score = scoreOf(v2Features, false);
     agg.lastScore = v2Score;
     agg.lastFeatures = v2Features;
@@ -1158,11 +1212,12 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     if (!agg.flagged && v2Members.length >= flagMinMembers && agg.combined.size >= combinedFloor && v2Score >= flagThreshold) {
       agg.flagged = true;
       agg.lastFlagAt = now;
+      agg.lastFlagAtMono = nowMono;
       const snapshot = emitFlag("v2-coverage", agg.id, v2Members, agg.combined.size, v2Score, v2Features, now, agg.combined);
       markAnnounced(agg, snapshot);
       if (!flag) flag = snapshot;
     } else if (agg.flagged) {
-      const supplementary = maybeSupplementary("v2-coverage", agg, agg.combined.size, v2Score, v2Features, now);
+      const supplementary = maybeSupplementary("v2-coverage", agg, agg.combined.size, v2Score, v2Features, now, nowMono);
       if (supplementary && !flag) flag = supplementary;
     }
 
