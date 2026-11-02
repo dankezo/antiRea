@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![cobertura de líneas de dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-336%20passing-informational)](tests/)
 
 antiRea ayuda a auditar lo que expone un sitio web, aplicar cuotas de velocidad y paginación en el servidor, mover la lógica crítica al servidor y aplicar controles canary o de marca de agua donde corresponda. **No puede** impedir que usuarios o agentes inspeccionen el código entregado a su navegador.
 
@@ -30,16 +30,20 @@ npm install @dannyphan190/anti-rea
 
 También se puede instalar mediante [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Novedades de v2.6.2
+## Novedades de v2.6.3
 
-Una versión de parche pequeña sobre relojes. Las ventanas de tiempo de antiRea se medían antes con el reloj de pared del servidor, el que puede saltar cuando la máquina sincroniza la hora o un administrador la cambia. Esos saltos podían torcer sus límites. Ya no pueden. Nada más cambia: no hay pasos de actualización ni ajustes nuevos.
+Una versión de parche que corrige los ocho problemas de gravedad media encontrados por la auditoría independiente de la v2.6.0. Sin funciones nuevas y sin pasos de actualización: los mismos límites que ya configuró ahora se aplican también en algunos puntos donde antes había huecos.
 
-- **Un salto del reloj hacia adelante ya no reparte un presupuesto doble.** Si el reloj del servidor saltaba 5 minutos hacia adelante, una ventana de 60 segundos ya agotada parecía "caducada", así que una sola cuenta podía llevarse 200 registros en 10 segundos reales: el doble de su presupuesto. Medido en el laboratorio sobre la versión anterior; ahora la ventana solo cuenta el tiempo real transcurrido y el lote extra se rechaza.
-- **Un salto hacia atrás ya no bloquea a los usuarios honestos.** El mismo salto en la otra dirección mantenía una ventana terminada en estado "cerrado" durante 5 minutos extra, bloqueando a usuarios normales sin motivo. Ahora las ventanas terminan a su hora.
-- **Los plazos reales siguen usando el reloj real.** Los enlaces firmados que caducan a una hora fija, los topes diarios y las reglas de calendario funcionan exactamente igual que antes: solo cambiaron los temporizadores de tipo cronómetro.
-- **La suite de pruebas creció para demostrarlo:** 322 pruebas, 320 superadas, incluidas pruebas nuevas que reproducen ambos saltos de reloj contra cada temporizador del paquete.
+- **Los límites de cuota y de exportación ahora se aplican de forma atómica con el almacén incluido.** Antes, un almacén lento dejaba que las solicitudes paralelas se adelantaran entre sí y superaran el tope. Ahora comprobar y registrar es un solo paso.
+- **Las exportaciones CSV ahora se cobran como las JSON.** Antes, un cuerpo CSV se valoraba en cero por accidente: en una prueba en vivo extrajo 150 registros a través de un límite de 60. Ahora todos los formatos de exportación pagan igual.
+- **Una acción sin precio declarado se rechaza en lugar de ser gratuita.** Si su aplicación olvidaba poner precio a una acción, antes se ejecutaba gratis para siempre. Ahora se rechaza hasta que tenga un precio (o hasta que usted fije un precio de reserva).
+- **Un callback del anfitrión que falla ya no pierde una marca de aviso.** Si su gestor de notificaciones lanzaba un error, la marca desaparecía. Ahora se conserva y se vuelve a entregar en el siguiente contacto.
+- **Una entrada NaN ya no bloquea un grupo de usuarios para siempre.** Un número malformado antes envenenaba el contador de un grupo hasta el reinicio. Ahora se rechaza en el acto y el contador se repara solo.
+- **La memoria de seguimiento tiene tope y se limpia sola.** El estado de seguimiento por identidad ahora tiene un límite de tamaño y expulsa las entradas menos activas, en lugar de crecer sin fin.
+- **La rotación de calibración ahora sí restablece las puntuaciones.** Cuando una ventana de evidencia cambia de periodo, las puntuaciones y contribuciones antiguas se borran de verdad: antes quedaban y podían volver a marcar un grupo al instante.
+- **La suite de pruebas creció para demostrarlo:** 338 pruebas, 336 superadas, incluidas 16 pruebas nuevas que fallan todas con el código anterior al parche.
 
-Informe técnico completo: [Análisis detallado de v2.6.2](docs/v2.6.2-deep-dive.es.md). Las tres correcciones de auditoría de la v2.6.1 están cubiertas en el [análisis detallado de la v2.6.1](docs/v2.6.1-deep-dive.es.md) y en el registro de cambios.
+Informe técnico completo: [Análisis detallado de v2.6.3](docs/v2.6.3-deep-dive.es.md). El endurecimiento de relojes de la v2.6.2 está cubierto en el [análisis detallado de la v2.6.2](docs/v2.6.2-deep-dive.es.md) y en el registro de cambios.
 
 ## Entorno de pruebas comparativas en el navegador
 
@@ -103,7 +107,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compila, ejecuta **322 pruebas automatizadas** (320 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compila, ejecuta **338 pruebas automatizadas** (336 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
 
 ## Cómo integrar el SDK
 
