@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![độ phủ dòng của dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-296%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
 
 antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
@@ -30,19 +30,15 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.6.0
+## Mới trong v2.6.1
 
-Nói ngắn gọn: trước đây antiRea đo *dữ liệu* rời khỏi ứng dụng của bạn. Nay nó đo thêm cả *hành động* - export, tìm kiếm nặng, nhận khuyến mãi - nên một đám tài khoản không còn rút cạn một tính năng đắt tiền chỉ bằng cách mỗi tài khoản lặng lẽ nằm dưới giới hạn của riêng mình. Người dùng bình thường không thấy gì khác.
+Một bản vá nhỏ: đợt kiểm toán bảo mật độc lập trên bản 2.6.0 tìm ra 3 lỗi, và cả 3 đã được vá. Cách antiRea hoạt động không đổi gì với người dùng bình thường - không cần bước nâng cấp nào, không có cài đặt mới.
 
-- **Mỗi hành động đắt đều có bảng giá - do bạn đặt.** Bạn nói một lần export hay một lượt tìm kiếm nặng tốn bao nhiêu; mỗi tài khoản có một ngân sách, và cả một đội có thể dùng chung một trần khóa chặt ngay từ lúc bạn khai báo.
-- **Nhóm chia nhau việc vẫn bị lộ.** Các tài khoản lặng lẽ chia nhau cùng một việc - hoặc cùng dồn vào một mã khuyến mãi - bị gom nhóm và gắn cờ cùng nhau, kể cả khi không tài khoản nào tự nó làm gì sai.
-- **Kẻ tấn công làm được ít hơn hẳn, và chậm hơn hẳn.** Trong bài test lab của chúng tôi, một đàn không bị bảo vệ làm xong 80/80 việc trong chưa tới một giây. Khi có bảo vệ, nó chỉ xong 16/80 (20%), và cả 24 tài khoản của nó đều bị đưa vào diện kiểm tra thêm.
-- **Đội thật vẫn làm việc bình thường.** Một đội 6 người đã khai báo làm xong 40/40 việc, 0 ma sát. Một đội tương tự chưa khai báo cũng không mất việc nào và không bao giờ bị chặn cứng - tệ nhất chỉ là thêm bước kiểm tra và tốc độ chậm lại.
-- **Người dùng thường không cảm thấy gì.** 8 người dùng thường trong cùng bài test: 48/48 hành động thành công ngay lần đầu, 0 hậu quả.
-- **Bẫy cho hành động, không chỉ cho trang web.** Bạn có thể đăng ký một mã khuyến mãi giả hoặc một lát export giả mà người dùng thật không bao giờ thấy. Ai chạm vào thì chỉ tự đánh dấu chính mình - người đứng ngoài hoàn toàn sạch.
-- **Giới hạn nói thẳng.** Lớp này đánh thuế và làm chậm việc lạm dụng tính năng; nó không thể khiến việc đó thành không thể khi đăng ký vẫn miễn phí và không giới hạn. Và nó không nói gì về lỗi trong logic nghiệp vụ của chính bạn - tính sai giá, đua nhau trừ kho, phân quyền hỏng là lỗi code, không phải thứ một công cụ đo đếm sửa được.
+- **"Số biên lai" mượn của người khác không còn dùng được.** Mỗi lượt giữ chỗ (reservation) có một khóa idempotency - cứ hiểu như số biên lai cho câu "tôi đã trả phần này rồi". Trước đây, ai biết được số biên lai của tài khoản khác cũng có thể trình ra như của mình và tiêu từ ngân sách của tài khoản đó. Nay biên lai được đối chiếu với đúng nội dung nó được cấp lần đầu, ở cả hai sổ cái; lệch là bị từ chối, và các reservation do bản cũ ghi (chưa có dấu vân tay mới) sẽ bị từ chối an toàn trong vài phút TTL còn lại.
+- **Cơ sở dữ liệu hỏng không còn làm sập ứng dụng của bạn.** Khi kho lưu trữ phía sau các sổ cái bị hỏng hoặc trả về dữ liệu rác, SDK trước đây ném lỗi thô thẳng vào luồng xử lý request - trong bài test live của đợt kiểm toán, một store chết đã làm tiến trình host sập ngay ở request đầu tiên. Nay SDK trả lời bằng một từ chối gọn gàng (quyết định kiểu HTTP 429 "store unavailable") và tiến trình của bạn vẫn sống.
+- **Record ID khổng lồ lại rẻ như cũ.** Sổ cái trước đây giữ một bảng đánh dấu có một ô cho mỗi ID có thể có, nên chỉ một record với ID 100.000.000 cũng làm trạng thái lưu phình lên 16,7 MB. Nay nó dùng bảng đánh dấu thưa, chỉ lớn theo số record bạn thật sự có: cùng trường hợp đó chỉ tốn 3 ms và 1.745 byte trạng thái (trước là 1.439 ms), và trạng thái đã lưu từ bản cũ vẫn đọc được.
 
-Bản kỹ thuật đầy đủ với mọi cơ chế và số đo: [Tìm hiểu sâu v2.6.0](docs/v2.6.0-deep-dive.vi.md).
+Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.6.1](docs/v2.6.1-deep-dive.vi.md). Lớp ngân sách hành động mới trong v2.6.0 được trình bày ở [Tìm hiểu sâu v2.6.0](docs/v2.6.0-deep-dive.vi.md) và changelog.
 
 ## Bộ khung benchmark trình duyệt
 
@@ -106,7 +102,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **298 kiểm thử tự động** (296 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
+`npm run check` gồm biên dịch, **305 kiểm thử tự động** (303 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
 ### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 

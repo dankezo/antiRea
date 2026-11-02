@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist 代码行覆盖率](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-296%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
 
 antiRea 帮助您审计网站暴露了什么、在服务器端执行速率/分页配额、把关键逻辑移到服务器，并在适当时应用金丝雀或水印控制。它**不能**阻止用户或智能体检查已交付到其浏览器的代码。
 
@@ -30,19 +30,15 @@ npm install @dannyphan190/anti-rea
 
 您也可以通过 [GitHub Release](https://github.com/dankezo/antiRea/releases) 安装。
 
-## v2.6.0 新功能
+## v2.6.1 新功能
 
-简而言之：antiRea 以前计量的是离开您应用的*数据*。现在它也计量*操作* - 导出、繁重搜索、促销领取 - 因此一群账号再也不能靠每个账号都礼貌地待在自己的限额之下，就耗尽一个昂贵的功能。普通用户应该不会察觉任何变化。
+一个小型补丁版本：对 v2.6.0 的一次独立安全审计发现了 3 个 bug，现已全部修复。对普通用户来说，antiRea 的工作方式没有任何变化 - 没有升级步骤，也没有新设置。
 
-- **每个昂贵操作都有一个价格标签 - 由您设定。** 您来说明一次导出或一次繁重搜索的成本是多少；每个账号获得一个预算，整个团队可以共用一个上限，且该上限从您声明的那一刻起就锁定生效。
-- **分工的团队仍会被发现。** 悄悄瓜分同一份工作的账号 - 或者全部涌向同一个促销的账号 - 会被分组并一起标记，即使没有任何单个账号做了错事。
-- **攻击者完成得少得多，也慢得多。** 在我们的实验室测试中，一个无保护的群体在一秒内完成了 80 个工作中的 80 个。接入保护后，它完成了 80 个中的 16 个（20%），其 24 个账号全部被 enroll 到额外检查中。
-- **真实团队继续工作。** 一个已声明的 6 人团队以零摩擦完成了 40 个工作中的 40 个。一个类似的未声明团队同样没有丢失任何工作，也从未被硬性封锁 - 最坏的情况是额外检查和更慢的节奏。
-- **普通用户毫无感觉。** 在同一测试中，8 个普通用户：48 次操作中 48 次一次成功，零后果。
-- **针对操作的陷阱，而不只是页面。** 您可以注册一个真实用户永远不会看到的虚假促销或导出切片。碰到它的人只会标记自己 - 旁观者保持完全干净。
-- **诚实的局限。** 这会给功能滥用增加成本并拖慢它；当注册免费且无限时，它无法使滥用成为不可能。它也对您自己业务逻辑中的 bug 只字不提 - 错误的价格、库存竞态、损坏的权限是代码 bug，不是计量器能修的东西。
+- **借用别人的"收据编号"不再有效。** 每次预留都有一个幂等键 - 可以把它理解为"我已经为这部分付过款"的收据编号。此前，任何人只要知道了另一个账号的收据编号，就能冒充自己的编号出示，并从那个账号的预算中支取。现在，两个账本都会把收据与它最初签发的内容核对；不匹配就会被拒绝，而旧版本写入的、没有新指纹的预留，会在它剩余的几分钟有效期内安全地失败关闭。
+- **损坏的数据库再也不会让您的应用崩溃。** 当账本背后的存储损坏或返回垃圾数据时，SDK 以前会把原始异常直接抛进您的请求处理流程 - 在审计的实机测试中，一个死掉的存储在第一个请求就让宿主进程崩溃。现在 SDK 会改为给出一个干净的拒绝（类似 HTTP 429 "store unavailable" 的决定），您的进程保持存活。
+- **巨大的记录 ID 重新变得廉价。** 账本以前保存的是一张"每个可能 ID 一个格子"的清单，因此仅一条 ID 为 100,000,000 的记录就能把保存的状态撑到 16.7 MB。现在它使用稀疏清单，只随您实际拥有的记录数量增长：同样的情况只需 3 毫秒和 1,745 字节状态（此前为 1,439 毫秒），并且旧版本保存的状态仍然可以读取。
 
-完整技术说明，包含每个机制和测量结果：[v2.6.0 深入解析](docs/v2.6.0-deep-dive.zh.md)。
+完整技术说明：[v2.6.1 深入解析](docs/v2.6.1-deep-dive.zh.md)。v2.6.0 新增的操作预算层见 [v2.6.0 深入解析](docs/v2.6.0-deep-dive.zh.md) 与更新日志。
 
 ## 浏览器基准测试工具
 
@@ -106,7 +102,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` 会编译、运行 **298 个自动化测试**（296 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
+`npm run check` 会编译、运行 **305 个自动化测试**（303 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
 
 ## 如何集成 SDK
 
