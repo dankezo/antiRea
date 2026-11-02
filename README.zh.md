@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist 代码行覆盖率](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-336%20passing-informational)](tests/)
 
 antiRea 帮助您审计网站暴露了什么、在服务器端执行速率/分页配额、把关键逻辑移到服务器，并在适当时应用金丝雀或水印控制。它**不能**阻止用户或智能体检查已交付到其浏览器的代码。
 
@@ -30,16 +30,20 @@ npm install @dannyphan190/anti-rea
 
 您也可以通过 [GitHub Release](https://github.com/dankezo/antiRea/releases) 安装。
 
-## v2.6.2 新功能
+## v2.6.3 新功能
 
-一个关于时钟的小型补丁版本。antiRea 的时间窗口以前是用服务器的挂钟计量的 - 而挂钟会在机器同步时间或管理员改动时间时跳变。这类跳变曾经能扭曲您的限额。现在不能了。其他一切不变：没有升级步骤，也没有新设置。
+一个补丁版本，修复了对 v2.6.0 的独立审计发现的八个中等严重程度问题。没有新功能，也没有升级步骤 - 您已经配置好的限额，现在在几个以前存在缝隙的地方得到了真正的执行。
 
-- **时钟向前跳变不再发放双倍预算。** 如果服务器时钟向前跳 5 分钟，一个已经用完的 60 秒窗口看起来会像"已过期"，于是单个账号能在 10 秒真实时间内取走 200 条记录 - 是其预算的两倍。此数据为上一版本在实验室中的实测；现在窗口只计算真实流逝的时间，多出的批次会被拒绝。
-- **时钟向后跳变不再误锁正常用户。** 反方向的同一跳变会让一个已经结束的窗口多"关闭" 5 分钟，无缘无故地拦住普通用户。现在窗口按时结束。
-- **真正的截止时间仍使用真实时钟。** 在固定时间过期的签名链接、每日上限和日历规则都和以前完全一样 - 改变的只有秒表式计时器。
-- **测试套件也随之扩充来证明这一点：** 322 个测试，320 个通过，其中包括把两种时钟跳变重放到包内每个计时器的新测试。
+- **配额上限与导出上限现在在使用自带存储时以原子方式执行。** 以前，存储响应慢时，并行请求可以互相抢先通过并越过上限。现在检查与记录是一个不可分割的步骤。
+- **CSV 导出现在与 JSON 导出一样计费。** 以前 CSV 正文会被错误地计为零价 - 在一次实测中，它越过 60 的上限取走了 150 条记录。现在每种导出格式都以相同方式付费。
+- **没有声明价格的操作会被拒绝，而不是免费。** 如果您的应用忘记为某个操作定价，它以前会永远免费运行。现在它在获得价格之前会被拒绝（或者您可以设置一个兜底价格）。
+- **宿主回调崩溃不再丢失警告标志。** 如果您的通知处理函数抛出错误，标志以前会随之消失。现在标志会被保留，并在下一次触及时再次送达。
+- **NaN 输入不再永久锁死一个用户组。** 一个损坏的数字以前会毒化整个组的计数器，直到重启为止。现在它会被当场拒绝，计数器也会自我修复。
+- **跟踪内存有上限并会自我清理。** 每个身份的跟踪状态现在有大小上限，并会淘汰最不活跃的条目，而不是无限增长。
+- **校准轮换现在真正重置分数。** 当证据窗口滚动到新一期时，旧分数和贡献会被真正清除 - 以前它们会残留并可能立即重新标记整个组。
+- **测试套件已扩充来证明这一点：** 338 个测试，336 个通过，其中包括 16 个在补丁前代码上全部失败的新测试。
 
-完整技术说明：[v2.6.2 深入解析](docs/v2.6.2-deep-dive.zh.md)。v2.6.1 的三处审计修复见 [v2.6.1 深入解析](docs/v2.6.1-deep-dive.zh.md) 与更新日志。
+完整技术说明：[v2.6.3 深入解析](docs/v2.6.3-deep-dive.zh.md)。v2.6.2 的时钟加固见 [v2.6.2 深入解析](docs/v2.6.2-deep-dive.zh.md) 与更新日志。
 
 ## 浏览器基准测试工具
 
@@ -103,7 +107,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` 会编译、运行 **322 个自动化测试**（320 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
+`npm run check` 会编译、运行 **338 个自动化测试**（336 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
 
 ## 如何集成 SDK
 

@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-336%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -30,16 +30,20 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.6.2
+## New in v2.6.3
 
-A small patch release about clocks. antiRea's time windows used to be measured with the server's wall clock - the one that can jump when the machine syncs its time or an admin changes it. Those jumps could bend your limits. They no longer can. Nothing else changes: no upgrade steps, no new settings.
+A patch release that fixes the eight medium-severity issues found by the independent audit of v2.6.0. No new features and no upgrade steps - the same limits you already configured are now enforced in a few places that used to have gaps.
 
-- **A clock jump forward no longer hands out a double budget.** If the server clock leapt 5 minutes ahead, a spent 60-second window looked "expired", so one account could take 200 records in 10 real seconds - double its budget. Measured in the lab on the previous version; now the window only counts real elapsed time and the extra batch is refused.
-- **A clock jump backward no longer locks out honest users.** The same leap in the other direction kept a finished window "closed" for 5 extra minutes, blocking normal users for no reason. Now windows end on schedule.
-- **Real deadlines still use the real clock.** Signed links that expire at a set time, daily caps and calendar rules keep working exactly as before - only the stopwatch-style timers changed.
-- **The test suite grew to prove it:** 322 tests, 320 passing, including new tests that replay both clock jumps against every timer in the package.
+- **Quota and export ceilings are now enforced atomically with the bundled store.** Before, a slow store let parallel requests slip past each other and overshoot the cap. Checking and recording is now a single step.
+- **CSV exports are now charged like JSON exports.** A CSV body used to price at zero by accident - in a live test it pulled 150 records through a ceiling of 60. Now every export format pays the same way.
+- **An action with no declared price is refused instead of free.** If your app forgot to price an action, it used to run free forever. Now it is refused until it has a price (or you set a fallback price).
+- **A crashing host callback no longer loses a warning flag.** If your notification handler threw an error, the flag used to vanish. Now it is kept and delivered again at the next touch.
+- **A NaN input no longer locks a user group forever.** One malformed number used to poison a group's counter until restart. Now it is refused on the spot and the counter heals itself.
+- **Tracking memory is capped and cleans itself up.** Per-identity tracking state now has a size limit and evicts the least active entries, instead of growing forever.
+- **Calibration rotation now really resets scores.** When an evidence window rolls over, old scores and contributions are actually cleared - before, they lingered and could re-flag a group instantly.
+- **The test suite grew to prove it:** 338 tests, 336 passing, including 16 new tests that all fail on the pre-patch code.
 
-Full technical write-up: [v2.6.2 deep dive](docs/v2.6.2-deep-dive.md). The three audit fixes in v2.6.1 are covered in the [v2.6.1 deep dive](docs/v2.6.1-deep-dive.md) and the changelog.
+Full technical write-up: [v2.6.3 deep dive](docs/v2.6.3-deep-dive.md). The clock hardening in v2.6.2 is covered in the [v2.6.2 deep dive](docs/v2.6.2-deep-dive.md) and the changelog.
 
 ## Browser benchmark harness
 
@@ -103,7 +107,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **322 automated tests** (320 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **338 automated tests** (336 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
