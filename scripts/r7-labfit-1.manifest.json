@@ -1,0 +1,16 @@
+{
+  "modelVersion": "cusum-1",
+  "calibrationVersion": "r7-labfit-1",
+  "sampleSizes": {
+    "legit": 36,
+    "attack": 24
+  },
+  "holdout": {
+    "falsePositiveRate": 0.16666666666666666,
+    "falseNegativeRate": 0.25
+  },
+  "method": "LOAFO trace-fitted LLR tables on lab-simulated traces; Laplace smoothing 0.5 per bin; LLR clamped to [-3, 3]; N_eff grid fit 50..2000 on legit cohort (sum, eta) pairs",
+  "attestedBy": "fit-cusum-calibration.cjs (lab-simulated)",
+  "issuedAtMs": 1793577600000,
+  "expiresAtMs": 1809129600000
+}

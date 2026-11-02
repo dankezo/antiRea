@@ -7,6 +7,7 @@ export * from "./tier2-active/quota-guard";
 export * from "./tier2-active/record-budget";
 export * from "./tier2-active/export-guard";
 export * from "./tier2-active/cursor";
+export * from "./tier2-active/canary-echo";
 export * from "./tier2-active/flow-scorer";
 export * from "./tier2-active/herd-detector";
 export * from "./tier2-active/decoy-mirage";

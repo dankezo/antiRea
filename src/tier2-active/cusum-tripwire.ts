@@ -85,6 +85,30 @@
  * compliance lesson applied at the engine layer: an uncalibrated
  * heuristic flag must never hard-cut anyone.
  *
+ * DECLARED CEILING ARMING (2.5.0 ceiling fix, 02/11/2026): the
+ * tiering law above has TWO lawful paths to a hard ceiling, and they
+ * engage differently. An INFERRED cohort reaches the ceiling only
+ * through a crossing (resolveConsequence at the flag, consequence
+ * floor included) - unchanged. A HOST-DECLARED cohort backed by a
+ * ceiling-tier calibration manifest is different: the host has
+ * already made the authorization decision and named the cohort, so
+ * requiring the evidence engine to cross before the cap binds makes
+ * the declared number a lie - the 2.5.0 round's pre-fix classic cell measured each
+ * declared cohort's union at ~900 records against a declared 600
+ * when its crossing landed (2,700 total). A declared cohort that
+ * resolves to `hard_ceiling` under the clamp with a ceiling-tier
+ * manifest is therefore ARMED at declaration: its members form one
+ * cohort from construction, `ceilingActive` (and the snapshot's
+ * `ceilingArmed`) is true from first sight, the union counts from
+ * the first record served, and `checkServe` refuses at the limit
+ * with NO crossing and NO consequence floor in the way. A declared
+ * cohort WITHOUT a ceiling-tier manifest is NOT armed (the clamp
+ * path at a crossing is the tiering law, unchanged); inferred
+ * cohorts are never armed. Arming is a data cap over the cohort's
+ * total, not a per-subject punishment: it counts every member's
+ * serves, and the protected-subject lane below is a separate concept
+ * that neither arms nor disarms a declared cohort.
+ *
  * PROTECTED SUBJECTS: a host that has declared subjects protected
  * (compliance / audit / support / agreed pentest - see
  * `protected-cohorts.ts`) passes `isProtected`; for an INFERRED
@@ -186,8 +210,30 @@ export interface CusumDecision {
   cohortId: string | null;
   score: number;
   increments: Record<CusumStreamName, number>;
+  /**
+   * The bin label each stream actually used for this event, so offline
+   * calibration tooling can read the raw observables instead of only
+   * the increment they produced. A label is null when that stream was
+   * not evaluated for this event (see formation / stream docs):
+   * adjacency - "null" for an evaluated predicate with zero abutting
+   * edges, "c2" / "c3" / "c4" / "c5plus" by cohort size after a merge,
+   * null when no predicate was evaluated; tiling - a z bin label,
+   * null when the gates were not reached, the identity is not in a
+   * cohort, or the stream is off; cold - "warm" / "low" / "mid" /
+   * "high" / "high_regular", null when the event carries no detailId;
+   * velocity - "human" / "v80_200" / "v30_80" / "v_lt_30", null when
+   * there is no valid cursor step.
+   */
+  bins: { adjacency: string | null; tiling: string | null; cold: string | null; velocity: string | null };
   crossed: boolean;
   flagged: boolean;
+  /**
+   * The cohort's shared campaign ceiling state at decision time:
+   * true from declaration for an armed host-declared cohort (see the
+   * header's DECLARED CEILING ARMING), or once a crossing engages
+   * the ceiling for any other lawful cohort.
+   */
+  ceilingActive: boolean;
   action: "none" | "logged" | "step_up" | "campaign_engaged";
   /**
    * Whether the cohort's exact union coverage has reached the
@@ -224,6 +270,17 @@ export interface CampaignSnapshot {
   score: number;
   flagged: boolean;
   ceilingActive: boolean;
+  /**
+   * True when this cohort's ceiling was ARMED AT DECLARATION
+   * (host-declared cohort + ceiling-tier calibration manifest):
+   * `ceilingActive` has been true since the cohort was declared,
+   * the cap binds from the first record, and `checkServe` enforces
+   * it without a crossing or the consequence floor. False for every
+   * inferred cohort and for declared cohorts without a ceiling-tier
+   * manifest - their ceilings, when lawful at all, engage only at a
+   * crossing.
+   */
+  ceilingArmed: boolean;
   unionRecords: number;
   /** True once `unionRecords` reaches `consequenceFloorRecords`. */
   consequenceEligible: boolean;
@@ -234,6 +291,47 @@ export interface CampaignSnapshot {
   calibrationVersion: string;
   uncalibrated: boolean;
   notice: string;
+}
+
+export interface ConsequenceTargets {
+  targets: string[];
+  protectedMembers: string[];
+  nonContributingMembers: string[];
+}
+
+/**
+ * Partition a campaign snapshot into the subjects a consequence may
+ * actually land on.
+ *
+ * - `targets` is `contributingMembers` minus `protectedMembers`:
+ *   friction-tier consequences (step_up, budget step-down) apply
+ *   ONLY to these subjects, because attribution follows the acting
+ *   subject and a protected subject never receives an inferred
+ *   consequence.
+ * - `nonContributingMembers` is `members` minus
+ *   `contributingMembers` minus `protectedMembers`: members whose
+ *   net in-cohort contribution is not positive, so no friction-tier
+ *   consequence is attributed to them either.
+ * - `protectedMembers` is the snapshot list verbatim.
+ *
+ * Distinguish the tiers carefully: friction-tier consequences above
+ * are per-subject and target-only. A lawful campaign ceiling (a
+ * host-declared cohort ceiling, or a manifest tier ceiling) is a
+ * DATA CAP counted over EVERY record served to the cohort -
+ * including records served by non-contributors - it is not a
+ * punishment aimed at a subject, and `checkServe` still passes a
+ * protected subject through on a per-subject basis.
+ */
+export function consequenceTargets(snapshot: CampaignSnapshot): ConsequenceTargets {
+  const protectedSet = new Set(snapshot.protectedMembers);
+  const contributingSet = new Set(snapshot.contributingMembers);
+  return {
+    targets: snapshot.contributingMembers.filter(member => !protectedSet.has(member)),
+    protectedMembers: [...snapshot.protectedMembers],
+    nonContributingMembers: snapshot.members.filter(
+      member => !contributingSet.has(member) && !protectedSet.has(member),
+    ),
+  };
 }
 
 export interface CusumTripwireOptions {
@@ -263,6 +361,30 @@ export interface CusumTripwireOptions {
    * evidence may pin a lower floor here deliberately.
    */
   consequences?: { minUnionRecords?: number };
+  /**
+   * Cohort formation signals that do not need a predicate (see the
+   * formation block in `observe`). All fields are optional.
+   */
+  formation?: {
+    /** Served-set slice complementarity. Default true. */
+    sliceComplementarity?: boolean;
+    /** Cold-walk complementarity over cold detail ids. Default true. */
+    coldWalk?: boolean;
+    /** Minimum served records per member for a slice pairing. Default: the tiling gate (`gates.minMemberRecords`, 150 shipped). */
+    minServedPerMember?: number;
+    /** Minimum cold records per member for a cold-walk pairing. Default 50 (the herd v2 `minOwnRecords` constant). */
+    minColdPerMember?: number;
+    /** Minimum union size for either pairing to merge. Default 300 (the herd union floor). */
+    minUnionRecords?: number;
+    /** Maximum pairwise Jaccard for a pairing to count as complementary. Default 0.10 (the herd link ceiling). */
+    maxOverlap?: number;
+    /** Minimum per-side range density, cold-walk only. Default 0.5. */
+    minRangeDensity?: number;
+    /** Co-activity window (ms) for a pairing. Default 60_000. */
+    windowMs?: number;
+    /** Pair re-evaluation throttle: the smaller side must grow by at least this much before a pair is checked again. Default 25 (the herd recheck growth). */
+    recheckGrowth?: number;
+  };
   /** Cohorts the host declares itself; members listed together form one declared cohort. */
   declaredCohorts?: string[][];
   /** Host calibration manifest; gates the ceiling via the tiering law. */
@@ -300,6 +422,12 @@ interface IdentityState {
   explained: Set<number>;
   coldWindow: { ts: number; id: number }[];
   ewmaTauMs: number;
+  /** Distinct cold detail ids (detail ids not in the introduced set when observed). Formation state for the cold-walk signal. */
+  coldSet: Set<number>;
+  coldMin: number | null;
+  coldMax: number | null;
+  lastColdTs: number;
+  lastActiveTs: number;
 }
 
 interface CohortState {
@@ -309,6 +437,8 @@ interface CohortState {
   flagged: boolean;
   flaggedAtMs: number;
   ceilingActive: boolean;
+  /** Armed at declaration (host-declared + ceiling-tier manifest); see the header. */
+  ceilingArmed: boolean;
   bucketTokens: number;
   bucketLastRefillMs: number;
   /** Net LLR attributed to each member over the current score window. */
@@ -350,6 +480,17 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   // Consequence floor: defaults to the tiling per-member gate (the
   // spec's absolute-scale constant); see the header derivation.
   const minConsequenceUnion = Math.max(1, options.consequences?.minUnionRecords ?? minMemberRecords);
+  // Formation constants: defaults bind to the existing constants named
+  // in CusumTripwireOptions.formation so they cannot drift apart.
+  const formationSlice = options.formation?.sliceComplementarity !== false;
+  const formationColdWalk = options.formation?.coldWalk !== false;
+  const formationMinServed = Math.max(1, options.formation?.minServedPerMember ?? minMemberRecords);
+  const formationMinCold = Math.max(1, options.formation?.minColdPerMember ?? 50);
+  const formationMinUnion = Math.max(1, options.formation?.minUnionRecords ?? 300);
+  const formationMaxOverlap = options.formation?.maxOverlap ?? 0.1;
+  const formationMinRangeDensity = options.formation?.minRangeDensity ?? 0.5;
+  const formationWindowMs = Math.max(0, options.formation?.windowMs ?? 60_000);
+  const formationRecheckGrowth = Math.max(1, options.formation?.recheckGrowth ?? 25);
   const now = options.now ?? Date.now;
 
   const declaredGroupOf = new Map<string, number>();
@@ -362,11 +503,25 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   const cohorts = new Map<string, CohortState>();
   const singletonScores = new Map<string, number>();
   const predicateRing: PredicateEntry[] = [];
+  /** Formation pair throttles: sorted pair key -> smaller side size at last full evaluation. */
+  const slicePairLastChecked = new Map<string, number>();
+  const coldPairLastChecked = new Map<string, number>();
 
   const identityState = (identity: string): IdentityState => {
     let state = identities.get(identity);
     if (!state) {
-      state = { served: new Set(), introduced: new Set(), explained: new Set(), coldWindow: [], ewmaTauMs: 150 };
+      state = {
+        served: new Set(),
+        introduced: new Set(),
+        explained: new Set(),
+        coldWindow: [],
+        ewmaTauMs: 150,
+        coldSet: new Set(),
+        coldMin: null,
+        coldMax: null,
+        lastColdTs: Number.NEGATIVE_INFINITY,
+        lastActiveTs: Number.NEGATIVE_INFINITY,
+      };
       identities.set(identity, state);
     }
     return state;
@@ -422,6 +577,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         flagged: false,
         flaggedAtMs: 0,
         ceilingActive: false,
+        ceilingArmed: false,
         bucketTokens: bucketBurst,
         bucketLastRefillMs: atMs,
         contributions: new Map(),
@@ -455,6 +611,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       merged.flagged = keep.flagged || drop.flagged;
       merged.flaggedAtMs = Math.max(keep.flaggedAtMs, drop.flaggedAtMs);
       merged.ceilingActive = keep.ceilingActive || drop.ceilingActive;
+      merged.ceilingArmed = keep.ceilingArmed || drop.ceilingArmed;
       merged.contributions = new Map(keep.contributions);
       mergeContributions(merged, drop);
       const mergedBucket = mergeCohortBucketStates(
@@ -468,6 +625,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       merged.flagged = drop.flagged;
       merged.flaggedAtMs = drop.flaggedAtMs;
       merged.ceilingActive = drop.ceilingActive;
+      merged.ceilingArmed = drop.ceilingArmed;
       merged.bucketTokens = drop.bucketTokens;
       merged.bucketLastRefillMs = drop.bucketLastRefillMs;
       merged.contributions = new Map(drop.contributions);
@@ -489,8 +647,103 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     return union.size;
   };
 
+  const pairKeyOf = (a: string, b: string): string => (a < b ? `${a}\u0001${b}` : `${b}\u0001${a}`);
+
+  const setOverlap = (a: Set<number>, b: Set<number>): { intersection: number; union: number } => {
+    const [small, big] = a.size <= b.size ? [a, b] : [b, a];
+    let intersection = 0;
+    for (const id of small) if (big.has(id)) intersection++;
+    return { intersection, union: a.size + b.size - intersection };
+  };
+
+  const coldDensity = (state: IdentityState): number => {
+    if (state.coldSet.size === 0 || state.coldMin === null || state.coldMax === null) return 0;
+    return state.coldSet.size / (state.coldMax - state.coldMin + 1);
+  };
+
+  /*
+   * Formation - cohort grouping without a predicate.
+   *
+   * (a) Served-set complementarity stands in for the predicate when a
+   * list carries a filter: a range predicate does not honestly exist
+   * for a text filter, but the served set always does, so two
+   * identities whose served sets are large, co-active, near-disjoint
+   * and jointly large are partitioning something whether or not a
+   * predicate was ever emitted.
+   * (b) Cold-walk complementarity works on cold detail ids only: a
+   * warm fetch contributes nothing, because a warm id was introduced
+   * to that identity first - only ids fetched cold extend the walk.
+   * (c) Known limit, stated plainly: a compliance team reviewing
+   * details sequentially is NOT separable from a walker at the
+   * formation level - both walk disjoint, dense, cold ranges. The
+   * consequence for that shape is blocked at the friction tier for
+   * inferred cohorts by the tiering law, and a host-declared
+   * protected cohort is exempt from inferred consequences; formation
+   * itself makes no claim to tell the two apart.
+   *
+   * Merges reuse mergeIdentities, so the existing rules carry over
+   * unchanged: singleton scores are discarded on merge, union-find
+   * roots update through the same path, and epoch rotation is
+   * untouched. Pair evaluation is throttled like herd v2: a pair is
+   * re-evaluated only once its smaller side has grown by at least
+   * formationRecheckGrowth since the last full evaluation.
+   */
+  const evaluateFormation = (identity: string, ts: number): void => {
+    if (!formationSlice && !formationColdWalk) return;
+    const self = identities.get(identity);
+    if (!self) return;
+    for (const otherId of [...identities.keys()]) {
+      if (otherId === identity) continue;
+      const other = identities.get(otherId);
+      if (!other) continue;
+      if (formationSlice) {
+        if (find(otherId) !== find(identity)) {
+          const curMin = Math.min(self.served.size, other.served.size);
+          if (
+            curMin >= formationMinServed &&
+            Math.abs(ts - other.lastActiveTs) <= formationWindowMs
+          ) {
+            const key = pairKeyOf(identity, otherId);
+            const lastChecked = slicePairLastChecked.get(key);
+            if (lastChecked === undefined || curMin - lastChecked >= formationRecheckGrowth) {
+              slicePairLastChecked.set(key, curMin);
+              const { intersection, union } = setOverlap(self.served, other.served);
+              const jaccard = union > 0 ? intersection / union : 0;
+              if (jaccard <= formationMaxOverlap && union >= formationMinUnion) {
+                mergeIdentities(identity, otherId, ts);
+              }
+            }
+          }
+        }
+      }
+      if (formationColdWalk) {
+        if (find(otherId) === find(identity)) continue;
+        const curMin = Math.min(self.coldSet.size, other.coldSet.size);
+        if (
+          curMin >= formationMinCold &&
+          Math.abs(ts - other.lastColdTs) <= formationWindowMs &&
+          coldDensity(self) >= formationMinRangeDensity &&
+          coldDensity(other) >= formationMinRangeDensity
+        ) {
+          const key = pairKeyOf(identity, otherId);
+          const lastChecked = coldPairLastChecked.get(key);
+          if (lastChecked === undefined || curMin - lastChecked >= formationRecheckGrowth) {
+            coldPairLastChecked.set(key, curMin);
+            const { intersection, union } = setOverlap(self.coldSet, other.coldSet);
+            const jaccard = union > 0 ? intersection / union : 0;
+            if (jaccard <= formationMaxOverlap && union >= formationMinUnion) {
+              mergeIdentities(identity, otherId, ts);
+            }
+          }
+        }
+      }
+    }
+  };
+
   const snapshotOf = (cohort: CohortState, atMs: number): CampaignSnapshot => {
     refill(cohort, atMs);
+    // A snapshot must never under-report an armed declared ceiling.
+    maybeArmDeclaredCeiling(cohort, atMs);
     const union = unionRecords(cohort);
     return {
       cohortId: cohort.id,
@@ -504,6 +757,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       score: cohort.score,
       flagged: cohort.flagged,
       ceilingActive: cohort.ceilingActive,
+      ceilingArmed: cohort.ceilingArmed,
       unionRecords: union,
       consequenceEligible: union >= minConsequenceUnion,
       consequenceFloorRecords: minConsequenceUnion,
@@ -555,6 +809,68 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       : "inferred";
   };
 
+  /**
+   * Whether a HOST-DECLARED cohort may lawfully carry a hard ceiling
+   * from declaration: the manifest must evaluate to the `ceiling`
+   * tier AND the tiering clamp must let `hard_ceiling` through for a
+   * declared cohort at that tier. Both conditions are required - a
+   * declaration without ceiling-tier calibration arms nothing.
+   */
+  const declaredCeilingLawful = (atMs: number): boolean => {
+    const evaluation = evaluateCalibrationManifest(options.manifest ?? null, {
+      ...options.calibrationGate,
+      now: atMs,
+    });
+    if (evaluation.tier !== "ceiling") return false;
+    const clamp = clampEnforcement("hard_ceiling", {
+      origin: "host_declared",
+      calibrationTier: evaluation.tier,
+      tripwireGated: true,
+    });
+    return !clamp.clamped && clamp.action === "hard_ceiling";
+  };
+
+  /**
+   * Arm a cohort's campaign ceiling at declaration, when lawful.
+   * Only ever SETS the armed state: a cohort whose origin is not
+   * host-declared (every member from the same declared group), or
+   * whose manifest is not ceiling-tier, is left exactly as it was,
+   * so inferred cohorts keep the crossing-gated path untouched.
+   */
+  const maybeArmDeclaredCeiling = (cohort: CohortState, atMs: number): boolean => {
+    if (cohort.ceilingArmed) {
+      cohort.ceilingActive = true;
+      return true;
+    }
+    if (cohortOrigin(cohort) !== "host_declared") return false;
+    if (!declaredCeilingLawful(atMs)) return false;
+    cohort.ceilingArmed = true;
+    cohort.ceilingActive = true;
+    return true;
+  };
+
+  /*
+   * Declared cohorts exist from declaration, not from detection:
+   * form each declared group into one cohort at construction and arm
+   * its ceiling when the law above allows. The union therefore
+   * counts every member's serves from the first record, and a member
+   * is never a singleton waiting for a formation signal to merge it
+   * into the cohort the host already named. (Groups the host
+   * declared without a ceiling-tier manifest still form - origin is
+   * a fact about the cohort - they are simply not armed.)
+   */
+  {
+    const armTs = now();
+    for (const group of options.declaredCohorts ?? []) {
+      const members = [...new Set(group)].filter(member => member.length > 0);
+      if (members.length === 0) continue;
+      for (const member of members) identityState(member);
+      let cohort = ensureCohort(find(members[0] as string), armTs);
+      for (const member of members.slice(1)) cohort = mergeIdentities(members[0] as string, member, armTs);
+      maybeArmDeclaredCeiling(cohort, armTs);
+    }
+  }
+
   async function observe(event: CusumEvent): Promise<CusumDecision> {
     const ts = event.ts ?? now();
     const identity = event.identity;
@@ -564,15 +880,19 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         cohortId: null,
         score: 0,
         increments: EMPTY_INCREMENTS(),
+        bins: { adjacency: null, tiling: null, cold: null, velocity: null },
         crossed: false,
         flagged: false,
+        ceilingActive: false,
         action: "none",
         consequenceEligible: false,
         protectedSubject: false,
       };
     }
     const state = identityState(identity);
+    state.lastActiveTs = ts;
     const increments = EMPTY_INCREMENTS();
+    const bins: CusumDecision["bins"] = { adjacency: null, tiling: null, cold: null, velocity: null };
 
     /* Warm set: list/search renders introduce ids (spec SS1.3). */
     if (event.introducedIds) for (const id of event.introducedIds) state.introduced.add(id);
@@ -613,9 +933,12 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
               for (const id of event.recordIds) if (id >= p.min && id <= p.max) state.explained.add(id);
             }
             const size = cohort ? cohort.members.size : 2;
-            increments.adjacency =
-              size >= 5 ? tables.adjacency.c5plus : size === 4 ? tables.adjacency.c4 : size === 3 ? tables.adjacency.c3 : tables.adjacency.c2;
+            const adjacencyBin =
+              size >= 5 ? "c5plus" : size === 4 ? "c4" : size === 3 ? "c3" : "c2";
+            bins.adjacency = adjacencyBin;
+            increments.adjacency = tables.adjacency[adjacencyBin];
           } else {
+            bins.adjacency = "null";
             increments.adjacency = tables.adjacency.null;
           }
         }
@@ -626,8 +949,20 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     if (event.recordIds) for (const id of event.recordIds) state.served.add(id);
 
     /* --- Stream 3: cold-ID misses over exact introduced sets --- */
+    // Formation cold state is tracked on the same isCold test (a
+    // detail id not in the introduced set at observe time), whether
+    // or not the cold evidence stream itself is enabled.
+    const isColdDetail =
+      event.type === "detail" && event.detailId !== undefined && !state.introduced.has(event.detailId);
+    if (isColdDetail && event.detailId !== undefined) {
+      state.coldSet.add(event.detailId);
+      state.coldMin = state.coldMin === null ? event.detailId : Math.min(state.coldMin, event.detailId);
+      state.coldMax = state.coldMax === null ? event.detailId : Math.max(state.coldMax, event.detailId);
+      state.lastColdTs = ts;
+    }
     if (streams.cold && event.type === "detail" && event.detailId !== undefined) {
       if (state.introduced.has(event.detailId)) {
+        bins.cold = "warm";
         increments.cold = tables.cold.warm;
       } else {
         state.coldWindow.push({ ts, id: event.detailId });
@@ -642,14 +977,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           const variance = deltas.reduce((a, d) => a + (d - mean) * (d - mean), 0) / deltas.length;
           regular = variance <= 4;
         }
-        increments.cold =
-          regular && count >= 3
-            ? tables.cold.high_regular
-            : count >= 6
-              ? tables.cold.high
-              : count >= 3
-                ? tables.cold.mid
-                : tables.cold.low;
+        const coldBin =
+          regular && count >= 3 ? "high_regular" : count >= 6 ? "high" : count >= 3 ? "mid" : "low";
+        bins.cold = coldBin;
+        increments.cold = tables.cold[coldBin];
       }
     }
 
@@ -659,13 +990,22 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       state.ewmaTauMs = 0.7 * state.ewmaTauMs + 0.3 * dwell;
       if (event.cursor.step > 3) {
         const tau = state.ewmaTauMs;
-        increments.velocity =
-          tau >= 200 ? tables.velocity.human : tau >= 80 ? tables.velocity.v80_200 : tau >= 30 ? tables.velocity.v30_80 : tables.velocity.v_lt_30;
+        const velocityBin =
+          tau >= 200 ? "human" : tau >= 80 ? "v80_200" : tau >= 30 ? "v30_80" : "v_lt_30";
+        bins.velocity = velocityBin;
+        increments.velocity = tables.velocity[velocityBin];
       }
     }
 
+    /* Formation: pair this identity against the others on its
+     * just-updated served / cold state, BEFORE scoring, so the
+     * current event belongs to the new cohort when a merge fires -
+     * the same ordering adjacency merges already use. */
+    evaluateFormation(identity, ts);
+
     /* Refresh cohort membership after possible merges. */
     cohort = cohortOf(identity);
+    if (cohort) maybeArmDeclaredCeiling(cohort, ts);
     const inCohort = cohort !== null && cohort.members.size >= 2;
 
     /* --- Stream 2: exact-set tiling, adjacency-explained records excluded --- */
@@ -692,16 +1032,18 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           const nEff = tables.nEff;
           const etaExp = (nEff * (1 - Math.exp(-sum / nEff))) / sum;
           const z = (eta - etaExp) / Math.max(1e-9, 1 - etaExp);
-          increments.tiling =
+          const tilingBin =
             z < 0.3
-              ? tables.tiling.z_lt_0_3
+              ? "z_lt_0_3"
               : z < 0.5
-                ? tables.tiling.z_0_3_0_5
+                ? "z_0_3_0_5"
                 : z < 0.65
-                  ? tables.tiling.z_0_5_0_65
+                  ? "z_0_5_0_65"
                   : z < 0.78
-                    ? tables.tiling.z_0_65_0_78
-                    : tables.tiling.z_ge_0_78;
+                    ? "z_0_65_0_78"
+                    : "z_ge_0_78";
+          bins.tiling = tilingBin;
+          increments.tiling = tables.tiling[tilingBin];
         }
       }
     }
@@ -716,6 +1058,9 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       if (cohort.flagged && ts - cohort.flaggedAtMs > epochMs) {
         cohort.flagged = false;
         cohort.ceilingActive = false;
+        // Epoch rotation retires a flag, not a host declaration: an
+        // armed declared ceiling survives it.
+        maybeArmDeclaredCeiling(cohort, ts);
       }
       cohort.score = Math.max(0, cohort.score + total);
       // Attribution: credit follows the acting subject (net increments
@@ -755,6 +1100,18 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           clampedReason = resolved.clampedReason;
         }
       }
+      // Armed declared ceiling, host ignoring checkServe: the cap is
+      // already reached, so the decision reports the engagement even
+      // though this cohort never crossed (and may never cross).
+      if (
+        !cohort.flagged &&
+        cohort.ceilingArmed &&
+        cohort.ceilingActive &&
+        mode === "enforce" &&
+        unionNow >= ceilingLimit
+      ) {
+        action = "campaign_engaged";
+      }
       // Protection (protected-cohorts.ts): for an INFERRED cohort, a
       // host-declared protected subject keeps the evidence but never
       // the consequence - the decision collapses to telemetry for
@@ -771,8 +1128,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         cohortId: cohort.id,
         score: cohort.score,
         increments,
+        bins,
         crossed,
         flagged: cohort.flagged,
+        ceilingActive: cohort.ceilingActive,
         action,
         consequenceEligible: eligible,
         protectedSubject: protectedHere,
@@ -787,8 +1146,12 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       cohortId: null,
       score: singletonScore,
       increments,
+      bins,
       crossed: false,
       flagged: false,
+      // A single-member declared cohort reaches this path (scoring
+      // needs a pair) - its armed ceiling state still reports here.
+      ceilingActive: cohort?.ceilingActive ?? false,
       action: "none",
       consequenceEligible: false,
       protectedSubject: false,
@@ -799,15 +1162,43 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   async function checkServe(identity: string, requested: number) {
     const ts = now();
     const cohort = cohortOf(identity);
-    if (!cohort || !cohort.flagged || mode === "observe") return { allowed: requested };
+    if (!cohort || mode === "observe") return { allowed: requested };
+    // An armed declared ceiling enforces WITHOUT a flag: the cohort
+    // was named by the host and its cap counts from the first record.
+    const armed = maybeArmDeclaredCeiling(cohort, ts);
+    if (!cohort.flagged && !armed) return { allowed: requested };
     // A protected subject in an inferred cohort is never paced or
-    // ceilinged by that cohort's inferred evidence.
+    // ceilinged by that cohort's inferred evidence. (Protection never
+    // applies inside a host-declared cohort - see the header.)
     if (cohortOrigin(cohort) === "inferred" && options.isProtected?.(identity) === true) {
       return { allowed: requested };
     }
+    const unionNow = unionRecords(cohort);
+    // The armed cap binds before the consequence floor and before
+    // any crossing: at the limit, every further serve is refused.
+    if (armed && unionNow >= ceilingLimit) {
+      return { allowed: 0, cohortId: cohort.id, reason: "campaign_ceiling" };
+    }
+    // A multi-record request must not overshoot the armed cap by
+    // request granularity: below the limit, the armed path allows at
+    // most the remaining headroom, so a host serving exactly
+    // `allowed` records lands the union exactly on the limit and the
+    // next call refuses. (Hosts that treat any short allowance as a
+    // whole-request refusal - the classic harness does - simply
+    // refuse a little earlier; the cap still never leaks.)
+    if (armed && ceilingLimit - unionNow < requested) {
+      return {
+        allowed: Math.max(0, ceilingLimit - unionNow),
+        cohortId: cohort.id,
+        reason: "campaign_ceiling",
+      };
+    }
+    // Armed but below the cap and not flagged: no pacing tax either -
+    // pacing remains a consequence of a flag, not of a declaration.
+    if (!cohort.flagged) return { allowed: requested };
     // A below-floor flag is telemetry only: no pacing, no ceiling.
-    if (unionRecords(cohort) < minConsequenceUnion) return { allowed: requested };
-    if (cohort.ceilingActive && unionRecords(cohort) >= ceilingLimit) {
+    if (unionNow < minConsequenceUnion) return { allowed: requested };
+    if (cohort.ceilingActive && unionNow >= ceilingLimit) {
       return { allowed: 0, cohortId: cohort.id, reason: "campaign_ceiling" };
     }
     refill(cohort, ts);
@@ -834,7 +1225,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     },
     async snapshotFor(identity) {
       const cohort = cohortOf(identity);
-      return cohort && cohort.members.size >= 2 ? snapshotOf(cohort, now()) : null;
+      // A cohort snapshot normally needs a pair - except an armed
+      // declared cohort, whose state (armed, capped) is meaningful
+      // even for a single-member declared group.
+      return cohort && (cohort.members.size >= 2 || cohort.ceilingArmed) ? snapshotOf(cohort, now()) : null;
     },
     async clearCohort(cohortId) {
       for (const cohort of cohorts.values()) {
@@ -843,6 +1237,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           cohort.ceilingActive = false;
           cohort.score = 0;
           cohort.contributions.clear();
+          // Note: clearing retires the flag and the score, not the
+          // host's declaration - an armed declared ceiling re-arms on
+          // the next snapshot / checkServe for as long as the cohort
+          // stays declared with a ceiling-tier manifest.
         }
       }
     },
