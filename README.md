@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-275%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-296%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -30,18 +30,19 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.5.0
+## New in v2.6.0
 
-The short version: antiRea got much better at catching *teams* of accounts that split the scraping work between them, and much more careful about who actually feels any friction. Normal users should notice nothing. Attackers need more accounts, more time - and still get flagged.
+The short version: antiRea used to meter the *data* leaving your app. Now it also meters the *actions* - exports, heavy searches, promo claims - so a crowd of accounts can no longer drain an expensive feature just by each staying politely under their own limit. Normal users should notice nothing.
 
-- **Whole crews get caught, not just the first few accounts.** When 18 accounts each take a small slice, all 18 get flagged now (the previous version caught 8). And it scales: grouping 1,000 accounts takes about 2 seconds.
-- **Switching accounts no longer resets the clock.** A page can carry a hidden signed "echo" id. When a fresh account shows up with an old account's id, the two are linked on the spot and their histories merge.
-- **One shared cap for the whole crew.** Linked accounts draw from a single shared limit that is enforced exactly. In our tests, a host-declared cap of 600 records stopped at exactly 600 - twice in a row.
-- **Friction lands only on the accounts that caused it.** Bystanders inside a flagged group - regular readers, coworkers sharing one office IP - received zero friction in every test.
-- **Your own audit team stays untouched.** Declare your compliance or pentest accounts once, and they can review everything with zero consequences from automated evidence.
-- **Stronger detection, honest labels.** The evidence engine now sees two attack shapes it used to miss. Its scoring tables still ship labeled "uncalibrated": they can trigger friction, never a hard ban.
+- **Every expensive action gets a price tag - set by you.** You say what an export or a heavy search costs; each account gets a budget, and a whole team can share one cap that is locked in from the moment you declare it.
+- **Teams splitting the work still get spotted.** Accounts that quietly divide up the same job - or all pile onto the same promo - are grouped and flagged together, even when no single account does anything wrong.
+- **Attackers finish far less, far slower.** In our lab test, an unprotected herd finished 80 of 80 jobs in under a second. Protected, it finished 16 of 80 (20%), and every one of its 24 accounts ended up enrolled in extra checks.
+- **Real teams keep working.** A declared team of 6 finished 40 of 40 jobs with zero friction. A similar undeclared team also lost no work and was never hard-blocked - at worst, extra checks and a slower pace.
+- **Ordinary users feel nothing.** 8 regular users in the same test: 48 of 48 actions succeeded on the first try, zero consequences.
+- **Traps for actions, not just pages.** You can register a fake promo or export slice that no real user ever sees. Whoever touches it marks only themselves - bystanders stay completely clean.
+- **Honest limits.** This taxes and slows feature abuse; it cannot make it impossible when signups are free and unlimited. And it says nothing about bugs in your own business logic - wrong prices, inventory races, broken permissions are code bugs, not something a meter can fix.
 
-Full technical write-up with every mechanism and measurement: [v2.5.0 deep dive](docs/v2.5.0-deep-dive.md).
+Full technical write-up with every mechanism and measurement: [v2.6.0 deep dive](docs/v2.6.0-deep-dive.md).
 
 ## Browser benchmark harness
 
@@ -75,6 +76,9 @@ The goal of this project is to help app owners implement **effective measures wi
 | Shared cohort ceiling (declared cohort + ceiling-tier manifest) | Does the lawful hard-ceiling path work end-to-end? (v2.5.0 classic round; declared ceiling 600 records) | Armed at declaration and re-tested: the declared cohort's union stopped at **exactly 600 distinct records** in both runs (the crossing-gated first attempt overshot to 2,700), every one of the 18 declared walkers blocked, **710-714 ceiling refusals** per run and 0 records served past the cap, controls in the same instance unaffected (compliance 1,200/1,200, zero friction). Declared cohorts without a ceiling-tier manifest arm nothing; inferred cohorts keep the crossing-gated path; see [Limitations](docs/LIMITATIONS.md) |
 | Full stack vs. adaptive attacker | Attacker deliberately spreads work across 18 identities and dilutes its pattern (v2.5.0 classic round) | Extraction still completed via rotation - but phase 1 (18 identities) was held to **78%** after ~18 minutes of step-up friction, session expiries and soft budget step-downs, every phase-1 identity inside the flagged/consequenced set, and finishing took **25 identities and ~19 minutes** overall. The ID-walk crew's phase 1 was held to **90.0%** - exactly 500 records per walker, the soft floor for inferred cohorts - with all 18 walkers capped and 324 phase-1 session interrupts (before this round: 91.0%, 224 interrupts, 2 walkers over the floor). Rotation remains the stack's main known limit; see [Limitations](docs/LIMITATIONS.md) |
 | Legitimate users | Declared compliance team, undeclared systematic review, polite users, shared-IP (NAT) cohorts (v2.5.0 classic round, re-measured) | Declared (protected) compliance: **1,200/1,200 records, zero friction**. Undeclared systematic review: flagged and frictioned (step-up + soft step-down) but **zero data loss - 1,200/1,200 served**. Polite users and NAT groups: **zero consequences** - including polite users who kept browsing mid-session inside a group while it was being flagged (contribution targeting, new in 2.5.0) |
+| Action budget vs. feature-abuse herd (lab) | Scripted herd splitting expensive actions across 24 identities (v2.6.0 feature classic, protected side, lab measurement) | Baseline (no protection): **80/80 operations completed in 241 ms, 0 interrupts**. Protected, after the fix round: **16/80 completed (20.0%)**, max distinct targets per identity held at **500**, and friction coverage measured by enrollment was **24/24** identities (the flag-union counter read 14/24 - attempt-time enrollment stops joiners before they generate the observations that counter counts; both numbers are reported in the deep dive). Attacker economics in the same round: 220 attempts, 108 interrupts, 96 HTTP 429 rate-limit responses, wall clock 480,445 ms (driver cap reached) |
+| Feature-side legitimate users (lab) | Declared team, undeclared teams, ordinary users under the action layer (v2.6.0 feature classic, protected side, lab measurement) | Declared team of 6: **40/40 operations, 0 friction, 0 enrolled**. Undeclared team of 6: **40/40, 0 work lost, no hard denial**. Undeclared team of 8: at the 15-minute mark **20/40 completed** over 3,205 attempts with 3,185 friction events - all at the step-up + soft-floor tier, **0 hard denials**; work is never refused outright, it flows at the published capped rate. Ordinary users (8): **48/48 first-attempt successes, 0 consequences** |
+| Canary actions (lab) | Registered fake action targets (a promo / export slice no real UI emits) touched by an attacker identity (v2.6.0 feature classic, protected side, lab measurement) | Touching the canary target (slice 40) tainted only the toucher, linked it into the flagged group via `taintedMembers`, and enrolled it in step-up on direct evidence; the bystander in the same cell measured **0 taint, 0 enrollments, 0 overrides**. Round 1 of this cell failed its bystander sub-check on raw-cost materiality; the fix round's contribution-based materiality passed all four sub-checks - see the deep dive |
 
 **What this adds up to.** The stack removes the casual one-shot clone, and turns bulk extraction into an identity problem: every additional slice of the dataset costs another account and more visibility. It does not stop a determined, well-resourced rebuilder, and the real price of an identity (signup friction, verified accounts, payment) is set by you, the host - which is why budgets are enforced per identity and why herd flags distinguish "cut the budget" from "step up scrutiny" instead of firing one blunt response.
 
@@ -102,7 +106,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **277 automated tests** (275 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **298 automated tests** (296 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 

@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![độ phủ dòng của dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-275%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-296%20passing-informational)](tests/)
 
 antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
@@ -30,18 +30,19 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.5.0
+## Mới trong v2.6.0
 
-Nói ngắn gọn: antiRea nay bắt tốt hơn hẳn các *nhóm* tài khoản chia nhau việc cào dữ liệu, và cẩn thận hơn nhiều về việc ai thật sự phải chịu ma sát. Người dùng bình thường không thấy gì khác. Kẻ tấn công cần nhiều tài khoản hơn, nhiều thời gian hơn - và vẫn bị gắn cờ.
+Nói ngắn gọn: trước đây antiRea đo *dữ liệu* rời khỏi ứng dụng của bạn. Nay nó đo thêm cả *hành động* - export, tìm kiếm nặng, nhận khuyến mãi - nên một đám tài khoản không còn rút cạn một tính năng đắt tiền chỉ bằng cách mỗi tài khoản lặng lẽ nằm dưới giới hạn của riêng mình. Người dùng bình thường không thấy gì khác.
 
-- **Bắt cả nhóm, không chỉ vài tài khoản đầu.** Khi 18 tài khoản mỗi tài khoản lấy một lát nhỏ, nay cả 18 đều bị gắn cờ (bản trước bắt được 8). Và chạy được ở quy mô thật: gom 1.000 tài khoản chỉ mất khoảng 2 giây.
-- **Đổi tài khoản không còn reset được đồng hồ.** Trang có thể mang một id "echo" ẩn có chữ ký. Tài khoản mới mà xuất hiện với id của tài khoản cũ thì hai tài khoản bị nối lại ngay tại chỗ, lịch sử gộp làm một.
-- **Một trần chung cho cả nhóm.** Các tài khoản đã nối nhau rút từ một giới hạn chung duy nhất, khóa chính xác. Trong test của chúng tôi, trần 600 bản ghi do host khai báo đã dừng ở đúng 600 - ở cả hai lượt chạy liên tiếp.
-- **Ma sát chỉ rơi vào tài khoản gây ra nó.** Người đứng ngoài trong nhóm bị gắn cờ - người đọc bình thường, đồng nghiệp dùng chung một IP văn phòng - nhận 0 ma sát trong mọi test.
-- **Đội kiểm toán của bạn không bị đụng tới.** Khai báo tài khoản compliance hoặc pentest một lần, họ rà soát mọi thứ mà không chịu hậu quả nào từ bằng chứng tự động.
-- **Phát hiện mạnh hơn, nhãn vẫn trung thực.** Bộ máy bằng chứng nay nhìn thấy hai dạng tấn công trước đây nó mù. Bảng điểm vẫn xuất xưởng với nhãn "chưa hiệu chuẩn": chỉ kích hoạt được ma sát, không bao giờ tự cấm cứng.
+- **Mỗi hành động đắt đều có bảng giá - do bạn đặt.** Bạn nói một lần export hay một lượt tìm kiếm nặng tốn bao nhiêu; mỗi tài khoản có một ngân sách, và cả một đội có thể dùng chung một trần khóa chặt ngay từ lúc bạn khai báo.
+- **Nhóm chia nhau việc vẫn bị lộ.** Các tài khoản lặng lẽ chia nhau cùng một việc - hoặc cùng dồn vào một mã khuyến mãi - bị gom nhóm và gắn cờ cùng nhau, kể cả khi không tài khoản nào tự nó làm gì sai.
+- **Kẻ tấn công làm được ít hơn hẳn, và chậm hơn hẳn.** Trong bài test lab của chúng tôi, một đàn không bị bảo vệ làm xong 80/80 việc trong chưa tới một giây. Khi có bảo vệ, nó chỉ xong 16/80 (20%), và cả 24 tài khoản của nó đều bị đưa vào diện kiểm tra thêm.
+- **Đội thật vẫn làm việc bình thường.** Một đội 6 người đã khai báo làm xong 40/40 việc, 0 ma sát. Một đội tương tự chưa khai báo cũng không mất việc nào và không bao giờ bị chặn cứng - tệ nhất chỉ là thêm bước kiểm tra và tốc độ chậm lại.
+- **Người dùng thường không cảm thấy gì.** 8 người dùng thường trong cùng bài test: 48/48 hành động thành công ngay lần đầu, 0 hậu quả.
+- **Bẫy cho hành động, không chỉ cho trang web.** Bạn có thể đăng ký một mã khuyến mãi giả hoặc một lát export giả mà người dùng thật không bao giờ thấy. Ai chạm vào thì chỉ tự đánh dấu chính mình - người đứng ngoài hoàn toàn sạch.
+- **Giới hạn nói thẳng.** Lớp này đánh thuế và làm chậm việc lạm dụng tính năng; nó không thể khiến việc đó thành không thể khi đăng ký vẫn miễn phí và không giới hạn. Và nó không nói gì về lỗi trong logic nghiệp vụ của chính bạn - tính sai giá, đua nhau trừ kho, phân quyền hỏng là lỗi code, không phải thứ một công cụ đo đếm sửa được.
 
-Bản kỹ thuật đầy đủ với mọi cơ chế và số đo: [Tìm hiểu sâu v2.5.0](docs/v2.5.0-deep-dive.vi.md).
+Bản kỹ thuật đầy đủ với mọi cơ chế và số đo: [Tìm hiểu sâu v2.6.0](docs/v2.6.0-deep-dive.vi.md).
 
 ## Bộ khung benchmark trình duyệt
 
@@ -75,6 +76,9 @@ Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển
 | Trần cohort dùng chung (cohort khai báo + manifest tier ceiling) | Đường trần cứng hợp lệ có chạy đầu-cuối được không? (vòng kinh điển v2.5.0; trần khai báo 600 bản ghi) | Đã armed từ lúc khai báo và test lại: union của cohort khai báo dừng ở **đúng 600 bản ghi phân biệt** trong cả hai lượt chạy (lượt đầu engage sau crossing vọt lên 2.700), toàn bộ 18 walker khai báo bị khóa, **710-714 lần từ chối vì trần** mỗi lượt và 0 bản ghi được phục vụ quá trần, controls trong cùng instance không bị ảnh hưởng (compliance 1.200/1.200, 0 ma sát). Cohort khai báo không có manifest tier ceiling thì không armed gì cả; cohort suy luận giữ nguyên đường engage sau crossing; xem [Giới hạn](docs/LIMITATIONS.md) |
 | Toàn bộ stack đấu với kẻ tấn công thích ứng | Kẻ tấn công cố ý rải việc qua 18 danh tính và pha loãng hành vi (vòng kinh điển v2.5.0) | Vẫn trích xuất xong nhờ luân phiên - nhưng phase 1 (18 danh tính) bị giữ ở **78%** sau ~18 phút chịu ma sát step-up, hết hạn phiên và hạ trần mềm, mọi danh tính phase 1 đều nằm trong tập bị flag/hậu quả, và để lấy trọn bộ phải tốn **25 danh tính và ~19 phút**. Phase 1 của nhóm ID-walk bị giữ ở **90,0%** - đúng 500 bản ghi cho mỗi walker, sàn mềm của cohort suy luận - với toàn bộ 18 walker bị cap và 324 lần ngắt phiên trong phase 1 (vòng trước: 91,0%, 224 lần ngắt, 2 walker vượt sàn). Luân phiên vẫn là lối thoát cấu trúc chính của stack; xem [Giới hạn](docs/LIMITATIONS.md) |
 | Người dùng hợp lệ | Đội compliance đã khai báo, đội rà soát hệ thống chưa khai báo, người dùng lịch sự, nhóm dùng chung IP (NAT) (vòng kinh điển v2.5.0, đo lại) | Compliance đã khai báo (được bảo vệ): **1.200/1.200 bản ghi, 0 ma sát**. Rà soát hệ thống chưa khai báo: bị gắn cờ và chịu ma sát (step-up + hạ trần mềm) nhưng **0 mất dữ liệu - phục vụ đủ 1.200/1.200**. Người dùng lịch sự và nhóm NAT: **0 hậu quả** - kể cả người dùng lịch sự vẫn lướt giữa phiên bên trong một nhóm đang bị gắn cờ (targeting theo đóng góp, mới trong 2.5.0) |
+| Ngân sách hành động đấu với đàn lạm dụng tính năng (lab) | Đàn chạy script chia các hành động đắt qua 24 danh tính (vòng kinh điển vế tính năng v2.6.0, phía protected, số đo lab) | Baseline (không bảo vệ): **80/80 thao tác hoàn thành trong 241 ms, 0 lần ngắt**. Khi có bảo vệ, sau vòng fix: **16/80 hoàn thành (20,0%)**, số đích phân biệt tối đa mỗi danh tính bị giữ ở **500**, và độ phủ ma sát đo bằng enrollment là **24/24** danh tính (bộ đếm flag union đọc được 14/24 - cơ chế enroll ngay tại attempt chặn thành viên gia nhập trước khi chúng sinh ra observation mà bộ đếm đó đếm; cả hai con số đều được báo cáo trong bản tìm hiểu sâu). Kinh tế kẻ tấn công cùng vòng: 220 lượt thử, 108 lần ngắt, 96 lần HTTP 429 rate-limit, thời gian thực 480.445 ms (chạm trần của driver) |
+| Người dùng hợp lệ ở vế tính năng (lab) | Đội đã khai báo, đội chưa khai báo, người dùng thường dưới lớp hành động (vòng kinh điển vế tính năng v2.6.0, phía protected, số đo lab) | Đội 6 người đã khai báo: **40/40 thao tác, 0 ma sát, 0 enrollment**. Đội 6 người chưa khai báo: **40/40, 0 việc bị mất, không bị từ chối cứng**. Đội 8 người chưa khai báo: tại mốc 15 phút **20/40 hoàn thành** qua 3.205 lượt thử với 3.185 sự kiện ma sát - tất cả ở bậc step-up + sàn mềm, **0 lần từ chối cứng**; việc không bao giờ bị từ chối thẳng, nó chỉ chảy ở tốc độ bị chặn trên đã công bố. Người dùng thường (8 người): **48/48 thành công ngay lần đầu, 0 hậu quả** |
+| Canary actions (lab) | Đích hành động giả đã đăng ký (một mã khuyến mãi / lát export mà UI thật không bao giờ phát ra) bị một danh tính tấn công chạm vào (vòng kinh điển vế tính năng v2.6.0, phía protected, số đo lab) | Chạm vào đích canary (lát 40) chỉ làm taint đúng kẻ chạm, nối nó vào nhóm bị gắn cờ qua `taintedMembers`, và enroll nó vào step-up bằng bằng chứng trực tiếp; người đứng ngoài trong cùng ô đo được **0 taint, 0 enrollment, 0 override**. Vòng 1 của ô này trượt tiểu mục kiểm tra người đứng ngoài vì materiality theo cost thô; vòng fix với materiality theo đóng góp đã đạt cả bốn tiểu mục - xem bản tìm hiểu sâu |
 
 **Tổng kết lại.** Stack này loại bỏ kiểu clone một-phát-xong ở tầng casual, và biến trích xuất hàng loạt thành bài toán danh tính: mỗi lát dữ liệu thêm tốn thêm một tài khoản và thêm dấu vết. Nó không chặn được người tái dựng quyết tâm và có nguồn lực, và cái giá thật của một danh tính (ma sát đăng ký, tài khoản đã xác minh, thanh toán) là do bạn, phía host, đặt ra - đó là lý do ngân sách được ép theo danh tính và cờ bầy đàn phân biệt "cắt ngân sách" với "tăng mức soi" thay vì dùng một phản ứng cùn cho mọi trường hợp.
 
@@ -102,7 +106,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **277 kiểm thử tự động** (275 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
+`npm run check` gồm biên dịch, **298 kiểm thử tự động** (296 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
 ### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 
