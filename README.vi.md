@@ -36,6 +36,17 @@ Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/anti
 - **Phát hiện bầy đàn:** `createHerdDetector()` theo dõi nhiều danh tính cùng lúc và gắn cờ các nhóm đang cùng nhau lát kín bộ dữ liệu, kể cả khác IP; `applyHerdLadder()` cắt ngân sách của nhóm bị gắn cờ. Các lớp tín hiệu cũng lớn thêm: mê cung canary xác định (`createCanaryMaze()`) và route mồi (`createDecoyMirage()`).
 - **Kế thừa từ v2.2:** kiểm chứng chữ ký Web Bot Auth (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) và bản port quota guard Python/FastAPI tại [examples/python-fastapi](examples/python-fastapi).
 
+## Mới trong v2.4: Bộ máy bằng chứng, Sổ giao dịch & Thi hành phân tầng
+
+v2.4 hiện thực hóa thiết kế hợp đồng SDK từ một phiên rà soát đối kháng qua đêm (bản tổng hợp đầy đủ nằm trong ghi chú nghiên cứu): các primitive bằng chứng, một bộ máy bằng chứng tuần tự, một sổ disclosure chính xác với trần campaign dùng chung, và cursor trói vào store - tất cả bị ràng bởi một luật, **không thi hành khi không có giao dịch, và không hậu quả cứng chỉ từ bằng chứng suy luận - nhưng ma sát thì bật mặc định.**
+
+- **Sổ disclosure giao dịch:** `createDisclosureLedger()` thi hành một trần *dùng chung* cho cả cohort (các danh tính liên kết rút từ một hợp chính xác duy nhất của các bản ghi đã phục vụ, dù chúng luân phiên thế nào) qua `reserveDisclosure()`, điểm thi hành nguyên tử duy nhất. Hợp đồng store trung thực về sức mạnh của chính nó: store cài được `transactLedger()` (CAS trên `ledgerVersion`, bao trùm bitmap hợp, các reservation, trần, bucket và bằng chứng trong một giao dịch) nhận `mode: "enforce"`; store chỉ có get/put nhận `mode: "audit_only"` và mọi quyết định mang `enforced: false` - SDK không bao giờ tuyên bố một trần mà store đua nhau (race) không giữ nổi. Reservation có giới hạn (TTL 60 giây, tối đa 2 reservation đang mở và 500 bản ghi được reserve mỗi subject theo mặc định, cap cohort tùy chọn, đường reservation dài riêng do host ủy quyền cho export chậm), và registry cohort đã khai báo thì fail-closed với subject chưa đăng ký, vì phòng lab đã đo registry thiếu một phần làm campaign guard thoái hóa lặng lẽ thành bảo vệ theo từng thành viên. Một conformance test đi kèm chứng minh các reservation song song trên store async chậm không bao giờ cộng lại vượt trần.
+- **Bằng chứng tuần tự (CUSUM tripwire):** `createCusumTripwire()` hợp nhất bốn stream - kề predicate, lát rời rạc trên tập chính xác, fetch ID lạnh, vận tốc cursor - vào một bộ tích lũy mixture GLR-CUSUM một phía cho mỗi cohort (sàn 0, ngưỡng `ln(1/alpha)`), thay cho các ngưỡng cố định độc lập mà kẻ tấn công có thể ngồi dưới mức 85% của từng ngưỡng. Stream lát loại trừ các bản ghi đã được predicate kề giải thích, nên các stream tương quan không bị đếm trùng. **Mặc định trung thực:** bảng đi kèm `r6-calib-1` được fit trên trace script trong lab (N_eff = 189) và xuất xưởng với nhãn `uncalibrated: true` cùng ghi chú "uncalibrated - audit only"; bộ máy mặc định ở mode `enforce`, nhưng CHỈ ở bậc step-up - một crossing đủ điều kiện sẽ enroll ma sát step-up và pacing theo cohort, và không hậu quả nào cứng hơn engage được trên bảng này. Vì bảng chưa hiệu chuẩn, mặc định chỉ tuyên bố ma sát trên bằng chứng script mạnh, không bao giờ tuyên bố tỷ lệ phát hiện; `mode: "observe"` vẫn còn cho triển khai chỉ cần telemetry. Crossing là telemetry ở mọi quy mô, nhưng hậu quả đòi hỏi quy mô tuyệt đối: dưới sàn hậu quả mặc định 150 bản ghi union chính xác (hằng số cổng đánh giá của stream lát, host chỉnh qua `consequences.minUnionRecords`), một crossing không enroll ai vào step-up và không pacing gì - snapshot đánh dấu `consequenceEligible: false`.
+- **Luật phân tầng, viết thành code:** `clampEnforcement()` cap các cohort *suy luận* từ hành vi ở **bậc ma sát**: step-up cộng hạ trần mềm - được hạ ngân sách của một thành viên nhưng không bao giờ xuống dưới 500 bản ghi phân biệt (`SOFT_BUDGET_FLOOR_RECORDS` - suy ra từ bound reservation theo subject của sổ; `softBudgetStepDown()` cho một yêu cầu cắt về 0 hạ cánh đúng trên sàn đó). Ma sát là mặc định: `defaultHerdBandResponse()` map cả hai band của herd sang bậc này cho cohort suy luận, và CUSUM tripwire xuất xưởng ở mode `enforce`. Trần cứng đòi hỏi cohort do host khai báo hoặc một calibration manifest ở tier cao nhất (`evaluateCalibrationManifest()` - phiên bản model, cỡ mẫu, FP/FN trên holdout, phương pháp, người xác nhận, hạn hiệu lực; không có cờ boolean "đã hiệu chuẩn"). Band `graduated_only` của herd detector mang giá 0 theo cấu trúc, và `validateHerdResponseConfig()` từ chối các cấu hình gắn giá vào band đó - prototype trong lab gắn giá vào band này (kèm hệ số fetch lạnh chồng lên override) đã cắt cứng một đội compliance giả lập ở 46% công việc hợp lệ của họ, và lỗi wiring đó giờ là lỗi lúc khởi động thay vì một vết cắt lặng lẽ.
+- **Cohort được bảo vệ:** hình dạng dương tính giả đã đo được - một đội nhỏ rà soát hệ thống toàn bộ một phân đoạn - ngoài đời hiếm và, trong tổ chức thật, là một hoạt động *được khai báo* (audit có lịch, pentest chạy theo quy tắc giao ước). Nên thay vì làm yếu phát hiện cho mọi người, hãy khai báo họ: `createProtectedCohortRegistry()` ghi lại các subject compliance/audit/support/pentest (kèm lý do và hạn hết tùy chọn), và subject được bảo vệ vẫn tích lũy telemetry đầy đủ trong khi nhận **0** hậu quả từ bằng chứng suy luận - không step-up, không hạ trần, không pacing. Bảo vệ không bao giờ che hậu quả do chính host ủy quyền, cũng không che bằng chứng trực tiếp theo subject (một cú chạm decoy do chính subject được bảo vệ thực hiện vẫn làm nó bị taint).
+- **Cursor V2:** `mintCursorV2()` / `verifyCursorV2()` trói phân trang vào trạng thái authority phía server: payload chỉ mang vị trí, binding subject/cohort/scope, sequence của chuỗi và `ledgerVersion` - không bao giờ mang LLR hay trạng thái bằng chứng - và khi có xung đột **store thắng**: version cũ hoặc tương lai và sequence lệch đều bị từ chối, không bao giờ được nâng cấp lặng lẽ. Cursor V1 không thay đổi.
+- **Ghi công bằng chứng & hook reviewer:** `createEvidenceAttributor()` chỉ ghi bằng chứng cho subject đang hành động; đóng góp xuyên subject cần quan hệ do host khai báo và bị cap kèm decay, liên kết suy luận chỉ được quan sát, liên kết không rõ bị cách ly vào audit. `createReviewerChannel()` là ý defender-agent cắt về lát an toàn duy nhất của nó: một reviewer phía host (model rẻ, luật, hàng đợi người) nhận các bundle tổng hợp có giới hạn và có thể trả về đề xuất *tư vấn* đã qua kiểm tra schema từ một bộ hành động cố định - nó không có ngân sách, không có quyền deny, và output của nó không bao giờ chảy ngược vào luồng bằng chứng (làm vậy là đếm cùng quan sát hai lần; một test chứng minh tính một chiều này trước một tripwire đang sống).
+
 ## Bộ khung benchmark trình duyệt
 
 Repo kèm một bộ khung Playwright chạy SaaS giả lập (**Northstar**: dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ) ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)** trên Chromium, Firefox và WebKit - bản tái lập được ngay trong repo, đi cùng mục kết quả đã đo ở dưới.
@@ -218,6 +229,54 @@ herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordId
 ```
 
 Dùng cùng một chuỗi danh tính (`account:<id>`) ở cả hai nơi, để cờ bầy đàn đưa thẳng vào `applyHerdLadder()` hoặc cơ chế ghi đè ngân sách.
+
+### 8. Trần dùng chung & Bằng chứng (v2.4)
+
+Với cohort, ngân sách theo danh tính bị pha loãng khi luân phiên; trần dùng chung thì không - nhưng chỉ khi reservation là giao dịch thật. Khai báo cohort, reserve trước khi phục vụ, commit sau:
+
+```ts
+import {
+  createDisclosureLedger, createInMemoryTransactionalStore,
+  createCusumTripwire, clampEnforcement,
+  createProtectedCohortRegistry, defaultHerdBandResponse,
+} from "@dannyphan190/anti-rea";
+
+const ledger = createDisclosureLedger({
+  store: createInMemoryTransactionalStore(), // store có CAS => mode "enforce"
+  ceilingLimit: 2_000,                        // dùng chung cho cả cohort
+});
+await ledger.declareRegistry(memberIds);      // subject chưa đăng ký bị fail-closed
+
+const reservation = await ledger.reserveDisclosure({ subject: "account:123", recordIds: idsToServe });
+if (!reservation.allowed) { /* 429: ceiling_exceeded | rate_limited | ... */ }
+// ... phục vụ ...
+await ledger.commitReservation(reservation.reservationId);
+
+// Khai báo các subject mà suy luận không bao giờ được áp hậu quả:
+// đội rà soát compliance, bộ phận support, một cửa sổ pentest đã
+// thỏa thuận. Telemetry của họ vẫn tích lũy - chỉ hậu quả bị chặn -
+// và bản khai báo là một hồ sơ kiểm toán được.
+const protectedCohorts = createProtectedCohortRegistry();
+protectedCohorts.declareProtected(["account:auditor-1", "account:auditor-2"], {
+  reason: "Q3 compliance review",
+});
+
+// Bằng chứng tích lũy riêng. Mode mặc định của tripwire là enforce,
+// nhưng với bảng chưa hiệu chuẩn đi kèm, hậu quả lên cohort suy
+// luận bị cap ở bậc ma sát (step-up, cộng hạ trần mềm không bao giờ
+// xuống dưới 500 bản ghi). Hậu quả cứng hơn cần cohort do host khai
+// báo hoặc calibration manifest ở tier ceiling - clampEnforcement()
+// là điểm kiểm tra.
+const tripwire = createCusumTripwire({ isProtected: id => protectedCohorts.isProtected(id) });
+await tripwire.observe({ type: "list", identity: "account:123", recordIds: idsToServe });
+
+// Flag của herd nhận cùng một mặc định: với cohort suy luận,
+// defaultHerdBandResponse() trả về ma sát (stepUp: true,
+// budgetStepDownFloorRecords: 500, ladder: false) trên cả hai band -
+// hãy partition các thành viên qua registry trước khi áp dụng.
+```
+
+Với store chỉ có get/put, sổ báo `mode: "audit_only"` và `enforced: false` trên mọi quyết định - đo trước, thi hành khi store của bạn giao dịch thật được. Ngữ nghĩa đầy đủ và giới hạn: [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 ## Đóng góp / An ninh / Giới hạn
 

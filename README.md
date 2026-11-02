@@ -36,6 +36,17 @@ You can also install via [GitHub Release](https://github.com/dankezo/antiRea/rel
 - **Herd detection:** `createHerdDetector()` watches many identities at once and flags groups that jointly tile your dataset, even across different IPs; `applyHerdLadder()` cuts a flagged group's budgets. Signal layers grew too: a deterministic canary maze (`createCanaryMaze()`) and decoy routes (`createDecoyMirage()`).
 - **Carried over from v2.2:** Web Bot Auth signature verification (`createWebBotAuthVerifier()`, RFC 9421 / Ed25519) and the Python/FastAPI quota-guard port in [examples/python-fastapi](examples/python-fastapi).
 
+## New in v2.4: Evidence Engine, Transactional Ledger & Tiered Enforcement
+
+v2.4 productizes the SDK-contract design from an overnight adversarial review (the full synthesis lives in the study notes): evidence primitives, a sequential evidence engine, an exact disclosure ledger with a shared campaign ceiling, and store-bound cursors - all held to one rule, **no enforcement without a transaction, and no hard consequence on inferred evidence alone - friction, however, is on by default.**
+
+- **Transactional disclosure ledger:** `createDisclosureLedger()` enforces a *shared* ceiling over a whole cohort (linked identities draw from one exact union of served records, however they rotate) through `reserveDisclosure()`, the single atomic enforcement point. The store contract is honest about its own strength: a store implementing `transactLedger()` (CAS on `ledgerVersion`, covering the union bitmap, reservations, ceiling, bucket and evidence in one transaction) gets `mode: "enforce"`; a get/put-only store gets `mode: "audit_only"` and decisions carry `enforced: false` - the SDK never claims a ceiling a racy store cannot hold. Reservations are bounded (60s TTL, at most 2 outstanding and 500 reserved records per subject by default, optional cohort cap, a separate host-authorized long-reservation path for slow exports), and a declared cohort registry fails closed for unregistered subjects, because the lab measured a partial registry silently degrading a campaign guard to per-member protection. A shipped conformance test proves parallel reservations against a slow async store never jointly overspend the ceiling.
+- **Sequential evidence (CUSUM tripwire):** `createCusumTripwire()` fuses four streams - predicate adjacency, exact-set disjoint tiling, cold-ID misses, cursor velocity - into one one-sided mixture GLR-CUSUM accumulator per cohort (zero floor, boundary `ln(1/alpha)`), replacing independent fixed thresholds that an attacker can sit under at 85% each. Tiling excludes records already explained by adjacency predicates, so correlated streams are not double-counted. **Honest default:** the bundled `r6-calib-1` tables were fitted on scripted lab traces (N_eff = 189) and ship labeled `uncalibrated: true` with the notice "uncalibrated - audit only"; the engine defaults to `enforce` mode, but ONLY at the step-up tier - an eligible crossing enrolls step-up friction and cohort pacing, and nothing harder can engage on these tables. Because the tables are uncalibrated, the default claims friction on strong scripted evidence, never detection rates; `mode: "observe"` remains available for telemetry-only deployments. Crossings are telemetry at any scale, but consequences require absolute scale: below a consequence floor of 150 exact union records by default (the tiling stream's evaluation-gate constant, host-configurable via `consequences.minUnionRecords`), a crossing enrolls nobody into step-up and paces nothing - snapshots mark it `consequenceEligible: false`.
+- **The tiering law, in code:** `clampEnforcement()` caps cohorts *inferred* from behavior at the **friction tier**: step-up plus a soft budget step-down that may lower a member's budget but never below 500 distinct records (`SOFT_BUDGET_FLOOR_RECORDS` - derived from the ledger's per-subject reservation bound; `softBudgetStepDown()` lands a demand to cut to zero exactly on that floor). Friction is the default: `defaultHerdBandResponse()` maps both herd bands to it for inferred cohorts, and the CUSUM tripwire ships in `enforce` mode. A hard ceiling requires a host-declared cohort or a calibration manifest at the top tier (`evaluateCalibrationManifest()` - model version, sample sizes, held-out FP/FN, method, attester, expiry; no boolean "calibrated" flag). The herd detector's `graduated_only` band carries zero price by construction, and `validateHerdResponseConfig()` rejects configurations that attach one - the lab prototype that priced that band (with a cold-fetch multiplier stacked on the override) hard-cut a simulated compliance team at 46% of its legitimate work, and that wiring mistake is now a startup error instead of a silent cut.
+- **Protected cohorts:** the measured false-positive shape - a small team systematically reviewing a full segment - is rare in practice and, in real organizations, a *declared* activity (audits are scheduled, pentests run under rules of engagement). So instead of weakening detection for everyone, declare them: `createProtectedCohortRegistry()` records the compliance/audit/support/pentest subjects (with reason and optional expiry), and protected subjects accrue full telemetry while receiving **zero** consequences from inferred evidence - no step-up, no budget step-down, no pacing. Protection never covers consequences the host itself authorized, nor direct per-subject evidence (a protected subject's own decoy hit still taints it).
+- **Cursor V2:** `mintCursorV2()` / `verifyCursorV2()` bind pagination to server-side authority: the payload carries only position, subject/cohort/scope binding, chain sequence and `ledgerVersion` - never LLR or evidence state - and on any conflict **the store wins**: stale or future versions and sequence mismatches are rejected, never silently upgraded. V1 cursors are unchanged.
+- **Attribution & reviewer hook:** `createEvidenceAttributor()` credits evidence to the acting subject only; cross-subject contribution needs a host-declared relationship and is capped and decayed, inferred links are observation-only, unknown links are quarantined to audit. `createReviewerChannel()` is the defender-agent idea reduced to its safe slice: a host-side reviewer (cheap model, rules, human queue) receives bounded aggregate bundles and may return schema-validated *advisory* proposals from a fixed vocabulary - it has no budget, no deny, and its output can never flow back into the evidence stream (that would count the same observations twice; a test proves the one-way property against a live tripwire).
+
 ## Browser benchmark harness
 
 The repo ships a Playwright harness that runs a synthetic SaaS (**Northstar**: dashboard, customer search, lead creation, CSV export, chart views) in **baseline (`:4173`)** and **protected (`:4174`)** modes across Chromium, Firefox and WebKit - the reproducible in-repo companion to the measured results below.
@@ -223,6 +234,54 @@ herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordId
 ```
 
 Use the same identity string (`account:<id>`) in both, so a herd flag can be fed straight into `applyHerdLadder()` or a budget override.
+
+### 8. Shared Ceilings & Evidence (v2.4)
+
+For cohorts, per-identity budgets dilute by rotation; a shared ceiling does not - but only if reservation is transactional. Declare the cohort, reserve before serving, commit after:
+
+```ts
+import {
+  createDisclosureLedger, createInMemoryTransactionalStore,
+  createCusumTripwire, clampEnforcement,
+  createProtectedCohortRegistry, defaultHerdBandResponse,
+} from "@dannyphan190/anti-rea";
+
+const ledger = createDisclosureLedger({
+  store: createInMemoryTransactionalStore(), // CAS store => mode "enforce"
+  ceilingLimit: 2_000,                        // shared across the whole cohort
+});
+await ledger.declareRegistry(memberIds);      // unregistered subjects fail closed
+
+const reservation = await ledger.reserveDisclosure({ subject: "account:123", recordIds: idsToServe });
+if (!reservation.allowed) { /* 429: ceiling_exceeded | rate_limited | ... */ }
+// ... serve ...
+await ledger.commitReservation(reservation.reservationId);
+
+// Declare the subjects inference must never consequence: the
+// compliance team's reviewers, the support floor, an agreed pentest
+// window. Their telemetry still accrues - only consequences are
+// suppressed - and the declaration is an auditable record.
+const protectedCohorts = createProtectedCohortRegistry();
+protectedCohorts.declareProtected(["account:auditor-1", "account:auditor-2"], {
+  reason: "Q3 compliance review",
+});
+
+// Evidence accumulates separately. The tripwire's default mode is
+// enforce, but with the bundled uncalibrated tables an inferred
+// cohort's consequence is capped at the friction tier (step-up, plus
+// a soft budget step-down that never goes below 500 records).
+// Anything harder needs a host-declared cohort or a ceiling-tier
+// calibration manifest - clampEnforcement() is the check.
+const tripwire = createCusumTripwire({ isProtected: id => protectedCohorts.isProtected(id) });
+await tripwire.observe({ type: "list", identity: "account:123", recordIds: idsToServe });
+
+// Herd flags get the same default: for an inferred cohort,
+// defaultHerdBandResponse() returns friction (stepUp: true,
+// budgetStepDownFloorRecords: 500, ladder: false) on both bands -
+// partition the members through the registry before applying it.
+```
+
+With a get/put-only store the ledger reports `mode: "audit_only"` and `enforced: false` on every decision - measure first, enforce when your store can actually transact. Full semantics and limits: [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 ## Why not "block CDP" or inject malicious prompts?
 
