@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist 代码行覆盖率](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
 
 antiRea 帮助您审计网站暴露了什么、在服务器端执行速率/分页配额、把关键逻辑移到服务器，并在适当时应用金丝雀或水印控制。它**不能**阻止用户或智能体检查已交付到其浏览器的代码。
 
@@ -30,15 +30,16 @@ npm install @dannyphan190/anti-rea
 
 您也可以通过 [GitHub Release](https://github.com/dankezo/antiRea/releases) 安装。
 
-## v2.6.1 新功能
+## v2.6.2 新功能
 
-一个小型补丁版本：对 v2.6.0 的一次独立安全审计发现了 3 个 bug，现已全部修复。对普通用户来说，antiRea 的工作方式没有任何变化 - 没有升级步骤，也没有新设置。
+一个关于时钟的小型补丁版本。antiRea 的时间窗口以前是用服务器的挂钟计量的 - 而挂钟会在机器同步时间或管理员改动时间时跳变。这类跳变曾经能扭曲您的限额。现在不能了。其他一切不变：没有升级步骤，也没有新设置。
 
-- **借用别人的"收据编号"不再有效。** 每次预留都有一个幂等键 - 可以把它理解为"我已经为这部分付过款"的收据编号。此前，任何人只要知道了另一个账号的收据编号，就能冒充自己的编号出示，并从那个账号的预算中支取。现在，两个账本都会把收据与它最初签发的内容核对；不匹配就会被拒绝，而旧版本写入的、没有新指纹的预留，会在它剩余的几分钟有效期内安全地失败关闭。
-- **损坏的数据库再也不会让您的应用崩溃。** 当账本背后的存储损坏或返回垃圾数据时，SDK 以前会把原始异常直接抛进您的请求处理流程 - 在审计的实机测试中，一个死掉的存储在第一个请求就让宿主进程崩溃。现在 SDK 会改为给出一个干净的拒绝（类似 HTTP 429 "store unavailable" 的决定），您的进程保持存活。
-- **巨大的记录 ID 重新变得廉价。** 账本以前保存的是一张"每个可能 ID 一个格子"的清单，因此仅一条 ID 为 100,000,000 的记录就能把保存的状态撑到 16.7 MB。现在它使用稀疏清单，只随您实际拥有的记录数量增长：同样的情况只需 3 毫秒和 1,745 字节状态（此前为 1,439 毫秒），并且旧版本保存的状态仍然可以读取。
+- **时钟向前跳变不再发放双倍预算。** 如果服务器时钟向前跳 5 分钟，一个已经用完的 60 秒窗口看起来会像"已过期"，于是单个账号能在 10 秒真实时间内取走 200 条记录 - 是其预算的两倍。此数据为上一版本在实验室中的实测；现在窗口只计算真实流逝的时间，多出的批次会被拒绝。
+- **时钟向后跳变不再误锁正常用户。** 反方向的同一跳变会让一个已经结束的窗口多"关闭" 5 分钟，无缘无故地拦住普通用户。现在窗口按时结束。
+- **真正的截止时间仍使用真实时钟。** 在固定时间过期的签名链接、每日上限和日历规则都和以前完全一样 - 改变的只有秒表式计时器。
+- **测试套件也随之扩充来证明这一点：** 322 个测试，320 个通过，其中包括把两种时钟跳变重放到包内每个计时器的新测试。
 
-完整技术说明：[v2.6.1 深入解析](docs/v2.6.1-deep-dive.zh.md)。v2.6.0 新增的操作预算层见 [v2.6.0 深入解析](docs/v2.6.0-deep-dive.zh.md) 与更新日志。
+完整技术说明：[v2.6.2 深入解析](docs/v2.6.2-deep-dive.zh.md)。v2.6.1 的三处审计修复见 [v2.6.1 深入解析](docs/v2.6.1-deep-dive.zh.md) 与更新日志。
 
 ## 浏览器基准测试工具
 
@@ -102,7 +103,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` 会编译、运行 **305 个自动化测试**（303 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
+`npm run check` 会编译、运行 **322 个自动化测试**（320 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
 
 ## 如何集成 SDK
 

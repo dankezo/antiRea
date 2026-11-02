@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![độ phủ dòng của dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-303%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-320%20passing-informational)](tests/)
 
 antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
@@ -30,15 +30,16 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.6.1
+## Mới trong v2.6.2
 
-Một bản vá nhỏ: đợt kiểm toán bảo mật độc lập trên bản 2.6.0 tìm ra 3 lỗi, và cả 3 đã được vá. Cách antiRea hoạt động không đổi gì với người dùng bình thường - không cần bước nâng cấp nào, không có cài đặt mới.
+Một bản vá nhỏ về đồng hồ. Các cửa sổ thời gian của antiRea trước đây được đo bằng đồng hồ tường của server - cái đồng hồ có thể nhảy khi máy đồng bộ giờ hoặc khi admin đổi giờ. Những cú nhảy đó từng bẻ cong được các giới hạn của bạn. Nay thì không còn nữa. Ngoài ra không có gì thay đổi: không cần bước nâng cấp nào, không có cài đặt mới.
 
-- **"Số biên lai" mượn của người khác không còn dùng được.** Mỗi lượt giữ chỗ (reservation) có một khóa idempotency - cứ hiểu như số biên lai cho câu "tôi đã trả phần này rồi". Trước đây, ai biết được số biên lai của tài khoản khác cũng có thể trình ra như của mình và tiêu từ ngân sách của tài khoản đó. Nay biên lai được đối chiếu với đúng nội dung nó được cấp lần đầu, ở cả hai sổ cái; lệch là bị từ chối, và các reservation do bản cũ ghi (chưa có dấu vân tay mới) sẽ bị từ chối an toàn trong vài phút TTL còn lại.
-- **Cơ sở dữ liệu hỏng không còn làm sập ứng dụng của bạn.** Khi kho lưu trữ phía sau các sổ cái bị hỏng hoặc trả về dữ liệu rác, SDK trước đây ném lỗi thô thẳng vào luồng xử lý request - trong bài test live của đợt kiểm toán, một store chết đã làm tiến trình host sập ngay ở request đầu tiên. Nay SDK trả lời bằng một từ chối gọn gàng (quyết định kiểu HTTP 429 "store unavailable") và tiến trình của bạn vẫn sống.
-- **Record ID khổng lồ lại rẻ như cũ.** Sổ cái trước đây giữ một bảng đánh dấu có một ô cho mỗi ID có thể có, nên chỉ một record với ID 100.000.000 cũng làm trạng thái lưu phình lên 16,7 MB. Nay nó dùng bảng đánh dấu thưa, chỉ lớn theo số record bạn thật sự có: cùng trường hợp đó chỉ tốn 3 ms và 1.745 byte trạng thái (trước là 1.439 ms), và trạng thái đã lưu từ bản cũ vẫn đọc được.
+- **Đồng hồ nhảy tới không còn phát ra ngân sách gấp đôi.** Nếu giờ server nhảy tới 5 phút, một cửa sổ 60 giây đã dùng hết trông như "đã hết hạn", nên một tài khoản lấy được 200 record trong 10 giây thật - gấp đôi ngân sách của nó. Số này đo trong lab trên bản trước; nay cửa sổ chỉ đếm thời gian thực đã trôi qua và lô thừa bị từ chối.
+- **Đồng hồ nhảy lùi không còn khóa oan người dùng tử tế.** Cú nhảy ngược chiều giữ một cửa sổ đã kết thúc ở trạng thái "đang đóng" thêm 5 phút, chặn người dùng bình thường mà không vì lý do gì. Nay cửa sổ kết thúc đúng lịch.
+- **Hạn chót thật vẫn dùng đồng hồ thật.** Link có chữ ký hết hạn vào một giờ cố định, trần theo ngày và các quy tắc lịch vẫn hoạt động y như trước - chỉ các bộ đếm kiểu đồng hồ bấm giờ là thay đổi.
+- **Bộ test lớn lên để chứng minh điều đó:** 322 test, 320 đạt, gồm các test mới phát lại cả hai cú nhảy giờ lên mọi bộ đếm thời gian trong gói.
 
-Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.6.1](docs/v2.6.1-deep-dive.vi.md). Lớp ngân sách hành động mới trong v2.6.0 được trình bày ở [Tìm hiểu sâu v2.6.0](docs/v2.6.0-deep-dive.vi.md) và changelog.
+Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.6.2](docs/v2.6.2-deep-dive.vi.md). Ba fix kiểm toán trong v2.6.1 được trình bày ở [Tìm hiểu sâu v2.6.1](docs/v2.6.1-deep-dive.vi.md) và changelog.
 
 ## Bộ khung benchmark trình duyệt
 
@@ -102,7 +103,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **305 kiểm thử tự động** (303 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
+`npm run check` gồm biên dịch, **322 kiểm thử tự động** (320 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
 ### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 
