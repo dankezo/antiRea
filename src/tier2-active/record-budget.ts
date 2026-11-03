@@ -31,7 +31,18 @@
  * Storage is bounded three ways. Record ids are stored as fixed-length
  * FNV-1a 64-bit hex keys (16 chars), never as raw id strings, so a hostile
  * 64KB id costs the store 16 chars (a hash collision would merge two ids'
- * states; at 64 bits that is a negligible, accepted trade-off). Identities
+ * states; at 64 bits that is a negligible, accepted trade-off). Hashing
+ * itself is cost-bounded too (F-15 - a NEW fix in this tree, not a port:
+ * still open in 2.6.3): ids up to 1,024 chars are hashed in full, exactly
+ * as before, but a longer id is hashed from a bounded sample - its first
+ * and last 512 chars plus its full length - so one hostile multi-megabyte
+ * id costs the same hashing work as a short one (~1,024 char steps,
+ * independent of its actual length) instead of one BigInt step per char
+ * (a 2,000,000-char id measured ~160-220 ms pre-fix). The trade-off: two
+ * long ids that differ ONLY inside the unsampled middle now share a key;
+ * ids differing in the sampled head/tail or in total length are still
+ * distinguished, and an id always hashes to the same key as itself, so
+ * de-duplication of any single id is exact. Identities
  * are partitioned into two pools - `ip:` keys in a small pool
  * (`maxIpEntries`), account/API-key keys in the main pool (`maxEntries`) -
  * so an IP-churn flood cannot evict account state. And each entry stops
@@ -208,18 +219,47 @@ const DEFAULT_MAX_IP_ENTRIES = 2_000;
 /** How far past its effective limit an entry may keep storing new record keys. */
 const STORAGE_SLACK = 1_024;
 
+/** Ids at or below this length are hashed in full - the pre-F-15 behavior, byte for byte. */
+const HASH_FULL_LENGTH = 1_024;
+/** Chars sampled from each end of a longer id before hashing (F-15). */
+const HASH_SAMPLE_LENGTH = 512;
+
+const fnv1a64Step = (h: bigint, text: string): bigint => {
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (let i = 0; i < text.length; i++) {
+    h ^= BigInt(text.charCodeAt(i));
+    h = (h * prime) & mask;
+  }
+  return h;
+};
+
 /**
  * FNV-1a 64-bit over UTF-16 code units, rendered as 16 hex chars. Storage
  * keys are fixed-length whatever the raw id looks like - see the module
  * header for the collision note.
+ *
+ * F-15 cost bound: the number of hash steps depends only on these
+ * constants, never on the raw id's length. Ids longer than
+ * `HASH_FULL_LENGTH` are represented by their first and last
+ * `HASH_SAMPLE_LENGTH` chars plus their full length (folded in after a
+ * NUL separator, a string no sampled head/tail fold produces at this
+ * position), so distinct lengths never share a key merely because their
+ * samples match. NOTE: this changes the stored key of ids longer than
+ * 1,024 chars relative to builds without the fix (2.6.3 and earlier) -
+ * keys are in-memory only and never persisted, so the change is visible
+ * solely as a one-time de-duplication reset for such ids when a process
+ * restarts on the fixed build; ids up to 1,024 chars keep their exact
+ * pre-fix keys.
  */
 const hashRecordKey = (id: string): string => {
   let h = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-  const mask = 0xffffffffffffffffn;
-  for (let i = 0; i < id.length; i++) {
-    h ^= BigInt(id.charCodeAt(i));
-    h = (h * prime) & mask;
+  if (id.length <= HASH_FULL_LENGTH) {
+    h = fnv1a64Step(h, id);
+  } else {
+    h = fnv1a64Step(h, id.slice(0, HASH_SAMPLE_LENGTH));
+    h = fnv1a64Step(h, id.slice(id.length - HASH_SAMPLE_LENGTH));
+    h = fnv1a64Step(h, "\u0000" + String(id.length));
   }
   return h.toString(16).padStart(16, "0");
 };
