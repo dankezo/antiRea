@@ -48,6 +48,21 @@
  * by the same consequence floor and tiering law as every other
  * tripwire signal.
  *
+ * Secret rotation: ids live up to their TTL (24 h by default), so a
+ * host that rotates its HMAC secret on schedule would otherwise
+ * blind the echo channel - every outstanding id would resolve as
+ * `bad_signature` and feed nothing. The rotation window closes that
+ * gap: verifiers accept an optional `previousSecrets` list of
+ * retired secrets. Verification tries the current secret first,
+ * then each retired secret in order; a successful result reports
+ * which generation verified (`secretGeneration`, plus
+ * `previousSecretIndex` for a retired secret) without leaking any
+ * secret material. Minting ALWAYS uses only the current secret -
+ * retired secrets are verify-only and are never used to mint, so
+ * removing a secret from the list is the moment its outstanding
+ * ids stop verifying. Hosts should keep a retired secret in the
+ * list only for the maximum id TTL after rotation, then remove it.
+ *
  * Node.js builtins only (`node:crypto` HMAC + CSPRNG); zero runtime
  * dependencies. Verification is one HMAC and one constant-time
  * comparison per presented id.
@@ -71,9 +86,23 @@ export interface VerifyEchoIdOptions {
   expectedScope?: string;
   /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. */
   now?: number;
+  /**
+   * Retired HMAC secrets still accepted for VERIFICATION only, in
+   * order. Verification tries the current secret (the first argument
+   * to `verifyEchoId` / `resolveEchoFrom`) first, then each retired
+   * secret. Minting never uses these secrets. Keep a retired secret
+   * listed only for the maximum echo-id TTL after rotation, then
+   * remove it - once removed, ids minted under it fail as
+   * `bad_signature`. When omitted or empty, behavior is identical to
+   * single-secret verification.
+   */
+  previousSecrets?: readonly EchoSecret[];
 }
 
 export type EchoVerifyFailure = "malformed" | "bad_signature" | "expired" | "scope_mismatch";
+
+/** Which secret generation verified an echo id. Carries no secret material. */
+export type EchoSecretGeneration = "current" | "previous";
 
 export type EchoVerifyResult =
   | {
@@ -84,6 +113,18 @@ export type EchoVerifyResult =
       scope?: string;
       /** Expiry (ms since epoch) carried by the id. */
       expiresAt: number;
+      /**
+       * Which generation verified the id: `"current"` for the secret
+       * passed as the verifier's first argument, `"previous"` for a
+       * retired secret from `VerifyEchoIdOptions.previousSecrets`.
+       */
+      secretGeneration: EchoSecretGeneration;
+      /**
+       * Zero-based index into `previousSecrets` of the retired secret
+       * that verified the id. Present only when
+       * `secretGeneration` is `"previous"`.
+       */
+      previousSecretIndex?: number;
     }
   | { ok: false; reason: EchoVerifyFailure };
 
@@ -97,6 +138,16 @@ interface EchoPayload {
 }
 
 export const DEFAULT_ECHO_TTL_MS = 86_400_000;
+
+/**
+ * Maximum accepted echo id length, in characters, including the
+ * `echo_` prefix (NV-2). Same bound and sizing basis as the cursor
+ * caps (typical echo ids are ~180 characters; ~1.5 KB with
+ * 512-character identity and scope fields): longer ids are rejected
+ * as `malformed` before any decode or parse work, so presenting an
+ * id cannot buy linear parse CPU with its length.
+ */
+export const MAX_ECHO_ID_LENGTH = 8_192;
 /** Structural prefix of every echo id; `isEchoId` is a shape check only, never evidence. */
 export const ECHO_ID_PREFIX = "echo_";
 
@@ -159,10 +210,18 @@ export function isEchoId(value: unknown): value is string {
   return typeof value === "string" && value.startsWith(ECHO_ID_PREFIX) && value.includes(".");
 }
 
+const signatureMatches = (secret: EchoSecret, payloadPart: string, presented: Uint8Array): boolean => {
+  const expected = sign(secret, payloadPart);
+  return presented.length === expected.length && getNodeCrypto().timingSafeEqual(presented, expected);
+};
+
 /**
  * Mint a signed echo id for `mintedFor`. Every mint is unique (random
  * 128-bit nonce), so a host may mint one id per response, per record
  * or per identity without any stored state: verification is stateless.
+ * Minting ALWAYS uses only `secret` (the current secret) - retired
+ * secrets from `VerifyEchoIdOptions.previousSecrets` are verify-only
+ * and are never used here.
  */
 export function mintEchoId(secret: EchoSecret, options: MintEchoIdOptions): string {
   if (typeof options.mintedFor !== "string" || options.mintedFor.length === 0) {
@@ -186,8 +245,12 @@ export function mintEchoId(secret: EchoSecret, options: MintEchoIdOptions): stri
 /**
  * Verify a presented echo id. Checks run in a fixed order - structure,
  * signature, expiry, scope - and the first failure is reported.
- * Failure results carry NO payload fields: an unauthenticated payload
- * must never steer host behavior (the cursor discipline).
+ * Signature verification tries the current secret first, then each
+ * secret in `options.previousSecrets` in order; the successful result
+ * reports the verifying generation via `secretGeneration` (and
+ * `previousSecretIndex` for a retired secret). Failure results carry
+ * NO payload fields: an unauthenticated payload must never steer
+ * host behavior (the cursor discipline).
  */
 export function verifyEchoId(
   secret: EchoSecret,
@@ -195,6 +258,8 @@ export function verifyEchoId(
   options: VerifyEchoIdOptions = {},
 ): EchoVerifyResult {
   if (!isEchoId(id)) return { ok: false, reason: "malformed" };
+  // Length bound BEFORE any decode/parse (NV-2): see MAX_ECHO_ID_LENGTH.
+  if (id.length > MAX_ECHO_ID_LENGTH) return { ok: false, reason: "malformed" };
   const body = id.slice(ECHO_ID_PREFIX.length);
   const dot = body.indexOf(".");
   if (dot <= 0 || dot === body.length - 1 || body.indexOf(".", dot + 1) !== -1) {
@@ -229,8 +294,22 @@ export function verifyEchoId(
 
   const presented = tryBase64UrlDecode(signaturePart);
   if (!presented) return { ok: false, reason: "bad_signature" };
-  const expected = sign(secret, payloadPart);
-  if (presented.length !== expected.length || !getNodeCrypto().timingSafeEqual(presented, expected)) {
+  let secretGeneration: EchoSecretGeneration | undefined;
+  let previousSecretIndex: number | undefined;
+  if (signatureMatches(secret, payloadPart, presented)) {
+    secretGeneration = "current";
+  } else if (options.previousSecrets) {
+    for (let i = 0; i < options.previousSecrets.length; i++) {
+      const candidateSecret = options.previousSecrets[i];
+      if (candidateSecret === undefined) continue;
+      if (signatureMatches(candidateSecret, payloadPart, presented)) {
+        secretGeneration = "previous";
+        previousSecretIndex = i;
+        break;
+      }
+    }
+  }
+  if (secretGeneration === undefined) {
     return { ok: false, reason: "bad_signature" };
   }
 
@@ -244,6 +323,8 @@ export function verifyEchoId(
     mintedFor: payload.f,
     ...(payload.s ? { scope: payload.s } : {}),
     expiresAt: payload.exp,
+    secretGeneration,
+    ...(previousSecretIndex !== undefined ? { previousSecretIndex } : {}),
   };
 }
 
@@ -253,7 +334,10 @@ export function verifyEchoId(
  * is not a valid echo id. Feed a non-`undefined` result that differs
  * from the presenting identity into the tripwire as
  * `CusumEvent.echoFrom`; a result equal to the presenter is its own
- * echo coming home and links nothing.
+ * echo coming home and links nothing. Accepts the same
+ * `VerifyEchoIdOptions` as `verifyEchoId`, including
+ * `previousSecrets`: an id verified under a retired secret inside
+ * the rotation window still resolves its origin here.
  */
 export function resolveEchoFrom(
   secret: EchoSecret,

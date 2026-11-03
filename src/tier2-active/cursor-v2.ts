@@ -95,6 +95,16 @@ const PAYLOAD_KEYS = new Set(["v", "sub", "coh", "scope", "pos", "seq", "lv", "i
 
 export const DEFAULT_CURSOR_V2_TTL_MS = 300_000;
 
+/**
+ * Maximum accepted V2 token length, in characters (NV-2). Same
+ * bound and sizing basis as V1's `MAX_CURSOR_TOKEN_LENGTH` (typical
+ * V2 tokens are ~190 characters; ~1.9 KB with 512-character binding
+ * fields): longer tokens are rejected as `malformed` before any
+ * decode or parse work, so an unauthenticated caller cannot buy
+ * linear parse CPU with token length.
+ */
+export const MAX_CURSOR_V2_TOKEN_LENGTH = 8_192;
+
 /* Minimal structural view of node:crypto (mirrors cursor.ts). */
 interface NodeHmacLike {
   update(data: string | Uint8Array): NodeHmacLike;
@@ -179,6 +189,8 @@ export function verifyCursorV2(
   options: VerifyCursorV2Options,
 ): CursorV2VerifyResult {
   if (typeof token !== "string" || token.length === 0) return { ok: false, reason: "malformed" };
+  // Length bound BEFORE any decode/parse (NV-2): see MAX_CURSOR_V2_TOKEN_LENGTH.
+  if (token.length > MAX_CURSOR_V2_TOKEN_LENGTH) return { ok: false, reason: "malformed" };
   const dot = token.indexOf(".");
   if (dot <= 0 || dot === token.length - 1 || token.indexOf(".", dot + 1) !== -1) {
     return { ok: false, reason: "malformed" };
@@ -254,7 +266,14 @@ export function createCursorV2Authority(): {
 } {
   let ledgerVersion = 0;
   const sequences = new Map<string, number>();
-  const key = (subject: string, scope: string): string => `${subject} ${scope}`;
+  // Length-prefixed key (F-23): a raw separator byte is ambiguous -
+  // `${subject}\0${scope}` maps ("a\0b","c") and ("a","b\0c") to the
+  // SAME key, so two different chains shared one sequence counter.
+  // Prefixing each component with its length makes the encoding
+  // injective: the first length fixes the subject boundary exactly,
+  // so no shifted pair can collide.
+  const key = (subject: string, scope: string): string =>
+    `${subject.length}:${subject}${scope.length}:${scope}`;
   return {
     current(subject, scope) {
       return { ledgerVersion, sequence: sequences.get(key(subject, scope)) ?? 0 };
