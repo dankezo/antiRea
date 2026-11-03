@@ -326,8 +326,10 @@ export function createCanaryMaze(opts: CanaryMazeOptions = {}): {
   const { wall: wallClock, mono: monoClock } = resolveIntervalClock(opts);
 
   // Bounded per-IP window counters, pruned with the same discipline as the
-  // Web Bot Auth in-memory nonce store: expired entries go first, then the
-  // oldest insertions, and the map never grows past MAX_IP_ENTRIES.
+  // Web Bot Auth in-memory nonce store: only expired entries are ever
+  // evicted, and the map never grows past MAX_IP_ENTRIES. A map full of
+  // live entries refuses the new IP (reported as capped) instead of
+  // forgetting a live entry and resetting that IP's per-IP budget (F-24).
   const MAX_IP_ENTRIES = 10_000;
   const ipWindows = new Map<string, { start: number; startMono: number; count: number }>();
   const hitIpBudget = (key: string, now: number, nowMono: number): boolean => {
@@ -339,9 +341,9 @@ export function createCanaryMaze(opts: CanaryMazeOptions = {}): {
     if (!entry) {
       if (ipWindows.size >= MAX_IP_ENTRIES) {
         for (const [k, v] of ipWindows) {
-          if (nowMono - v.startMono >= windowMs || ipWindows.size >= MAX_IP_ENTRIES) ipWindows.delete(k);
-          if (ipWindows.size < MAX_IP_ENTRIES) break;
+          if (nowMono - v.startMono >= windowMs) ipWindows.delete(k);
         }
+        if (ipWindows.size >= MAX_IP_ENTRIES) return false;
       }
       entry = { start: now, startMono: nowMono, count: 0 };
       ipWindows.set(key, entry);
