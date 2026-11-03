@@ -33,6 +33,13 @@ export interface ReplayGuardOptions {
   /** Default TTL in ms when caller does not supply one (default: 300_000 = 5 minutes). */
   ttlMs?: number;
   /**
+   * Maximum cached nonces in memory (default: 10_000). The bound fails
+   * closed: only expired entries are evicted, and once the cache is full of
+   * unexpired nonces new envelopes are rejected (reported as replays) rather
+   * than the guard forgetting a live nonce to make room.
+   */
+  maxEntries?: number;
+  /**
    * Monotonic clock for the guard's TTL bookkeeping (L-DEEP-2). Expiry
    * values are internal to the guard and never exposed, so the whole
    * ledger of seen nonces lives on a clock that never steps. Defaults
@@ -40,12 +47,14 @@ export interface ReplayGuardOptions {
    */
   monoNow?: () => number;
   /**
-   * Maximum cached nonces in memory (default: 10_000). The bound fails
-   * closed: only expired entries are evicted, and once the cache is full of
-   * unexpired nonces new envelopes are rejected (reported as replays) rather
-   * than the guard forgetting a live nonce to make room.
+   * Clock used for expiry checks when `monoNow` is not given. Inject a
+   * manual clock in tests to make expiry behaviour deterministic
+   * instead of depending on wall-clock timing. When neither clock is
+   * given the guard runs on the monotonic source (L-DEEP-2); when only
+   * `now` is given, the injected clock drives the guard (pre-patch
+   * single-clock behavior, preserved for existing hosts/tests).
    */
-  maxEntries?: number;
+  now?: () => number;
 }
 
 declare const require: ((id: string) => { webcrypto?: Crypto }) | undefined;
@@ -143,7 +152,7 @@ export const verifyTransportEnvelope = decryptPayload;
 export function createInMemoryReplayGuard(options: ReplayGuardOptions = {}): OpenEnvelopeOptions["markNonceOnce"] {
   const defaultTtlMs = Math.max(1000, options.ttlMs ?? 300_000);
   const maxEntries = Math.max(100, options.maxEntries ?? 10_000);
-  const monoClock = options.monoNow ?? monoNowMs;
+  const monoClock = options.monoNow ?? (options.now ? options.now : monoNowMs);
   const seen = new Map<string, number>();
   return (key, ttlMs) => {
     const now = monoClock();

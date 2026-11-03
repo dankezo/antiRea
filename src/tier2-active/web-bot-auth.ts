@@ -300,10 +300,17 @@ class SfParser {
 
   parseParams(): SfParam[] {
     const params: SfParam[] = [];
+    const seen = new Set<string>();
     while (this.peek() === ";") {
       this.i++;
       this.skipSpaces();
       const name = this.parseKey();
+      // RFC 8941 §3.1.2: parameter names are unique within an item / inner
+      // list. Accepting a repeat would be a parser differential (this
+      // parser's lookups are first-wins, other readers may be last-wins),
+      // so a duplicate parameter is a structural parse error.
+      if (seen.has(name)) throw this.error(`duplicate parameter "${name}"`);
+      seen.add(name);
       if (this.peek() === "=") {
         this.i++;
         params.push({ name, value: this.parseBareItem() });
@@ -360,6 +367,11 @@ export function parseSfDictionary(headerValue: string): Map<string, SfMember> {
   parser.skipOptionalWhitespace();
   while (!parser.done) {
     const key = parser.parseKey();
+    // RFC 8941 §3.2: dictionary member names are unique. A repeated key is
+    // a structural parse error, not a last-wins overwrite — otherwise this
+    // parser and a proxy/host reading the same header with a different
+    // convention disagree about which member was signed (F-22).
+    if (members.has(key)) throw parser.error(`duplicate dictionary key "${key}"`);
     parser.skipSpaces();
     if (parser.peek() === "=") {
       parser.advance();
@@ -621,6 +633,12 @@ export interface ParsedWebBotAuthDirectory {
 export function parseWebBotAuthDirectory(document: unknown): ParsedWebBotAuthDirectory {
   let parsed: unknown = document;
   if (typeof document === "string") {
+    // NV-3: reject oversized documents before paying the parse at all.
+    if (document.length > MAX_DIRECTORY_DOCUMENT_LENGTH) {
+      throw new TypeError(
+        `Web Bot Auth directory document exceeds the maximum accepted length of ${MAX_DIRECTORY_DOCUMENT_LENGTH} characters`,
+      );
+    }
     try {
       parsed = JSON.parse(document);
     } catch {
@@ -643,6 +661,14 @@ export function parseWebBotAuthDirectory(document: unknown): ParsedWebBotAuthDir
   if (!jwks) {
     throw new TypeError(
       "Unrecognized Web Bot Auth key directory document: expected a JWK Set ({ keys: [...] }), an array of JWKs, or a single Ed25519 JWK",
+    );
+  }
+  // NV-3: fail fast BEFORE normalizing any key - normalization is real
+  // cryptographic work per key, so an unbounded directory is an unbounded
+  // synchronous CPU bill on the request path.
+  if (jwks.length > MAX_DIRECTORY_KEYS) {
+    throw new TypeError(
+      `Web Bot Auth directory document carries ${jwks.length} keys; the maximum accepted is ${MAX_DIRECTORY_KEYS}`,
     );
   }
   const keys = new Map<string, WebBotAuthKeyEntry>();
@@ -688,6 +714,18 @@ function looksLikeDirectoryDocument(value: unknown): boolean {
 
 /** Maximum accepted length of a signature `nonce` parameter, in characters. */
 export const MAX_NONCE_LENGTH = 256;
+
+/**
+ * Maximum number of keys accepted in one Web Bot Auth directory document
+ * (NV-3 cleanup). Real directories carry 1-10 keys; 256 is >25x headroom
+ * and bounds one parse to a few milliseconds of key normalization.
+ */
+export const MAX_DIRECTORY_KEYS = 256;
+/**
+ * Maximum accepted size, in characters, of a directory document handed in
+ * as a string (NV-3 cleanup). Checked before `JSON.parse` runs.
+ */
+export const MAX_DIRECTORY_DOCUMENT_LENGTH = 1_048_576;
 
 export interface WebBotAuthNonceStore {
   /**
@@ -817,7 +855,12 @@ export interface WebBotAuthVerifierOptions {
    * Injected resolver for dynamic directories — fetch
    * `https://<agent>` + WEB_BOT_AUTH_DIRECTORY_PATH yourself (with your own
    * cache/TTL/SSRF policy) and return the JSON document, a parsed directory,
-   * or the single key for `keyId`. Consulted after `keys` misses.
+   * or the single key for `keyId`. Consulted after `keys` misses. Returning
+   * the raw document is correct, but on hot paths prefer returning the
+   * result of `parseWebBotAuthDirectory(...)` — or reuse the same fetched
+   * document object/string so the verifier's parse cache applies — when
+   * the directory carries many keys: normalization is per-key crypto work,
+   * bounded by MAX_DIRECTORY_KEYS / MAX_DIRECTORY_DOCUMENT_LENGTH.
    */
   resolveKey?: (
     ctx: WebBotAuthKeyResolverContext,
@@ -897,11 +940,61 @@ function buildStaticIndex(source: WebBotAuthKeySource | undefined): Map<string, 
   return index;
 }
 
-function lookupInSource(source: WebBotAuthKeySource, keyId: string): WebBotAuthKeyEntry | undefined {
+/**
+ * Per-verifier parse cache for resolver-supplied directory documents
+ * (NV-3 cleanup). Normalizing a directory is real cryptographic work per
+ * key; without a cache, a resolver returning the raw document paid that
+ * cost again on EVERY verify (~215 ms per request for a 10,000-key
+ * document vs ~0.2 ms for a pre-parsed one). Strings are keyed by exact
+ * content, objects by identity. Deliberately NOT keyed by a content hash
+ * for fresh objects: hashing requires serializing (same order as a plain
+ * JSON.parse), and with MAX_DIRECTORY_KEYS bounding one parse to a few
+ * milliseconds, a hash cache would be complexity without payoff - a
+ * resolver that fabricates a brand-new object per call simply pays the
+ * bounded parse each time.
+ */
+interface DirectoryParseCache {
+  byString: Map<string, ParsedWebBotAuthDirectory>;
+  byObject: WeakMap<object, ParsedWebBotAuthDirectory>;
+}
+
+const MAX_CACHED_DIRECTORY_STRINGS = 8;
+
+function parseDirectoryCached(
+  document: unknown,
+  cache: DirectoryParseCache | undefined,
+): ParsedWebBotAuthDirectory {
+  if (!cache) return parseWebBotAuthDirectory(document);
+  if (typeof document === "string") {
+    const hit = cache.byString.get(document);
+    if (hit) return hit;
+    const parsedDir = parseWebBotAuthDirectory(document);
+    if (cache.byString.size >= MAX_CACHED_DIRECTORY_STRINGS) {
+      const oldest = cache.byString.keys().next().value;
+      if (oldest !== undefined) cache.byString.delete(oldest);
+    }
+    cache.byString.set(document, parsedDir);
+    return parsedDir;
+  }
+  if (typeof document === "object" && document !== null) {
+    const hit = cache.byObject.get(document);
+    if (hit) return hit;
+    const parsedDir = parseWebBotAuthDirectory(document);
+    cache.byObject.set(document, parsedDir);
+    return parsedDir;
+  }
+  return parseWebBotAuthDirectory(document);
+}
+
+function lookupInSource(
+  source: WebBotAuthKeySource,
+  keyId: string,
+  directoryCache?: DirectoryParseCache,
+): WebBotAuthKeyEntry | undefined {
   if (typeof source === "string") {
     const trimmed = source.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-      return parseWebBotAuthDirectory(trimmed).keys.get(keyId);
+      return parseDirectoryCached(trimmed, directoryCache).keys.get(keyId);
     }
   }
   if (isParsedDirectory(source)) return source.keys.get(keyId);
@@ -910,7 +1003,7 @@ function lookupInSource(source: WebBotAuthKeySource, keyId: string): WebBotAuthK
     return value === undefined ? undefined : entryFromSourceValue(value);
   }
   if (Array.isArray(source) || looksLikeDirectoryDocument(source) || isJwkLike(source)) {
-    return parseWebBotAuthDirectory(source).keys.get(keyId);
+    return parseDirectoryCached(source, directoryCache).keys.get(keyId);
   }
   if (typeof source === "object" && source !== null) {
     const record = source as Record<string, WebBotAuthKeyInput>;
@@ -1052,6 +1145,10 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
   const requireNonce = options.requireNonce ?? false;
   const nonceStore = options.nonceStore ?? createInMemoryNonceStore(options.maxNonces ?? 10_000);
   const clock = options.now ?? (() => Date.now());
+  // NV-3: resolver documents are parsed once per document version, not
+  // once per request (see DirectoryParseCache). Instance-scoped on
+  // purpose: no parse state is shared across verifiers.
+  const directoryCache: DirectoryParseCache = { byString: new Map(), byObject: new WeakMap() };
 
   const emit = async (verdict: WebBotAuthVerdict): Promise<WebBotAuthVerdict> => {
     if (options.onVerdict) {
@@ -1078,7 +1175,7 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     }
     if (resolved === undefined || resolved === null) return {};
     try {
-      return { entry: lookupInSource(resolved, ctx.keyId) };
+      return { entry: lookupInSource(resolved, ctx.keyId, directoryCache) };
     } catch {
       return { resolverFailed: true };
     }
