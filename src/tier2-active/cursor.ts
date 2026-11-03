@@ -110,6 +110,21 @@ interface CursorPayload {
 
 export const DEFAULT_CURSOR_TTL_MS = 300_000;
 
+/**
+ * Maximum accepted cursor token length, in characters (NV-2).
+ * Verification used to decode and JSON-parse the payload BEFORE the
+ * HMAC check with no length bound, so a caller's CPU cost per verify
+ * grew linearly with a token it fully controls (~300 ms per MB of
+ * token measured on the audit machine; no amplification - plain
+ * linear parse cost). A token longer than this is rejected as
+ * `malformed` before any decode or parse work. Sizing: a typical
+ * minted cursor is 140-190 characters, and even a cursor minted with
+ * 512-character session id and filter hash fields is ~1.5 KB, so
+ * 8192 leaves >40x headroom over typical tokens and >4x over that
+ * stress case while capping worst-case verify cost at sub-ms.
+ */
+export const MAX_CURSOR_TOKEN_LENGTH = 8_192;
+
 /* ------------------------------------------------------------------------ */
 /* Minimal structural view of node:crypto (no @types/node in this repo,     */
 /* mirroring the lazy-require pattern used by web-bot-auth).                */
@@ -194,6 +209,8 @@ export function verifyCursor(
   options: VerifyCursorOptions,
 ): CursorVerifyResult {
   if (typeof token !== "string" || token.length === 0) return { ok: false, reason: "malformed" };
+  // Length bound BEFORE any decode/parse (NV-2): see MAX_CURSOR_TOKEN_LENGTH.
+  if (token.length > MAX_CURSOR_TOKEN_LENGTH) return { ok: false, reason: "malformed" };
   const dot = token.indexOf(".");
   if (dot <= 0 || dot === token.length - 1 || token.indexOf(".", dot + 1) !== -1) {
     return { ok: false, reason: "malformed" };
