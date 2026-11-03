@@ -62,6 +62,36 @@
  * Eligibility is evaluated live: a cohort that crosses below the
  * floor and later grows past it becomes eligible while still flagged.
  *
+ * CONSEQUENCE ELIGIBILITY TRANSITION (2.7.0, L8a): that live
+ * re-evaluation used to be invisible to push-style hosts -
+ * `onCampaignFlag` fires once at the crossing itself, so a cohort
+ * that crossed below the floor and later grew into eligibility
+ * never re-notified anyone, and hosts had to poll snapshots to
+ * notice. The optional `onConsequenceEligibility` callback closes
+ * that gap: it fires EXACTLY ONCE per cohort, with the eligible
+ * snapshot (the same `CampaignSnapshot` shape `onCampaignFlag`
+ * receives), at the moment a FLAGGED cohort is first seen
+ * consequence-eligible after having crossed ineligible.
+ * Detection is evaluated on every path that evaluates eligibility
+ * live: `observe()` (the path on which the union normally grows),
+ * `checkServe()`, and the snapshot reads (`snapshotFor` /
+ * `getSnapshot`). Ids held by serve reservations also count toward
+ * the union; a reservation-driven transition is detected on the
+ * next call to any of those paths, not inside `reserveServe`
+ * itself. All paths share one per-cohort guard,
+ * `CohortState.eligibilityNotified`, which is set BEFORE the
+ * callback is invoked, so repeated calls on any path - and a
+ * callback that itself reads a snapshot - can never re-fire. A
+ * cohort that crosses ALREADY eligible gets no transition fire at
+ * all: its crossing marks the guard set, because the
+ * `onCampaignFlag` snapshot at that crossing already carries
+ * `consequenceEligible: true`. The guard is per cohort record for
+ * its lifetime: it is not reset by epoch rotation or
+ * `clearCohort`, and a merged cohort inherits it if either
+ * predecessor was already notified (or crossed eligible). Callback
+ * errors are swallowed - a throwing (or rejecting) host callback
+ * must never break `observe` / `checkServe` / snapshot handling.
+ *
  * MEMBER ATTRIBUTION: snapshots carry `contributingMembers` - the
  * members whose net in-cohort LLR contribution over the current score
  * window is > 0 (consistent with the evidence-attribution rules:
@@ -109,6 +139,84 @@
  * serves, and the protected-subject lane below is a separate concept
  * that neither arms nor disarms a declared cohort.
  *
+ * DECLARED-CEILING RESERVATIONS (2.7.0, L1): `checkServe` alone is
+ * a check, not an atomic reservation - two concurrent serves that
+ * both pass below the armed cap can jointly overshoot it, because
+ * the union only grew when the host later called `observe`. For an
+ * ARMED declared cohort the tripwire therefore also offers
+ * `reserveServe` / `commitServe` / `releaseServe`: the ceiling
+ * check and the tentative union mutation happen in ONE synchronous
+ * step (the methods are deliberately NOT async - there is no await
+ * anywhere between the check and the mutation, so no interleaving
+ * serve can slip between them in this process), pending
+ * reservations count against the armed cap immediately (for both
+ * `reserveServe` and `checkServe`), and reservations are TTL-bound
+ * (default 60 s, `ceilingReservation.ttlMs`). Reservations apply
+ * ONLY to armed declared cohorts: for any other cohort (inferred,
+ * declared-but-unarmed, observe mode, unknown identity)
+ * `reserveServe` is a no-op allow of every requested id, so hosts
+ * can wire it uniformly on every serving path.
+ *
+ * OBSERVE CONTRACT (the exact double-count rule): the ceiling union
+ * is a SET union over (records served via `observe`) UNION (ids
+ * held by pending reservations) UNION (ids held by committed
+ * reservations), computed over the cohort's current members. A host
+ * that reserves, serves exactly `allowed`, commits, and then calls
+ * `observe` for the same ids therefore counts each id exactly once
+ * at every step - `observe` of an id currently pending or committed
+ * via a reservation is a no-op FOR UNION PURPOSES (the event still
+ * accrues evidence normally; only the union accounting is shared).
+ * `releaseServe` frees a pending hold's ids UNLESS they were also
+ * served via `observe` meanwhile - a release can un-hold, it cannot
+ * un-serve. A reservation that expires (TTL) before commit frees
+ * its ids the same way; if the host served them but never observed
+ * or committed, they become servable again, exactly like the
+ * disclosure ledger's TTL semantics - commit before the TTL.
+ *
+ * TTL CONTRACT (Argon red-team, 2.7.0 wave): the TTL MUST exceed
+ * the host's worst-case serve latency (reserve -> serve -> commit).
+ * The default 60 s is sized for ordinary request serving; a host
+ * whose serves can run longer MUST raise `ceilingReservation.ttlMs`.
+ * A reservation that expires while a serve is still in flight frees
+ * capacity a second reservation may legitimately take; if the first
+ * serve then completes anyway, that serve happened OUTSIDE a live
+ * reservation. Serving outside a live reservation - never
+ * reserving, releasing early, or serving after expiry - is outside
+ * the cap's promise, exactly like a host that ignores `checkServe`:
+ * a late `observe` of such ids is still recorded (the union grows
+ * past the cap and decisions report `campaign_engaged`), but that
+ * overshoot is a host contract breach, not an SDK failure. The one
+ * variant that can never overshoot is re-serving the SAME ids: the
+ * cap is a distinct-record set union, so a record counts once no
+ * matter how many expired holds touched it. Symmetrically,
+ * `commitServe` on an expired reservation is REFUSED with reason
+ * `reservation_expired` (likewise `reservation_released` after a
+ * release, `unknown_reservation` for a never-seen id) and counts
+ * nothing - a late commit cannot resurrect freed capacity.
+ *
+ * AUDIT PORT (2.7.0 pre-release, from the 2.6.3 wave-2 fixes and
+ * L-DEEP-2): host callbacks are never trusted to behave - a throwing
+ * `isExempt` / `isProtected` predicate behaves as an absent
+ * predicate, and a throwing `onCampaignFlag` marks the notification
+ * pending for retry on the next observe / snapshot instead of
+ * losing the flag (F-08). `checkServe` refuses a non-finite or
+ * negative `requested` structurally (`invalid_request`) and the
+ * pacing bucket self-heals and is reset by `clearCohort` (F-09).
+ * Identity state is capped by `maxIdentities` with LRU eviction and
+ * snapshots report `stateSizes` (F-10). Epoch rotation resets the
+ * score, the contributions and any pending flag notification - the
+ * union is a fact and survives (F-11). `observe` validates its
+ * event: a malformed event (null / non-object, missing, empty or
+ * non-string identity, non-finite `ts`) is refused with a
+ * structured no-op decision - the exempt decision's shape - and
+ * mutates no state (F-16). Interval arithmetic (bucket refill,
+ * serve-reservation TTL) reads the monotonic clock resolved by
+ * `resolveIntervalClock`; a pending serve reservation's TTL is
+ * measured on the monotonic clock (the disclosure ledger's hybrid
+ * discipline, CLK-1 / CLK-2), so a wall-clock step alone can never
+ * free a hold early, while a serve that genuinely outlives the TTL
+ * still expires.
+ *
  * PROTECTED SUBJECTS: a host that has declared subjects protected
  * (compliance / audit / support / agreed pentest - see
  * `protected-cohorts.ts`) passes `isProtected`; for an INFERRED
@@ -154,7 +262,7 @@ import {
 } from "./calibration-manifest";
 import { clampEnforcement, type CohortOrigin } from "./enforcement-tiering";
 import { mergeCohortBucketStates } from "./disclosure-ledger";
-import { monoNowMs } from "../internal/mono-clock";
+import { resolveIntervalClock } from "../internal/mono-clock";
 
 export type CusumStreamName = "adjacency" | "tiling" | "cold" | "velocity";
 export type CusumMode = "observe" | "enforce";
@@ -283,6 +391,12 @@ export interface CampaignSnapshot {
    */
   ceilingArmed: boolean;
   unionRecords: number;
+  /**
+   * Distinct records counted in `unionRecords` ONLY via serve
+   * reservations (pending or committed holds not yet also served
+   * through `observe`). Zero for every cohort without reservations.
+   */
+  reservedRecords: number;
   /** True once `unionRecords` reaches `consequenceFloorRecords`. */
   consequenceEligible: boolean;
   /** The absolute floor (exact distinct records) in effect. */
@@ -354,6 +468,14 @@ export interface CusumTripwireOptions {
   llrTables?: CusumLlrTables;
   streams?: Partial<Record<CusumStreamName, boolean>>;
   ceiling?: { limit?: number };
+  /**
+   * Serve-reservation bounds for the armed declared ceiling (see
+   * the header's DECLARED-CEILING RESERVATIONS). `ttlMs` bounds how
+   * long a pending `reserveServe` hold counts against the cap
+   * before it expires and frees its ids. Default 60_000 ms (the
+   * disclosure ledger's reservation TTL).
+   */
+  ceilingReservation?: { ttlMs?: number };
   bucket?: { burst?: number; rateBase?: number; rateExponent?: number };
   epochMs?: number;
   /** Tiling evaluation gates (CUSUM-SPEC SS1.2). Defaults 150 / 1200. */
@@ -399,6 +521,17 @@ export interface CusumTripwireOptions {
   manifest?: CalibrationManifest | null;
   calibrationGate?: CalibrationGateOptions;
   onCampaignFlag?: (snapshot: CampaignSnapshot) => void;
+  /**
+   * Fired EXACTLY ONCE per cohort when a flagged cohort that
+   * crossed BELOW the consequence floor later becomes
+   * consequence-eligible (see the header's CONSEQUENCE ELIGIBILITY
+   * TRANSITION): the push-style counterpart to polling snapshots
+   * for the transition. Receives the eligible snapshot. Never
+   * fires for a cohort that crossed already eligible - that
+   * crossing's `onCampaignFlag` snapshot already carried
+   * `consequenceEligible: true`. Errors are swallowed.
+   */
+  onConsequenceEligibility?: (snapshot: CampaignSnapshot) => Promise<void> | void;
   isExempt?: (identity: string) => boolean;
   /**
    * Host-declared protected subjects (compliance / audit / support /
@@ -412,12 +545,12 @@ export interface CusumTripwireOptions {
   isProtected?: (identity: string) => boolean;
   now?: () => number;
   /**
-   * Monotonic clock for the cohort pacing bucket's refill arithmetic
-   * (L-DEEP-2) - the only interval this engine measures on its own
-   * clock. Formation windows and epoch rotation run over event
-   * timestamps (host time domain) and are untouched. When only `now`
-   * is given, the injected clock drives both domains (pre-patch
-   * behavior).
+   * Monotonic clock for interval arithmetic (L-DEEP-2): the cohort
+   * pacing bucket's refill and the serve-reservation TTL are
+   * measured on this clock. Formation windows and epoch rotation run
+   * over event timestamps (host time domain) and are untouched. When
+   * only `now` is given, the injected clock drives both domains
+   * (pre-patch behavior) - see `resolveIntervalClock`.
    */
   monoNow?: () => number;
   /**
@@ -431,12 +564,62 @@ export interface CusumTripwireOptions {
   maxIdentities?: number;
 }
 
+/**
+ * Result of `reserveServe`. `allowed` lists the exact record ids the
+ * host may serve for this request: every requested id that was
+ * already counted (served, pending or committed - re-delivery is
+ * free) plus genuinely new ids up to the armed cap's remaining
+ * headroom, in request order. `reservationId` is present only when
+ * the reservation actually holds new ids on an armed declared
+ * cohort; a no-op allow (non-armed cohort, observe mode, unknown
+ * identity, or a request with zero new ids) carries none.
+ */
+export interface ServeReservationResult {
+  allowed: number[];
+  /** Genuinely new records this call holds against the armed cap. */
+  newRecords: number;
+  reservationId?: string;
+  cohortId?: string;
+  /** `"campaign_ceiling"` when some requested new ids were refused. */
+  reason?: string;
+}
+
+export interface CommitServeResult {
+  committed: boolean;
+  /** True when this reservation was already committed (idempotent retry). */
+  duplicate?: boolean;
+  /**
+   * On refusal: `"reservation_expired"` (TTL passed - the hold's
+   * capacity was freed and the commit counts nothing),
+   * `"reservation_released"`, or `"unknown_reservation"`.
+   */
+  reason?: string;
+}
+
+export interface ReleaseServeResult {
+  released: boolean;
+  reason?: string;
+}
+
 export interface CusumTripwire {
   observe(event: CusumEvent): Promise<CusumDecision>;
   checkServe(
     identity: string,
     requested: number,
   ): Promise<{ allowed: number; notBeforeMs?: number; cohortId?: string; reason?: string }>;
+  /**
+   * Atomically check the armed declared ceiling AND tentatively
+   * hold the granted ids against it, in one synchronous step.
+   * Synchronous by design (see the header): callers may still
+   * `await` the plain result. Serve exactly `result.allowed`, then
+   * `commitServe(result.reservationId)`; call `releaseServe`
+   * instead when the serve is abandoned.
+   */
+  reserveServe(identity: string, recordIds: number[]): ServeReservationResult;
+  /** Finalize a pending reservation. Idempotent: a second commit of the same id reports `duplicate: true` and counts nothing twice. */
+  commitServe(reservationId: string): CommitServeResult;
+  /** Free a pending reservation's ids. A committed reservation cannot be released. */
+  releaseServe(reservationId: string): ReleaseServeResult;
   getSnapshot(cohortId: string): Promise<CampaignSnapshot | null>;
   snapshotFor(identity: string): Promise<CampaignSnapshot | null>;
   clearCohort(cohortId: string): Promise<void>;
@@ -462,6 +645,14 @@ interface CohortState {
   score: number;
   flagged: boolean;
   flaggedAtMs: number;
+  /**
+   * Eligibility-transition guard (L8a): true once the cohort's
+   * consequence-eligibility transition has been accounted for -
+   * either `onConsequenceEligibility` fired, or the cohort crossed
+   * already eligible so no transition fire is owed. Set before the
+   * callback runs; never reset for the cohort record's lifetime.
+   */
+  eligibilityNotified: boolean;
   ceilingActive: boolean;
   /** Armed at declaration (host-declared + ceiling-tier manifest); see the header. */
   ceilingArmed: boolean;
@@ -506,6 +697,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     velocity: options.streams?.velocity !== false,
   };
   const ceilingLimit = Math.max(1, options.ceiling?.limit ?? 2000);
+  const reservationTtlMs = Math.max(1, options.ceilingReservation?.ttlMs ?? 60_000);
   const bucketBurst = Math.max(1, options.bucket?.burst ?? 150);
   const bucketRateBase = options.bucket?.rateBase ?? 3.5;
   const bucketRateExponent = options.bucket?.rateExponent ?? 0.15;
@@ -529,13 +721,62 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   const formationMinRangeDensity = options.formation?.minRangeDensity ?? 0.5;
   const formationWindowMs = Math.max(0, options.formation?.windowMs ?? 60_000);
   const formationRecheckGrowth = Math.max(1, options.formation?.recheckGrowth ?? 25);
-  const now = options.now ?? Date.now;
-  const monoNowFn = options.monoNow ?? (options.now ? now : monoNowMs);
+  // Interval-clock resolution (L-DEEP-2): `now` is the wall domain
+  // (display timestamps, calendar semantics, absolute deadlines);
+  // `monoNowFn` is the only source interval arithmetic may read. A
+  // host that injects `now` but not `monoNow` keeps the pre-patch
+  // single-clock behavior exactly.
+  const intervalClock = resolveIntervalClock(options);
+  const now = intervalClock.wall;
+  const monoNowFn = intervalClock.mono;
 
   const declaredGroupOf = new Map<string, number>();
   (options.declaredCohorts ?? []).forEach((group, index) => {
     for (const member of group) declaredGroupOf.set(member, index);
   });
+
+  /*
+   * Serve reservations for armed declared cohorts (see the header).
+   * Keyed by reservation id; each entry holds the GENUINELY NEW ids
+   * granted to one identity. Pending entries expire at
+   * `expiresAtMs` (lazy sweep, ledger discipline); committed
+   * entries never expire - their ids stay counted until (and after)
+   * the host's `observe` lands them in the served sets, at which
+   * point the served copy carries them and the union is unchanged.
+   */
+  interface ServeReservation {
+    id: string;
+    identity: string;
+    ids: number[];
+    expiresAtMs: number;
+    /**
+     * Monotonic creation instant (CLK-2), held in RAM only: a
+     * pending hold's TTL is measured from this instant on the
+     * monotonic clock, so a wall-clock step alone can never free
+     * it early, and a genuine serve longer than the TTL still
+     * expires. (`expiresAtMs` above remains the wall-domain
+     * milestone for a hold without a mono record.)
+     */
+    createdMonoMs?: number;
+    state: "pending" | "committed";
+  }
+  const serveReservations = new Map<string, ServeReservation>();
+  let serveReservationSeq = 1;
+  /**
+   * Tombstones for holds that ended without a commit, so a late
+   * `commitServe` can be refused with the precise reason
+   * (`reservation_expired` / `reservation_released`) instead of a
+   * generic unknown - and can never resurrect freed capacity.
+   * Bounded to the most recent 1024 settlements.
+   */
+  const settledReservations = new Map<string, "expired" | "released">();
+  const settleReservation = (id: string, kind: "expired" | "released"): void => {
+    settledReservations.set(id, kind);
+    while (settledReservations.size > 1024) {
+      const oldest = settledReservations.keys().next().value as string;
+      settledReservations.delete(oldest);
+    }
+  };
 
   const identities = new Map<string, IdentityState>();
   const parent = new Map<string, string>();
@@ -654,7 +895,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
    * with it, and its cohort (if any) loses the member. If the
    * evicted identity was the union-find root, another member is
    * promoted and the cohort re-keyed - the same surgery
-   * mergeIdentities performs when it retires a root.
+   * mergeIdentities performs when it retires a root. A pending serve
+   * reservation held by the evicted identity is settled as expired:
+   * its ids stop counting with the member, and a late commit is
+   * refused instead of resurrecting a member that no longer exists.
    */
   const removeIdentity = (victim: string): void => {
     const root = find(victim);
@@ -666,6 +910,12 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     for (const map of [slicePairLastChecked, coldPairLastChecked]) {
       for (const key of [...map.keys()]) {
         if (key.split("\u0001").includes(victim)) map.delete(key);
+      }
+    }
+    for (const [id, reservation] of [...serveReservations]) {
+      if (reservation.identity === victim && reservation.state === "pending") {
+        serveReservations.delete(id);
+        settleReservation(id, "expired");
       }
     }
     const cohort = cohorts.get(root);
@@ -723,6 +973,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         score: 0,
         flagged: false,
         flaggedAtMs: 0,
+        eligibilityNotified: false,
         ceilingActive: false,
         ceilingArmed: false,
         bucketTokens: bucketBurst,
@@ -760,6 +1011,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       merged.flagged = keep.flagged || drop.flagged;
       merged.flagNotificationPending = keep.flagNotificationPending || drop.flagNotificationPending;
       merged.flaggedAtMs = Math.max(keep.flaggedAtMs, drop.flaggedAtMs);
+      merged.eligibilityNotified = keep.eligibilityNotified || drop.eligibilityNotified;
       merged.ceilingActive = keep.ceilingActive || drop.ceilingActive;
       merged.ceilingArmed = keep.ceilingArmed || drop.ceilingArmed;
       merged.contributions = new Map(keep.contributions);
@@ -778,6 +1030,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       merged.flagged = drop.flagged;
       merged.flagNotificationPending = drop.flagNotificationPending;
       merged.flaggedAtMs = drop.flaggedAtMs;
+      merged.eligibilityNotified = drop.eligibilityNotified;
       merged.ceilingActive = drop.ceilingActive;
       merged.ceilingArmed = drop.ceilingArmed;
       merged.bucketTokens = drop.bucketTokens;
@@ -793,13 +1046,74 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     return merged;
   };
 
-  const unionRecords = (cohort: CohortState): number => {
+  /**
+   * Lazy TTL sweep: expired PENDING holds free their ids (and are
+   * tombstoned). Committed holds never expire. Expiry follows the
+   * ledger's hybrid discipline (CLK-2), adapted to a state shape
+   * the ledger does not have: serve reservations live only in this
+   * process's RAM, so EVERY hold carries a monotonic creation
+   * record and its TTL is measured on the monotonic clock - a
+   * wall-clock step alone can never free a hold early, while a
+   * serve that genuinely outlives the TTL still expires. The wall
+   * `expiresAtMs` remains the expiry milestone for a hold without
+   * a mono record (the ledger's foreign-reservation case; no such
+   * hold exists in this map today), and under the single-clock
+   * resolution (host injected `now` only) the mono milestone
+   * coincides with the wall one, so pre-patch TTL behavior is
+   * preserved exactly.
+   */
+  const pruneExpiredReservations = (atMs: number, atMonoMs: number): void => {
+    for (const [id, reservation] of serveReservations) {
+      if (reservation.state !== "pending") continue;
+      const expired =
+        reservation.createdMonoMs !== undefined
+          ? atMonoMs - reservation.createdMonoMs >= reservationTtlMs
+          : reservation.expiresAtMs <= atMs;
+      if (expired) {
+        serveReservations.delete(id);
+        settleReservation(id, "expired");
+      }
+    }
+  };
+
+  const servedUnionSet = (cohort: CohortState): Set<number> => {
     const union = new Set<number>();
     for (const member of cohort.members) {
       const state = identities.get(member);
       if (state) for (const id of state.served) union.add(id);
     }
-    return union.size;
+    return union;
+  };
+
+  /**
+   * The ceiling union: served ids UNION pending-reservation ids
+   * UNION committed-reservation ids, over the cohort's current
+   * members. This single definition is what makes the observe
+   * contract hold - an id present in more than one of the three
+   * sources still counts exactly once (see the header). Callers
+   * prune expired pending holds first (every public entry point
+   * does), so expired holds never inflate the count.
+   */
+  const effectiveUnionSet = (cohort: CohortState): Set<number> => {
+    const union = servedUnionSet(cohort);
+    for (const reservation of serveReservations.values()) {
+      if (!cohort.members.has(reservation.identity)) continue;
+      for (const id of reservation.ids) union.add(id);
+    }
+    return union;
+  };
+
+  const unionRecords = (cohort: CohortState): number => effectiveUnionSet(cohort).size;
+
+  /** Distinct union ids attributable ONLY to reservations (not yet served via `observe`). */
+  const reservedOnlyRecords = (cohort: CohortState): number => {
+    const served = servedUnionSet(cohort);
+    const extra = new Set<number>();
+    for (const reservation of serveReservations.values()) {
+      if (!cohort.members.has(reservation.identity)) continue;
+      for (const id of reservation.ids) if (!served.has(id)) extra.add(id);
+    }
+    return extra.size;
   };
 
   const pairKeyOf = (a: string, b: string): string => (a < b ? `${a}\u0001${b}` : `${b}\u0001${a}`);
@@ -923,6 +1237,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
 
   const snapshotOf = (cohort: CohortState, atMs: number, atMonoMs: number): CampaignSnapshot => {
     refill(cohort, atMs, atMonoMs);
+    pruneExpiredReservations(atMs, atMonoMs);
     // A snapshot must never under-report an armed declared ceiling.
     maybeArmDeclaredCeiling(cohort, atMs);
     const union = unionRecords(cohort);
@@ -940,6 +1255,7 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       ceilingActive: cohort.ceilingActive,
       ceilingArmed: cohort.ceilingArmed,
       unionRecords: union,
+      reservedRecords: reservedOnlyRecords(cohort),
       consequenceEligible: union >= minConsequenceUnion,
       consequenceFloorRecords: minConsequenceUnion,
       ceilingLimit,
@@ -977,6 +1293,30 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       cohort.flagNotificationPending = false;
     } catch {
       /* Stays pending; retried on the next observe / snapshot. */
+    }
+  };
+
+  /**
+   * Eligibility-transition detection (L8a; see the header). Called
+   * from every path that evaluates eligibility live - `observe`,
+   * `checkServe`, `snapshotFor`, `getSnapshot`. The guard is set
+   * BEFORE the callback is invoked, so a callback that reads a
+   * snapshot (re-entering a detection path) cannot re-fire, and a
+   * throwing callback is still counted as notified: exactly once
+   * means exactly once. The snapshot is built after the guard is
+   * set; callback errors (sync throws and async rejections alike)
+   * are swallowed.
+   */
+  const maybeNotifyEligibilityTransition = (cohort: CohortState, atMs: number, atMonoMs: number): void => {
+    if (!cohort.flagged || cohort.eligibilityNotified) return;
+    if (unionRecords(cohort) < minConsequenceUnion) return;
+    cohort.eligibilityNotified = true;
+    if (!options.onConsequenceEligibility) return;
+    try {
+      const result = options.onConsequenceEligibility(snapshotOf(cohort, atMs, atMonoMs));
+      if (result instanceof Promise) result.catch(() => undefined);
+    } catch {
+      /* Host wiring must never break request handling. */
     }
   };
 
@@ -1084,10 +1424,47 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
   }
 
   async function observe(event: CusumEvent): Promise<CusumDecision> {
+    /*
+     * Input discipline (F-16, same family as the F-09 checkServe
+     * validation): a malformed event must neither throw a bare
+     * TypeError into the host's request path (observe(null)) nor
+     * accrue state under a shared garbage key (a missing identity
+     * used to file every such event under the key `undefined`), and
+     * a non-finite `ts` must not poison `flaggedAtMs` / the refill
+     * anchors so epoch rotation never fires. An invalid event -
+     * null / non-object, identity missing, empty or not a string,
+     * or a present-but-non-finite `ts` - is refused with a
+     * structured no-op decision in the exact shape the exempt path
+     * below already returns (the least contract-breaking form: hosts
+     * already handle it, no new error type enters the API), and it
+     * mutates NO state - not even a reservation sweep.
+     */
+    if (
+      event === null ||
+      typeof event !== "object" ||
+      typeof event.identity !== "string" ||
+      event.identity.length === 0 ||
+      (event.ts !== undefined && (typeof event.ts !== "number" || !Number.isFinite(event.ts)))
+    ) {
+      return {
+        identity: typeof event?.identity === "string" ? event.identity : "",
+        cohortId: null,
+        score: 0,
+        increments: EMPTY_INCREMENTS(),
+        bins: { adjacency: null, tiling: null, cold: null, velocity: null },
+        crossed: false,
+        flagged: false,
+        ceilingActive: false,
+        action: "none",
+        consequenceEligible: false,
+        protectedSubject: false,
+      };
+    }
     const ts = event.ts ?? now();
     // Internal-clock events also stamp the monotonic twin; host-ts
     // events stay in the host's time domain (their twin mirrors ts).
     const tsMono = event.ts !== undefined ? ts : monoNowFn();
+    pruneExpiredReservations(ts, tsMono);
     const identity = event.identity;
     if (safeIsExempt(identity)) {
       return {
@@ -1201,14 +1578,48 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
 
     /* --- Stream 4: cursor velocity (EWMA dwell per record) --- */
     if (streams.velocity && event.cursor) {
-      const dwell = (ts - event.cursor.issuedAtMs) / Math.max(1, event.cursor.pageSize);
-      state.ewmaTauMs = 0.7 * state.ewmaTauMs + 0.3 * dwell;
-      if (event.cursor.step > 3) {
-        const tau = state.ewmaTauMs;
-        const velocityBin =
-          tau >= 200 ? "human" : tau >= 80 ? "v80_200" : tau >= 30 ? "v30_80" : "v_lt_30";
-        bins.velocity = velocityBin;
-        increments.velocity = tables.velocity[velocityBin];
+      /*
+       * Input discipline (NV-1, same family as F-09/F-16): the
+       * cursor object is host-supplied and may not have come from a
+       * verified SDK cursor at all, so its fields are validated
+       * BEFORE the EWMA is touched. A non-finite `issuedAtMs` (NaN,
+       * +/-Infinity, a non-number from an untyped caller) used to
+       * poison `ewmaTauMs` permanently - NaN pins every later bin to
+       * the fastest `v_lt_30`, -Infinity pins it to `human` - and
+       * the update ran even for `step <= 3`, before the step gate.
+       * A finite but absurd dwell poisons almost as durably (an
+       * `issuedAtMs` of -1e308, or 0 read at epoch-scale `ts`, moves
+       * the EWMA by ~1e307, thousands of honest steps from recovery),
+       * and a negative dwell is not a measurement at all. An invalid
+       * cursor is therefore treated as NO cursor: the stream is
+       * skipped whole - no EWMA mutation, no increment, no throw -
+       * exactly the F-16 no-op discipline. The dwell ceiling is a
+       * plausibility bound, not a classification change: the bins
+       * saturate at 200 ms, so any dwell up to an hour per record
+       * classifies exactly as before; beyond that the sample carries
+       * no velocity information worth the state risk.
+       */
+      const cursor = event.cursor;
+      const MAX_PLAUSIBLE_DWELL_MS = 3_600_000;
+      const cursorValid =
+        typeof cursor.issuedAtMs === "number" &&
+        Number.isFinite(cursor.issuedAtMs) &&
+        typeof cursor.pageSize === "number" &&
+        Number.isFinite(cursor.pageSize) &&
+        typeof cursor.step === "number" &&
+        Number.isFinite(cursor.step);
+      if (cursorValid) {
+        const dwell = (ts - cursor.issuedAtMs) / Math.max(1, cursor.pageSize);
+        if (Number.isFinite(dwell) && dwell >= 0 && dwell <= MAX_PLAUSIBLE_DWELL_MS) {
+          state.ewmaTauMs = 0.7 * state.ewmaTauMs + 0.3 * dwell;
+          if (cursor.step > 3) {
+            const tau = state.ewmaTauMs;
+            const velocityBin =
+              tau >= 200 ? "human" : tau >= 80 ? "v80_200" : tau >= 30 ? "v30_80" : "v_lt_30";
+            bins.velocity = velocityBin;
+            increments.velocity = tables.velocity[velocityBin];
+          }
+        }
       }
     }
 
@@ -1298,6 +1709,10 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
         crossed = true;
         cohort.flagged = true;
         cohort.flaggedAtMs = ts;
+        // A crossing that is ALREADY eligible owes no transition
+        // fire: the onCampaignFlag snapshot below already carries
+        // consequenceEligible: true (L8a).
+        if (eligible) cohort.eligibilityNotified = true;
         if (mode === "observe") {
           action = "logged";
         } else if (!eligible) {
@@ -1332,6 +1747,13 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
           clampedReason = resolved.clampedReason;
         }
       }
+      // Eligibility transition (L8a): a cohort that crossed below
+      // the floor and has now grown into eligibility while flagged
+      // notifies exactly once, here on the growth path itself.
+      maybeNotifyEligibilityTransition(cohort, ts, tsMono);
+      // Retry a flag notification an earlier throwing callback lost
+      // (F-08) - at most one delivery attempt per observe call.
+      if (!flagDeliveryAttempted) deliverFlag(cohort, ts, tsMono);
       // Armed declared ceiling, host ignoring checkServe: the cap is
       // already reached, so the decision reports the engagement even
       // though this cohort never crossed (and may never cross).
@@ -1344,9 +1766,6 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       ) {
         action = "campaign_engaged";
       }
-      // Retry a flag notification an earlier throwing callback lost
-      // (F-08) - at most one delivery attempt per observe call.
-      if (!flagDeliveryAttempted) deliverFlag(cohort, ts, tsMono);
       // Protection (protected-cohorts.ts): for an INFERRED cohort, a
       // host-declared protected subject keeps the evidence but never
       // the consequence - the decision collapses to telemetry for
@@ -1411,8 +1830,16 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     }
     const ts = now();
     const tsMono = monoNowFn();
+    pruneExpiredReservations(ts, tsMono);
     const cohort = cohortOf(identity);
-    if (!cohort || mode === "observe") return { allowed: requested };
+    if (!cohort) return { allowed: requested };
+    // Eligibility is evaluated live on every checkServe call, in
+    // every mode: a flagged cohort first seen eligible here fires
+    // its once-only transition notification (L8a) - the
+    // notification is telemetry, not a consequence, so it is not
+    // gated by mode or by the pacing returns below.
+    maybeNotifyEligibilityTransition(cohort, ts, tsMono);
+    if (mode === "observe") return { allowed: requested };
     // An armed declared ceiling enforces WITHOUT a flag: the cohort
     // was named by the host and its cap counts from the first record.
     const armed = maybeArmDeclaredCeiling(cohort, ts);
@@ -1466,17 +1893,134 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
     return { allowed, cohortId: cohort.id };
   }
 
+  /*
+   * Serve reservations (2.7.0 L1) - see the header for the full
+   * contract. All three methods are SYNCHRONOUS on purpose: the
+   * ceiling check and the tentative union mutation in reserveServe
+   * happen in one run-to-completion step with no await between
+   * them, which is exactly what closes the check-then-serve race
+   * for every deployment this in-process layer supports.
+   */
+  function reserveServe(identity: string, recordIds: number[]): ServeReservationResult {
+    const ts = now();
+    const tsMono = monoNowFn();
+    pruneExpiredReservations(ts, tsMono);
+    const requested = [
+      ...new Set(
+        (recordIds ?? []).filter(id => Number.isFinite(id) && id >= 0).map(id => Math.floor(id)),
+      ),
+    ];
+    const cohort = cohortOf(identity);
+    // No-op allow: observe mode restricts nothing, and reservations
+    // exist only for armed declared cohorts - every other shape
+    // (unknown identity, inferred cohort, declared-but-unarmed)
+    // passes through whole so hosts can wire this uniformly.
+    if (!cohort || mode === "observe") return { allowed: requested, newRecords: 0 };
+    const armed = maybeArmDeclaredCeiling(cohort, ts);
+    if (!armed) return { allowed: requested, newRecords: 0, cohortId: cohort.id };
+    // Defensive restatement of the law: a protected subject in an
+    // inferred cohort is never capped. (Unreachable today - arming
+    // requires a host-declared origin - but the guard keeps the law
+    // local if arming ever widens.)
+    if (cohortOrigin(cohort) === "inferred" && safeIsProtected(identity)) {
+      return { allowed: requested, newRecords: 0, cohortId: cohort.id };
+    }
+    // --- atomic section: check + tentative mutation, no await ---
+    const effective = effectiveUnionSet(cohort);
+    const newIds = requested.filter(id => !effective.has(id));
+    if (newIds.length === 0) {
+      // Re-delivery of already-counted ids is free and holds nothing.
+      return { allowed: requested, newRecords: 0, cohortId: cohort.id };
+    }
+    // The armed cap binds before the consequence floor; a
+    // multi-record request is granted at most the remaining
+    // headroom, mirroring checkServe's headroom rule.
+    const headroom = Math.max(0, ceilingLimit - effective.size);
+    const granted = newIds.slice(0, headroom);
+    const grantedSet = new Set(granted);
+    const newSet = new Set(newIds);
+    const allowed = requested.filter(id => !newSet.has(id) || grantedSet.has(id));
+    if (granted.length === 0) {
+      return { allowed, newRecords: 0, cohortId: cohort.id, reason: "campaign_ceiling" };
+    }
+    const reservationId = `srv_${serveReservationSeq++}`;
+    serveReservations.set(reservationId, {
+      id: reservationId,
+      identity,
+      ids: granted,
+      expiresAtMs: ts + reservationTtlMs,
+      createdMonoMs: tsMono,
+      state: "pending",
+    });
+    // --- end atomic section (the hold already counts) ---
+    return {
+      allowed,
+      newRecords: granted.length,
+      reservationId,
+      cohortId: cohort.id,
+      ...(granted.length < newIds.length ? { reason: "campaign_ceiling" } : {}),
+    };
+  }
+
+  function commitServe(reservationId: string): CommitServeResult {
+    const ts = now();
+    pruneExpiredReservations(ts, monoNowFn());
+    const reservation = serveReservations.get(reservationId);
+    if (!reservation) {
+      // Refused, and counts NOTHING: an expired or released hold's
+      // capacity was already freed (and may have been re-granted),
+      // so a late commit must never resurrect it.
+      const settled = settledReservations.get(reservationId);
+      if (settled === "expired") return { committed: false, reason: "reservation_expired" };
+      if (settled === "released") return { committed: false, reason: "reservation_released" };
+      return { committed: false, reason: "unknown_reservation" };
+    }
+    if (reservation.state === "committed") return { committed: true, duplicate: true };
+    // Finalize in place: the ids stay counted via the committed
+    // hold, and the host's subsequent observe of the same ids lands
+    // them in the served sets without counting them twice (the
+    // union is a set union over both - see the header contract).
+    reservation.state = "committed";
+    return { committed: true };
+  }
+
+  function releaseServe(reservationId: string): ReleaseServeResult {
+    const ts = now();
+    pruneExpiredReservations(ts, monoNowFn());
+    const reservation = serveReservations.get(reservationId);
+    if (!reservation) {
+      const settled = settledReservations.get(reservationId);
+      if (settled === "expired") return { released: false, reason: "reservation_expired" };
+      if (settled === "released") return { released: false, reason: "reservation_released" };
+      return { released: false, reason: "unknown_reservation" };
+    }
+    if (reservation.state === "committed") return { released: false, reason: "already_committed" };
+    // Deleting the hold frees exactly its ids that are not also in
+    // the served union (the effective-union computation does the
+    // rest) - a release can un-hold, it cannot un-serve.
+    serveReservations.delete(reservationId);
+    settleReservation(reservationId, "released");
+    return { released: true };
+  }
+
   return {
     observe,
     checkServe,
+    reserveServe,
+    commitServe,
+    releaseServe,
     async getSnapshot(cohortId) {
+      const ts = now();
+      const tsMono = monoNowFn();
       for (const cohort of cohorts.values()) {
         if (cohort.id === cohortId) {
-          const atMs = now();
-          const atMonoMs = monoNowFn();
-          const snapshot = snapshotOf(cohort, atMs, atMonoMs);
+          // Snapshot reads evaluate eligibility live: a flagged
+          // cohort first seen eligible here fires its once-only
+          // transition notification (L8a) before the read returns.
+          maybeNotifyEligibilityTransition(cohort, ts, tsMono);
+          const snapshot = snapshotOf(cohort, ts, tsMono);
           // A snapshot read is also a flag-delivery retry point (F-08).
-          deliverFlag(cohort, atMs, atMonoMs);
+          deliverFlag(cohort, ts, tsMono);
           return snapshot;
         }
       }
@@ -1487,15 +2031,14 @@ export function createCusumTripwire(options: CusumTripwireOptions = {}): CusumTr
       // A cohort snapshot normally needs a pair - except an armed
       // declared cohort, whose state (armed, capped) is meaningful
       // even for a single-member declared group.
-      if (cohort && (cohort.members.size >= 2 || cohort.ceilingArmed)) {
-        const atMs = now();
-        const atMonoMs = monoNowFn();
-        const snapshot = snapshotOf(cohort, atMs, atMonoMs);
-        // A snapshot read is also a flag-delivery retry point (F-08).
-        deliverFlag(cohort, atMs, atMonoMs);
-        return snapshot;
-      }
-      return null;
+      if (!cohort || (cohort.members.size < 2 && !cohort.ceilingArmed)) return null;
+      const ts = now();
+      const tsMono = monoNowFn();
+      maybeNotifyEligibilityTransition(cohort, ts, tsMono);
+      const snapshot = snapshotOf(cohort, ts, tsMono);
+      // A snapshot read is also a flag-delivery retry point (F-08).
+      deliverFlag(cohort, ts, tsMono);
+      return snapshot;
     },
     async clearCohort(cohortId) {
       for (const cohort of cohorts.values()) {
