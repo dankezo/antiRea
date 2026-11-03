@@ -159,7 +159,9 @@ export interface FlowScorerOptions {
   /**
    * Verified-bot lane: return true for session keys the host has verified
    * out-of-band (Web Bot Auth verdict, verified crawler rDNS). Exempt
-   * sessions are never scored and hold no state.
+   * sessions are never scored and hold no state. A throwing predicate is
+   * treated as not exempt (the error is swallowed, like every other host
+   * hook in this module).
    */
   isExempt?: (sessionKey: string) => boolean;
   /**
@@ -267,6 +269,18 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
   const { wall: clock, mono: monoClock } = resolveIntervalClock(options);
   const sessions = new Map<string, SessionState>();
 
+  const isExemptSafe = (sessionKey: string): boolean => {
+    if (!options.isExempt) return false;
+    try {
+      return options.isExempt(sessionKey) === true;
+    } catch {
+      /* A throwing host hook is treated as not exempt, mirroring
+       * kindOf below and the CUSUM tripwire's safeIsExempt (F-20):
+       * telemetry must never break request handling. */
+      return false;
+    }
+  };
+
   const kindOf = (sessionKey: string): FlowIdentityKind => {
     if (options.identityKind) {
       try {
@@ -359,7 +373,7 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
   };
 
   const observe = (sessionKey: string, event: FlowEvent): FlowObservation => {
-    if (options.isExempt?.(sessionKey)) {
+    if (isExemptSafe(sessionKey)) {
       return { score: 0, level: "normal", exempt: true };
     }
     const state = liveState(sessionKey);
@@ -466,7 +480,7 @@ export function createFlowScorer(options: FlowScorerOptions = {}): FlowScorer {
   return {
     observe,
     score(sessionKey: string): number {
-      if (options.isExempt?.(sessionKey)) return 0;
+      if (isExemptSafe(sessionKey)) return 0;
       const state = sessions.get(sessionKey);
       if (!state) return 0;
       if (monoClock() - state.lastSeenMono > windowMs) {

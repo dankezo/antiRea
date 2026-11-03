@@ -89,6 +89,16 @@
  * fires ONCE per group per window (the latch re-arms after the whole
  * group has been idle for `activityWindowMs`).
  *
+ * One candidate feature is computed but NOT scored by default: union
+ * growth (see `HerdFeatures.unionGrowth`). Interleaving a herd's
+ * slices collapses its contiguity term while the complement grouping
+ * still proves the members tile disjoint slices; union growth -
+ * the share of served records that grew the group's union,
+ * discounted by the contiguity that already credits contiguous
+ * growth - stays high for that profile and low for redundant
+ * readers. Its shipped weight is 0 (the lab-validated scoring is
+ * untouched); `weights: { unionGrowth: 0.15 }` opts in.
+ *
  * Response bands - the C6 lesson, encoded. A flag is not one kind of
  * evidence. Every measured herd tiles (tiling ~ 1.0); the one measured
  * legitimate group that crossed the threshold - a compliance team
@@ -200,6 +210,18 @@ export interface HerdFeatures {
   tiling: number;
   /** Mean per-member largest-consecutive-index-run fraction. 0 without `recordIndex`. */
   contiguity: number;
+  /**
+   * Union growth through fragmentation (L8b candidate, opt-in via
+   * `weights.unionGrowth`, default weight 0): the fraction of served
+   * records that grew the group's union (combined / sum of member
+   * sizes - 1 for a partitioning group, low for redundant readers),
+   * discounted by contiguity. Contiguous assembly is already credited
+   * by the contiguity term, so this term pays out only for union
+   * growth achieved through NON-contiguous serving - the
+   * slice-interleaved profile whose contiguity collapses while its
+   * members still tile disjoint slices.
+   */
+  unionGrowth: number;
   /** Fraction of members active within the trailing co-activity window. */
   coActivity: number;
   /** Fraction of members at >= 90% of their record-budget limit. */
@@ -258,6 +280,8 @@ export interface HerdWeights {
   contiguity: number;
   coActivity: number;
   capPressure: number;
+  /** L8b candidate feature weight. 0 in the shipped defaults: opt-in only. */
+  unionGrowth: number;
 }
 
 /** The lab-validated weights (chain C). The v2 score drops `cluster` without renormalizing. */
@@ -268,6 +292,13 @@ export const DEFAULT_HERD_WEIGHTS: HerdWeights = {
   contiguity: 0.15,
   coActivity: 0.1,
   capPressure: 0.05,
+  // L8b candidate (union growth through fragmentation): computed on
+  // every snapshot but weighted 0 by default, so the shipped scoring
+  // is exactly the lab-validated arithmetic. A host opts in with
+  // `weights: { unionGrowth: 0.15 }` - the contiguity weight, so a
+  // perfectly partitioning group earns the assembly term in full
+  // whether its slices arrive contiguously or interleaved.
+  unionGrowth: 0,
 };
 
 export interface HerdDetectorOptions {
@@ -433,6 +464,14 @@ export function applyHerdLadder(
 /* Internals                                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Largest |ms| value a `Date` can represent (ECMA-262 TimeClip range,
+ * +/-8.64e15). An event `ts` outside it makes `new Date(ts).toISOString()`
+ * throw a bare RangeError (F-21) and poisons every window comparison it
+ * touches, so observe() refuses such events before any state is read.
+ */
+const MAX_DATE_MS = 8_640_000_000_000_000;
+
 const MIN_MS = 60_000;
 const DEFAULT_CHAINING_WINDOW_MS = 120 * MIN_MS;
 const DEFAULT_COACTIVITY_WINDOW_MS = 15 * MIN_MS;
@@ -581,9 +620,25 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
 
   const limitOf = (st: IdentityState): number => {
     if (st.budgetLimit !== undefined && st.budgetLimit > 0) return st.budgetLimit;
-    const fromHost = options.getLimit?.(st.identity);
-    if (fromHost !== undefined && fromHost > 0) return fromHost;
+    // F-20: a throwing host callback must never escape observe() (the
+    // sibling discipline: onFlag / isProtected-style predicates are all
+    // swallowed). A failed lookup is treated as no host limit.
+    try {
+      const fromHost = options.getLimit?.(st.identity);
+      if (fromHost !== undefined && fromHost > 0) return fromHost;
+    } catch {
+      /* fall through to the default cap */
+    }
     return defaultRecordCap;
+  };
+
+  /** F-20: `recordIndex` is a host callback; a throw is treated as "no index for this id". */
+  const safeRecordIndex = (id: string): number | undefined => {
+    try {
+      return options.recordIndex?.(id);
+    } catch {
+      return undefined;
+    }
   };
 
   const recomputeLargestRun = (st: IdentityState): void => {
@@ -634,11 +689,16 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     }
     const spanMin = maxSignup >= minSignup ? (maxSignup - minSignup) / MIN_MS : 0;
     const overlapRatio = (sumSizes - combined) / Math.max(1, sumSizes);
+    const contiguity = n > 0 ? contSum / n : 0;
     return {
       cluster: includeCluster ? clusterOfSpan(spanMin) : null,
       coverageRamp: Math.min(1, combined / rampDenominator),
       tiling: 1 - Math.min(1, overlapRatio * 3),
-      contiguity: n > 0 ? contSum / n : 0,
+      contiguity,
+      // Union growth: of everything the group was served, the share
+      // that actually grew the union - discounted by contiguity,
+      // which already credits the contiguous share of that growth.
+      unionGrowth: (combined / Math.max(1, sumSizes)) * (1 - contiguity),
       coActivity: n > 0 ? coActive / n : 0,
       capPressure: n > 0 ? capCount / n : 0,
     };
@@ -649,6 +709,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     (weights.coverageRamp * features.coverageRamp +
       weights.tiling * features.tiling +
       weights.contiguity * features.contiguity +
+      weights.unionGrowth * features.unionGrowth +
       weights.coActivity * features.coActivity +
       weights.capPressure * features.capPressure +
       (includeCluster && features.cluster !== null ? weights.cluster * features.cluster : 0));
@@ -1034,6 +1095,25 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
     if (!event || typeof event.identity !== "string" || event.identity.length === 0) {
       return { recorded: false };
     }
+    /*
+     * Input discipline (F-21, same family as the CUSUM F-16 validation):
+     * a present-but-unusable `ts` - not a number, non-finite, or outside
+     * the representable Date range (|ts| > 8.64e15) - refuses the event
+     * as a structured no-op BEFORE any state is touched (not even an
+     * identity creation or an LRU eviction). Before this check, a finite
+     * but out-of-range ts (e.g. 1e16) sailed through the finite check,
+     * was latched as the group's flag time, and then made emitFlag's
+     * `new Date(now).toISOString()` throw a bare RangeError out of
+     * observe() - losing the very flag that event carried, permanently
+     * (the latch stayed set, the supplementary cooldown compared
+     * against the poisoned flag time and never opened again).
+     */
+    if (
+      event.ts !== undefined &&
+      (typeof event.ts !== "number" || !Number.isFinite(event.ts) || Math.abs(event.ts) > MAX_DATE_MS)
+    ) {
+      return { recorded: false };
+    }
     const hasTs = typeof event.ts === "number" && Number.isFinite(event.ts);
     const now = hasTs ? (event.ts as number) : clock();
     // Host-ts events stay in the host's time domain (twin mirrors ts);
@@ -1078,7 +1158,7 @@ export function createHerdDetector(options: HerdDetectorOptions = {}): HerdDetec
         newKeys.push(key);
         const block = blockOfKey(key);
         st.bitmap[block >> 6] = (st.bitmap[block >> 6] as bigint) | (1n << BigInt(block & 63));
-        const index = options.recordIndex?.(id);
+        const index = safeRecordIndex(id);
         if (typeof index === "number" && Number.isFinite(index)) {
           if (!st.indices.has(index)) {
             st.indices.add(index);
