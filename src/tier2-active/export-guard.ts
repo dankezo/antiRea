@@ -43,6 +43,15 @@
  *     budget cannot afford is rejected with `429 record_budget_exceeded`.
  *     This path cannot see that exported rows were already viewed, so it
  *     overcharges exactly the records the per-record path prices fairly.
+ * - Identity: when a `recordBudget` is wired but NO identity can be
+ *   resolved for the request (no account, no API key and no determinable
+ *   IP), the export is NOT exempt (F-14 - a NEW fix in this tree, not a
+ *   port: the hole was still open in 2.6.3). Every budget effect -
+ *   the rejection floor, the flat charge, the per-record gate and the
+ *   middleware's pricing/reservation - is applied to a single shared
+ *   `unknown:unresolved` bucket, the quota guard's precedent for the
+ *   same situation. Set `allowUnresolvedIdentity: true` only to restore
+ *   the legacy behavior of leaving such exports unbudgeted.
  * - Zero-cost oracles are priced too: a 422 rejection (unfiltered or
  *   over-scope) charges the identity `rejectionFloorUnits` (default 1)
  *   when a budget is attached, so probing the guard's boundaries is not
@@ -74,6 +83,16 @@ export interface ExportGuardOptions extends RecordBudgetIdentityOptions {
   budgetMultiplier?: number;
   /** Shared record budget (from `createRecordBudget`) that allowed exports are charged against. */
   recordBudget?: RecordBudget;
+  /**
+   * When a `recordBudget` is wired but the request's identity cannot be
+   * resolved at all (no account, no API key, no determinable IP), the
+   * default (`false`) charges the export against a single shared
+   * `unknown:unresolved` budget bucket, so an unresolvable export is
+   * never silently exempt (F-14; the quota guard's precedent). Set to
+   * `true` only to restore the legacy behavior of skipping budget
+   * enforcement for such requests.
+   */
+  allowUnresolvedIdentity?: boolean;
   /**
    * Estimate how many rows this export request would produce. May be async
    * (a COUNT query). Return `undefined` when the host cannot estimate.
@@ -147,6 +166,14 @@ export interface ExportGuard {
 
 type ExportRequestLike = QuotaRequestLike & { antireaExportRows?: unknown };
 
+/**
+ * Budget bucket for exports whose identity cannot be resolved at all
+ * when a budget is wired (F-14) - the same key the quota guard counts
+ * unresolvable requests against. It deliberately does NOT start with
+ * `ip:`, so it lives in the record budget's main (account) pool.
+ */
+const UNRESOLVED_BUDGET_IDENTITY_KEY = "unknown:unresolved";
+
 export function createExportGuard(options: ExportGuardOptions): ExportGuard {
   const maxRows = Math.max(1, Math.floor(options.maxRowsPerExport) || 1);
   const multiplier = Math.max(0, options.budgetMultiplier ?? 2);
@@ -177,6 +204,14 @@ export function createExportGuard(options: ExportGuardOptions): ExportGuard {
     let identityKey: string | undefined;
     if (options.recordBudget) {
       identityKey = await resolveRecordBudgetIdentityKey(req, options);
+      if (!identityKey && options.allowUnresolvedIdentity !== true) {
+        // F-14: a wired budget with no resolvable identity must not be
+        // a silent fail-open (pre-fix, every budget effect below was
+        // skipped and the export ran unaccounted). Count it against
+        // the shared unknown bucket instead, mirroring the quota
+        // guard; the legacy skip remains only as an explicit opt-in.
+        identityKey = UNRESOLVED_BUDGET_IDENTITY_KEY;
+      }
     }
 
     const reject = async (
