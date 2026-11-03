@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-336%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-583%20passing-informational)](tests/)
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
@@ -30,20 +30,23 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.6.3
+## New in v2.7.0
 
-A patch release that fixes the eight medium-severity issues found by the independent audit of v2.6.0. No new features and no upgrade steps - the same limits you already configured are now enforced in a few places that used to have gaps.
+The short version: the alarm system used to rely on thresholds fitted in a lab - good numbers, but no promise behind them. v2.7.0 adds an evidence engine with a mathematical false-alarm promise, two new advisory signals, and a hardening merge underneath.
 
-- **Quota and export ceilings are now enforced atomically with the bundled store.** Before, a slow store let parallel requests slip past each other and overshoot the cap. Checking and recording is now a single step.
-- **CSV exports are now charged like JSON exports.** A CSV body used to price at zero by accident - in a live test it pulled 150 records through a ceiling of 60. Now every export format pays the same way.
-- **An action with no declared price is refused instead of free.** If your app forgot to price an action, it used to run free forever. Now it is refused until it has a price (or you set a fallback price).
-- **A crashing host callback no longer loses a warning flag.** If your notification handler threw an error, the flag used to vanish. Now it is kept and delivered again at the next touch.
-- **A NaN input no longer locks a user group forever.** One malformed number used to poison a group's counter until restart. Now it is refused on the spot and the counter heals itself.
-- **Tracking memory is capped and cleans itself up.** Per-identity tracking state now has a size limit and evicts the least active entries, instead of growing forever.
-- **Calibration rotation now really resets scores.** When an evidence window rolls over, old scores and contributions are actually cleared - before, they lingered and could re-flag a group instantly.
-- **The test suite grew to prove it:** 338 tests, 336 passing, including 16 new tests that all fail on the pre-patch code.
+- **An alarm with a promise attached.** The new e-value tripwire (opt-in) works like a careful gambler's bankroll: if your legitimate users stay under an intensity bound you set, the chance it *ever* fires falsely is at most the level you picked (say 5%) - guaranteed by construction. In 10,000 simulated legitimate runs it fired 0 times; at the hardest honest boundary, 4.2% against the 5% promise. It caught slicing at a median of 400 records vs 1,225 for the current engine.
+- **A second shape for quiet-then-loud attacks.** The plain bankroll reacts slowly after a long quiet spell, so a Shiryaev-Roberts mode ships alongside: median 14 steps to catch an attack after the quiet period, vs 774 - under its own, different guarantee, stated plainly. A calibration helper measures the bound from your own traffic.
+- **The honest catch, printed on the box.** The promise is exactly as good as your bound: a legitimate workflow running hotter than the bound *will* eventually trip it - hot-but-honest jobs like bulk importers belong in the declared lanes or need their own bound.
+- **Hard ceilings, exact in a crowd.** Forty workers hammering a declared cap of 600 records overshot to 1,575 on the old check-then-serve path. The new reserve-first path holds exactly 600, zero overshoot - and its holds now expire on a monotonic clock, so a system-clock jump can't stretch or kill them.
+- **A new signal for feature enumeration (advisory).** Input-space coverage watches *which* features and resources an account touches, not just how much data it takes. In the lab it flags sweep and random-probe enumeration 9 of 9 at the first checkpoint (the current engine: 0 of 9) and a work-splitting herd 72 of 72 members - at a 1.15% legitimate flag rate. It only scores what you declare, and it never blocks anything by itself.
+- **A new signal for crawler-shaped browsers (advisory).** The asset/referrer profile notices browsers that never load images and never carry referrers: 0 false flags in the lab (6,658 legitimate streams, 923 sale-week streams), crawlers flagged 9 of 9 - and shipped deliberately slower-but-surer, needing two bad windows in a row before it flags.
+- **Verified users stop getting re-challenged.** Pass a step-up check once and a new grace window (24 h by default) leaves you alone at ordinary evidence levels. It breaks instantly if evidence jumps to twice the flag line - and it never lifts any budget or ceiling.
+- **A real bug found and fixed.** New heavy-search attack tests caught a bystander being swept into an attack group's flag - worse, the accident *shielded* one attacker from friction. The grouping rule is fixed: bystander clean, all 16 attackers enrolled.
+- **Signed-bot verification, re-checked.** An independent conformance pack for the RFC 9421 verifier, built from the specification's own example keys: all 12 broken signature variants rejected, false accepts 0.
+- **Your policy, in the formats agents read.** A small generator emits your data-use policy as robots.txt signals, a TDM reservation file and a policy JSON - correct format only, no enforcement claimed.
+- **All recent hardening, merged in.** Every fix shipped in the 2.6.1-2.6.3 patches (idempotency binding, atomic quota enforcement, priced CSV exports, tamper-proof clocks, and more) is part of this line - a pre-release audit caught that the 2.7 development tree had forked before them, and nothing shipped until they were merged back and re-verified.
 
-Full technical write-up: [v2.6.3 deep dive](docs/v2.6.3-deep-dive.md). The clock hardening in v2.6.2 is covered in the [v2.6.2 deep dive](docs/v2.6.2-deep-dive.md) and the changelog.
+Full technical write-up with every mechanism, derivation and measurement: [v2.7.0 deep dive](docs/v2.7.0-deep-dive.md). What the previous patch line changed: [v2.6.3 deep dive](docs/v2.6.3-deep-dive.md).
 
 ## Browser benchmark harness
 
@@ -80,6 +83,9 @@ The goal of this project is to help app owners implement **effective measures wi
 | Action budget vs. feature-abuse herd (lab) | Scripted herd splitting expensive actions across 24 identities (v2.6.0 feature classic, protected side, lab measurement) | Baseline (no protection): **80/80 operations completed in 241 ms, 0 interrupts**. Protected, after the fix round: **16/80 completed (20.0%)**, max distinct targets per identity held at **500**, and friction coverage measured by enrollment was **24/24** identities (the flag-union counter read 14/24 - attempt-time enrollment stops joiners before they generate the observations that counter counts; both numbers are reported in the deep dive). Attacker economics in the same round: 220 attempts, 108 interrupts, 96 HTTP 429 rate-limit responses, wall clock 480,445 ms (driver cap reached) |
 | Feature-side legitimate users (lab) | Declared team, undeclared teams, ordinary users under the action layer (v2.6.0 feature classic, protected side, lab measurement) | Declared team of 6: **40/40 operations, 0 friction, 0 enrolled**. Undeclared team of 6: **40/40, 0 work lost, no hard denial**. Undeclared team of 8: at the 15-minute mark **20/40 completed** over 3,205 attempts with 3,185 friction events - all at the step-up + soft-floor tier, **0 hard denials**; work is never refused outright, it flows at the published capped rate. Ordinary users (8): **48/48 first-attempt successes, 0 consequences** |
 | Canary actions (lab) | Registered fake action targets (a promo / export slice no real UI emits) touched by an attacker identity (v2.6.0 feature classic, protected side, lab measurement) | Touching the canary target (slice 40) tainted only the toucher, linked it into the flagged group via `taintedMembers`, and enrolled it in step-up on direct evidence; the bystander in the same cell measured **0 taint, 0 enrollments, 0 overrides**. Round 1 of this cell failed its bystander sub-check on raw-cost materiality; the fix round's contribution-based materiality passed all four sub-checks - see the deep dive |
+| Declared ceiling under parallel load (lab) | 40 concurrent workers hammering a declared cohort's hard ceiling of 600 (v2.7.0 classic cell) | The old check-then-serve path overshot: union **639** (1-record requests) and **1,575** (25-record requests). The new reservation path (`reserveServe`) held **exactly 600, zero overshoot**, both shapes; the declared-protected control lane served **1,200/1,200** with zero interference |
+| Anytime-valid evidence engine (lab, simulation) | E-value tripwire (`createEvalueTripwire`): false-flag guarantee by construction (Ville) under a host-set legitimate-intensity bound; pre-registered simulation, seeded and reproducible | **0 false crossings in 10,000** legitimate runs at nominal 5% and 1%; at the hardest boundary (legitimate mean exactly at the bound, maximum variance) **4.2% vs the 5% promise**. Detection: slicing caught at median **400** union records (CUSUM on the same traces: 1,225). Printed costs: a legitimate class running just above the bound is flagged with probability near 1 (the bound is the guarantee's condition - a calibration helper ships with the engine), per-record feeding is blind to slow ID-walks, and the plain product shape needed a median **774** steps to catch an attack after a long quiet history - the Shiryaev-Roberts shape shipped alongside cuts that to **14** under its own average-run-length guarantee |
+| Feature-side attack cells S2 + S3, LLM attacker (lab) | Heavy-search herd (16 identities), promo farming (12 identities), and a live LLM-driven attacker on the export cell (v2.7.0, protected side) | Heavy search: flag covered **10/16**, completion **30%** of baseline - the cell also caught a real grouping bug (a bystander absorbed into the flag, shielding one attacker); after the fix, completion **25%**, bystander in **no** flag, **16/16** attackers enrolled. Promo farming: **12/12** flagged, per-identity grants capped at **2-3 per minute-window**, control's first claim clean. LLM attacker (single model, SambaNova gemma-4-31B-it, 2 runs): **16/80 (20%)** - identical outcome to the scripted herd, **24/24** enrolled; it never tried the under-the-floor counter-strategy described in its own prompt |
 
 **What this adds up to.** The stack removes the casual one-shot clone, and turns bulk extraction into an identity problem: every additional slice of the dataset costs another account and more visibility. It does not stop a determined, well-resourced rebuilder, and the real price of an identity (signup friction, verified accounts, payment) is set by you, the host - which is why budgets are enforced per identity and why herd flags distinguish "cut the budget" from "step up scrutiny" instead of firing one blunt response.
 
@@ -107,7 +113,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **338 automated tests** (336 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **585 automated tests** (583 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
