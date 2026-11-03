@@ -759,6 +759,24 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     return expired;
   }
 
+  /**
+   * Remove a reservation AND every idempotency key pointing at it
+   * (F-12). NEW minimal patch added during the 2.7.0 port - this is
+   * NOT in the released 2.6.3 ledger, whose commit/release deleted
+   * only the reservation and left its key orphaned in the map
+   * forever (audit regress-h2: 25 orphaned keys / 0 reservations);
+   * the expiry sweep above only prunes orphans when some other
+   * reservation happens to expire in the same mutation. Mirrors the
+   * `dropReservation` precedent in action-budget.ts, where commit
+   * and release already route through the equivalent helper.
+   */
+  function dropReservation(state: DisclosureLedgerState, reservation: LedgerReservation): void {
+    delete state.reservations[reservation.id];
+    for (const [key, reservationId] of Object.entries(state.idempotency)) {
+      if (reservationId === reservation.id) delete state.idempotency[key];
+    }
+  }
+
   function effectiveBitmap(state: DisclosureLedgerState): Bitmap {
     let bitmap = bitmapFromBase64(state.unionBitmap);
     for (const reservation of Object.values(state.reservations)) {
@@ -984,7 +1002,7 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
           const held = bitmapFromBase64(reservation.idsBitmap);
           state.unionBitmap = bitmapToBase64(bitmapUnion(bitmapFromBase64(state.unionBitmap), held));
           state.anonymousServed += reservation.count - bitmapPopcount(held);
-          delete state.reservations[reservationId];
+          dropReservation(state, reservation);
           return { state, value: { committed: true } };
         });
         if (result.committed) ownReservationMono.delete(reservationId);
@@ -997,8 +1015,9 @@ export function createDisclosureLedger(options: DisclosureLedgerOptions): Disclo
     async releaseReservation(reservationId) {
       try {
         const result = await mutate<{ released: boolean; reason?: string }>(state => {
-          if (!state.reservations[reservationId]) return { state: null, value: { released: false } };
-          delete state.reservations[reservationId];
+          const reservation = state.reservations[reservationId];
+          if (!reservation) return { state: null, value: { released: false } };
+          dropReservation(state, reservation);
           return { state, value: { released: true } };
         });
         if (result.released) ownReservationMono.delete(reservationId);

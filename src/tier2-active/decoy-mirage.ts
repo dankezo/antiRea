@@ -308,6 +308,22 @@ const AMBIENT_DESTS: ReadonlySet<string> = new Set([
  * navigation mode means the browser loaded the URL ambiently (an embed, a
  * preview, a typed navigation); anything else is a deliberate client fetch.
  */
+/**
+ * Await a host response-write result only when it is thenable. The
+ * structural response type declares `void` returns, but a real host `res`
+ * (or an async shim around one) may hand back a promise; ignoring a
+ * rejected one would leak an unhandled rejection out of the middleware.
+ */
+const awaitIfThenable = async (value: unknown): Promise<void> => {
+  if (
+    value !== null &&
+    (typeof value === "object" || typeof value === "function") &&
+    typeof (value as { then?: unknown }).then === "function"
+  ) {
+    await (value as PromiseLike<unknown>);
+  }
+};
+
 const classifyHitKind = (request: CanaryRequest): DecoyHitKind => {
   const dest = request.headers.get("sec-fetch-dest")?.trim().toLowerCase();
   const mode = request.headers.get("sec-fetch-mode")?.trim().toLowerCase();
@@ -413,20 +429,36 @@ export function createDecoyMirage(options: DecoyMirageOptions = {}): DecoyMirage
       next();
       return;
     }
-    res.setHeader("content-type", "application/json");
-    if (typeof res.status === "function") {
-      const chained = res.status(result.status);
-      if (chained && typeof chained.json === "function") {
-        chained.json(result.body);
+    // Writing the response is host I/O, and a host `res` can fail here:
+    // `setHeader` after headers are sent, `json`/`end` on a closed
+    // socket, or an async write that rejects. None of that may escape
+    // this middleware - an async middleware rejection is unhandled on
+    // Express 4 and can take the host process down, and a floating
+    // rejected promise from `json`/`end` is an unhandled rejection on
+    // any framework. Swallow write failures like callback failures
+    // elsewhere in this package: the mirage is a monitoring surface and
+    // must never break the host application. `next(err)` is NOT called:
+    // the decoy was already decided and recorded, the response is
+    // half-written at best, and there is nothing the host's error
+    // handler could usefully do with it.
+    try {
+      await awaitIfThenable(res.setHeader("content-type", "application/json"));
+      if (typeof res.status === "function") {
+        const chained = res.status(result.status);
+        if (chained && typeof chained.json === "function") {
+          await awaitIfThenable(chained.json(result.body));
+          return;
+        }
+      }
+      if (typeof res.json === "function") {
+        await awaitIfThenable(res.json(result.body));
         return;
       }
-    }
-    if (typeof res.json === "function") {
-      res.json(result.body);
+      res.statusCode = result.status;
+      await awaitIfThenable(res.end(JSON.stringify(result.body)));
+    } catch {
       return;
     }
-    res.statusCode = result.status;
-    res.end(JSON.stringify(result.body));
   };
 
   return { paths: [...pathSet], handle, middleware };
