@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![độ phủ dòng của dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-336%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-583%20passing-informational)](tests/)
 
 antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
@@ -30,20 +30,23 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.6.3
+## Mới trong v2.7.0
 
-Một bản vá sửa 8 lỗi mức trung bình mà đợt kiểm toán độc lập bản 2.6.0 đã tìm ra. Không có tính năng mới, không cần bước nâng cấp nào - chỉ là các giới hạn bạn đã cấu hình nay được giữ chặt ở những chỗ trước đây còn kẽ hở.
+Nói ngắn gọn: hệ thống báo động trước đây dựa vào các ngưỡng được hiệu chuẩn trong phòng lab - số đẹp, nhưng không có lời hứa nào đứng sau. v2.7.0 bổ sung một engine bằng chứng có lời hứa toán học về báo động giả, hai tín hiệu tư vấn mới, và một đợt hợp nhất củng cố bên dưới.
 
-- **Trần quota và trần export giờ ép nguyên tử với store đóng gói.** Trước đây, nếu store phản hồi chậm, nhiều request song song có thể cùng lọt qua trước khi bộ đếm kịp ghi và vượt trần. Nay việc kiểm tra và ghi là một bước không tách rời.
-- **Xuất CSV nay bị tính phí như xuất JSON.** Trước đây phần thân CSV bị tính giá 0 ngoài ý muốn - trong test trực tiếp nó lấy được 150 record qua một trần 60. Nay mọi định dạng xuất đều trả phí như nhau.
-- **Hành động không khai giá thì bị từ chối thay vì miễn phí.** Nếu app của bạn quên khai giá cho một hành động, trước đây nó chạy miễn phí mãi mãi. Nay nó bị từ chối cho tới khi có giá (hoặc bạn đặt một giá dự phòng).
-- **Một callback lỗi của host không còn làm mất cờ cảnh báo.** Nếu hàm nhận thông báo của bạn văng lỗi, cờ cảnh báo trước đây biến mất theo. Nay nó được giữ lại và gửi lại ở lần chạm tiếp theo.
-- **Đầu vào NaN không còn khóa oan cả nhóm vĩnh viễn.** Một giá trị số hỏng từng đầu độc bộ đếm của cả nhóm cho tới khi khởi động lại. Nay nó bị từ chối ngay tại chỗ và bộ đếm tự lành.
-- **Bộ nhớ theo dõi có trần và tự dọn.** Trạng thái theo dõi từng danh tính nay có giới hạn kích thước và tự loại bỏ các mục ít hoạt động nhất, thay vì lớn mãi không ngừng.
-- **Đổi khóa hiệu chuẩn giờ reset điểm thật.** Khi cửa sổ bằng chứng lăn sang kỳ mới, điểm và đóng góp cũ được xóa thật - trước đây chúng ở lại và có thể gắn cờ lại cả nhóm ngay lập tức.
-- **Bộ test lớn lên để chứng minh điều đó:** 338 test, 336 đạt, gồm 16 test mới mà cả 16 đều fail trên bản trước khi vá.
+- **Một báo động có lời hứa đi kèm.** Tripwire e-value mới (tùy chọn bật) tích lũy bằng chứng như cách một tay cược cẩn thận làm lớn vốn: nếu người dùng hợp lệ của bạn nằm dưới một ngưỡng cường độ do bạn đặt, khả năng nó *bao giờ* bắn nhầm cũng không vượt quá mức bạn chọn (ví dụ 5%) - bảo đảm theo cấu trúc. Trong 10.000 lượt mô phỏng người dùng hợp lệ nó bắn 0 lần; ở biên trung thực khắc nghiệt nhất: 4,2% so với lời hứa 5%. Nó bắt slicing ở trung vị 400 bản ghi so với 1.225 của engine hiện tại.
+- **Một dạng thứ hai cho kiểu tấn công im lặng rồi bùng nổ.** Hình dạng tích lũy thường phản ứng chậm sau thời gian dài yên lặng, nên bản này kèm chế độ Shiryaev-Roberts: trung vị 14 bước để bắt tấn công sau thời gian yên lặng, so với 774 - với một bảo đảm riêng, khác hẳn, ghi rõ là như vậy. Một công cụ hiệu chuẩn đo ngưỡng từ chính lưu lượng của bạn.
+- **Cái giá nói thẳng, in ngay trên hộp.** Lời hứa chỉ tốt đúng bằng ngưỡng bạn đặt: một workflow hợp lệ chạy nóng hơn ngưỡng sẽ *chắc chắn* vấp phải nó theo thời gian - các việc nóng-nhưng-thật như nhập dữ liệu hàng loạt thuộc về làn khai báo hoặc cần ngưỡng riêng.
+- **Trần cứng, chính xác giữa đám đông.** Bốn mươi worker cùng đập vào một trần khai báo 600 bản ghi: đường check-then-serve cũ vượt tới 1.575. Đường reserve-first mới giữ đúng 600, vượt 0 - và các lượt giữ chỗ nay hết hạn theo đồng hồ đơn điệu, nên một bước nhảy đồng hồ hệ thống không kéo dài hay giết chết chúng được.
+- **Một tín hiệu mới cho hành vi liệt kê qua tính năng (tư vấn).** Độ phủ không gian đầu vào theo dõi *những* tính năng và tài nguyên nào một tài khoản chạm tới, không chỉ lượng dữ liệu nó lấy. Trong lab nó gắn cờ hành vi quét và dò ngẫu nhiên 9/9 ngay checkpoint đầu (engine hiện tại: 0/9) và một đội chia việc 72/72 thành viên - ở tỉ lệ gắn cờ người dùng hợp lệ 1,15%. Nó chỉ chấm những gì bạn khai báo, và tự nó không chặn bất cứ thứ gì.
+- **Một tín hiệu mới cho trình duyệt kiểu crawler (tư vấn).** Hồ sơ asset/referrer nhận ra các trình duyệt không bao giờ tải ảnh và không bao giờ mang referrer: 0 gắn cờ nhầm trong lab (6.658 luồng người dùng hợp lệ, 923 luồng tuần sale), crawler bị gắn cờ 9/9 - và bản này cố ý giao chậm-mà-chắc, cần hai cửa sổ xấu liên tiếp mới gắn cờ.
+- **Người dùng đã xác minh không bị thách lại liên tục.** Qua được một lần kiểm tra step-up thì một cửa sổ ân hạn mới (mặc định 24 giờ) để bạn yên ở mức bằng chứng thường. Nó vỡ ngay khi bằng chứng vọt lên gấp đôi vạch gắn cờ - và nó không bao giờ nâng bất kỳ ngân sách hay trần nào.
+- **Một bug thật được tìm thấy và sửa.** Các bài test tấn công tìm kiếm nặng bắt gặp một người đứng ngoài bị cuốn vào cờ của một nhóm tấn công - tệ hơn, tai nạn đó *che chắn* cho một kẻ tấn công khỏi ma sát. Quy tắc gom nhóm đã sửa: người đứng ngoài sạch, cả 16 kẻ tấn công đều bị enroll.
+- **Xác thực bot ký tên, kiểm chứng lại.** Một gói conformance độc lập cho bộ xác thực RFC 9421, xây từ chính các khóa ví dụ của đặc tả: cả 12 biến thể chữ ký hỏng bị từ chối, chấp nhầm 0.
+- **Chính sách của bạn, ở các định dạng agent đọc được.** Một bộ sinh nhỏ phát hành chính sách dùng dữ liệu của bạn dưới dạng tín hiệu robots.txt, một tệp đặt chỗ TDM và một JSON chính sách - chỉ tuyên bố đúng định dạng, không tuyên bố thực thi.
+- **Toàn bộ đợt củng cố gần đây, hợp nhất vào.** Mọi bản vá đã phát hành ở các bản 2.6.1-2.6.3 (gắn khóa idempotency vào chủ thể, thực thi quota nguyên tử, tính giá xuất CSV, đồng hồ chống bước nhảy, và hơn nữa) đều nằm trong dòng này - một đợt audit tiền phát hành đã bắt gặp cây phát triển 2.7 tách nhánh từ trước các bản vá đó, và không có gì được phát hành cho tới khi chúng được hợp nhất trở lại và kiểm chứng lại.
 
-Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.6.3](docs/v2.6.3-deep-dive.vi.md). Phần gia cố đồng hồ trong v2.6.2 được trình bày ở [Tìm hiểu sâu v2.6.2](docs/v2.6.2-deep-dive.vi.md) và changelog.
+Bản kỹ thuật đầy đủ với mọi cơ chế, chứng minh và số đo: [Tìm hiểu sâu v2.7.0](docs/v2.7.0-deep-dive.vi.md). Dòng bản vá trước thay đổi những gì: [Tìm hiểu sâu v2.6.3](docs/v2.6.3-deep-dive.vi.md).
 
 ## Bộ khung benchmark trình duyệt
 
@@ -81,6 +84,10 @@ Mục tiêu của dự án là giúp chủ sở hữu và cộng đồng triển
 | Người dùng hợp lệ ở vế tính năng (lab) | Đội đã khai báo, đội chưa khai báo, người dùng thường dưới lớp hành động (vòng kinh điển vế tính năng v2.6.0, phía protected, số đo lab) | Đội 6 người đã khai báo: **40/40 thao tác, 0 ma sát, 0 enrollment**. Đội 6 người chưa khai báo: **40/40, 0 việc bị mất, không bị từ chối cứng**. Đội 8 người chưa khai báo: tại mốc 15 phút **20/40 hoàn thành** qua 3.205 lượt thử với 3.185 sự kiện ma sát - tất cả ở bậc step-up + sàn mềm, **0 lần từ chối cứng**; việc không bao giờ bị từ chối thẳng, nó chỉ chảy ở tốc độ bị chặn trên đã công bố. Người dùng thường (8 người): **48/48 thành công ngay lần đầu, 0 hậu quả** |
 | Canary actions (lab) | Đích hành động giả đã đăng ký (một mã khuyến mãi / lát export mà UI thật không bao giờ phát ra) bị một danh tính tấn công chạm vào (vòng kinh điển vế tính năng v2.6.0, phía protected, số đo lab) | Chạm vào đích canary (lát 40) chỉ làm taint đúng kẻ chạm, nối nó vào nhóm bị gắn cờ qua `taintedMembers`, và enroll nó vào step-up bằng bằng chứng trực tiếp; người đứng ngoài trong cùng ô đo được **0 taint, 0 enrollment, 0 override**. Vòng 1 của ô này trượt tiểu mục kiểm tra người đứng ngoài vì materiality theo cost thô; vòng fix với materiality theo đóng góp đã đạt cả bốn tiểu mục - xem bản tìm hiểu sâu |
 
+| Trần khai báo dưới tải song song (lab) | 40 worker đồng thời đập vào trần cứng 600 của một cohort khai báo (ô kinh điển v2.7.0) | Đường check-then-serve cũ vượt trần: union **639** (request 1 bản ghi) và **1.575** (request 25 bản ghi). Đường đặt chỗ mới (`reserveServe`) giữ **đúng 600, vượt 0**, cả hai dạng; làn kiểm soát khai báo-bảo vệ phục vụ **1.200/1.200**, 0 can thiệp |
+| Engine bằng chứng anytime-valid (lab, mô phỏng) | Tripwire e-value (`createEvalueTripwire`): tỉ lệ gắn cờ giả bảo đảm theo cấu trúc (Ville) dưới một ngưỡng cường độ hợp lệ do host đặt; mô phỏng đăng ký trước, có seed, tái lập được | **0 lần bắn nhầm trong 10.000** lượt hợp lệ ở mức danh nghĩa 5% và 1%; ở biên khắc nghiệt nhất (trung bình hợp lệ đúng bằng ngưỡng, phương sai tối đa) **4,2% so với lời hứa 5%**. Phát hiện: slicing bị bắt ở trung vị **400** bản ghi union (CUSUM trên cùng traces: 1.225). Cái giá in rõ: một lớp hợp lệ chạy chỉ hơi trên ngưỡng bị gắn cờ với xác suất gần 1 (ngưỡng là điều kiện của bảo đảm - một công cụ hiệu chuẩn đi kèm engine), cho ăn từng bản ghi thì mù trước ID-walk chậm, và dạng tích thường cần trung vị **774** bước để bắt một cuộc tấn công sau thời gian dài yên lặng - dạng Shiryaev-Roberts đi kèm cắt con số đó xuống **14** với bảo đảm thời-gian-trung-bình-giữa-hai-lần-báo-nhầm riêng |
+| Các ô tấn công vế tính năng S2 + S3, kẻ tấn công LLM (lab) | Đàn tìm kiếm nặng (16 danh tính), săn khuyến mãi (12 danh tính), và một kẻ tấn công điều khiển bằng LLM trực tiếp trên ô export (v2.7.0, phía protected) | Tìm kiếm nặng: cờ phủ **10/16**, hoàn thành **30%** so với baseline - ô này còn bắt được một bug gom nhóm thật (người đứng ngoài bị hút vào cờ, che chắn cho một kẻ tấn công); sau khi sửa: hoàn thành **25%**, người đứng ngoài nằm trong **không** cờ nào, **16/16** kẻ tấn công bị enroll. Săn khuyến mãi: **12/12** bị gắn cờ, lượt nhận mỗi danh tính bị chặn ở **2-3 mỗi cửa sổ phút**, lượt nhận đầu của control sạch. Kẻ tấn công LLM (một model, SambaNova gemma-4-31B-it, 2 lượt): **16/80 (20%)** - kết quả y hệt đàn chạy script, **24/24** bị enroll; nó không hề thử chiến lược né sàn đã ghi sẵn trong prompt của nó |
+
 **Tổng kết lại.** Stack này loại bỏ kiểu clone một-phát-xong ở tầng casual, và biến trích xuất hàng loạt thành bài toán danh tính: mỗi lát dữ liệu thêm tốn thêm một tài khoản và thêm dấu vết. Nó không chặn được người tái dựng quyết tâm và có nguồn lực, và cái giá thật của một danh tính (ma sát đăng ký, tài khoản đã xác minh, thanh toán) là do bạn, phía host, đặt ra - đó là lý do ngân sách được ép theo danh tính và cờ bầy đàn phân biệt "cắt ngân sách" với "tăng mức soi" thay vì dùng một phản ứng cùn cho mọi trường hợp.
 
 ## Bốn tầng và ưu tiên triển khai
@@ -107,7 +114,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **338 kiểm thử tự động** (336 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
+`npm run check` gồm biên dịch, **585 kiểm thử tự động** (583 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
 ### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 
