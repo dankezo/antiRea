@@ -67,10 +67,41 @@
  * kept in a process-local map, exactly like `createRecordBudget`'s
  * `setOverride`: the spec'd API is synchronous, so the override cannot
  * live behind an async transaction. The map is mirrored into the
- * transactional state on every mutation (the `allowanceOverrides`
- * field) so snapshots stay auditable; on a shared store, a second
- * budget instance reads the mirrored overrides but its own
- * `setAllowanceOverride` calls remain local to that instance.
+ * transactional state (the `allowanceOverrides` field) by any
+ * mutation on the setting instance that actually persists state -
+ * a successful reserve/commit/release, a cohort declaration or a
+ * pacing change - so snapshots stay auditable; a refused reserve,
+ * a `snapshot()` call and `sweepExpired()` do not persist the mirror.
+ * On a shared store, a second budget instance reads the mirrored
+ * overrides for subjects it has not locally touched (see
+ * `effectiveAllowance`), but an override with no subsequent
+ * persisting mutation on the setting instance never reaches shared
+ * state on its own. `flushOverrides()` closes that gap: it writes
+ * the local map (sets and clears) into shared state explicitly,
+ * without needing a reserve. Measured contract and regression tests:
+ * `tests/action-budget-overrides.test.cjs`.
+ *
+ * Clock discipline (L-DEEP-2 hybrid rule, ported from the released
+ * tree): persisted state keeps wall-clock fields only, but intervals
+ * are defended against wall-clock steps - bucket refill credits are
+ * clamped to the time a bucket needs to fill, a reservation created
+ * BY THIS PROCESS also dies at its monotonic TTL (whichever of
+ * wall-expiry / mono-TTL comes first), and a subject/cohort window
+ * created or rolled BY THIS PROCESS also rolls at its monotonic
+ * length (whichever comes first). Reservations and windows restored
+ * from the store or written by another process have no monotonic
+ * mirror and follow the wall clock alone.
+ *
+ * Subject-window pruning (F-13; NEW in this tree - the released tree
+ * has no equivalent): a subject window whose window has fully rolled
+ * (wall or anchored monotonic length) and which holds no open
+ * reservation is deleted on persisting mutation paths (reserve /
+ * commit / release / sweep / cohort and pacing writes / override
+ * flush), so one-shot subjects cannot accumulate in persisted state
+ * forever. `snapshot()` is read-only by the override contract above
+ * and never persists; it reflects whatever the last persisting
+ * mutation left behind. Declared cohorts are never pruned: their
+ * membership is a host declaration, not accounting.
  *
  * Anti-claims, stated plainly (see docs/LIMITATIONS.md discipline):
  * under open registration + free unlimited feature use, absolute
@@ -307,6 +338,19 @@ export interface ActionStepDownContext extends EnforcementContext {
   derivedSoftFloorCost?: number;
 }
 
+export interface FlushOverridesResult {
+  /** Subjects whose local override entry (a set value, or a clear) was written to shared state. */
+  flushed: number;
+  mode: ActionBudgetMode;
+  /** False in audit_only mode: the write happened best-effort over a get/put store, with no CAS guarantee. */
+  enforced: boolean;
+  /**
+   * Set to `store_conflict` when the flush could not reach the store
+   * (F-06): `flushed` is then 0 and no override was published.
+   */
+  reason?: string;
+}
+
 export interface ActionBudget {
   readonly mode: ActionBudgetMode;
   /** Plain-language statement of what this budget does and does not guarantee. */
@@ -338,6 +382,16 @@ export interface ActionBudget {
   clearCohortPacing(cohortKey: string): Promise<{ cleared: boolean; reason?: string }>;
   /** Per-subject allowance override (the step-down landing point). Synchronous, process-local - see the header. */
   setAllowanceOverride(subject: string, allowance: number | null): void;
+  /**
+   * Write this instance's local override map (sets AND clears) into
+   * shared transactional state, without a reserve or any other
+   * mutation. After it resolves, a second budget instance on the
+   * same store/budgetId respects the flushed overrides for subjects
+   * it has not locally touched. Safe to call with nothing pending
+   * (a no-op reporting `flushed: 0`); in `audit_only` mode it still
+   * writes through the get/put path and reports `enforced: false`.
+   */
+  flushOverrides(): Promise<FlushOverridesResult>;
   /** `clampActionStepDown` bound to this budget's derived soft floor. */
   clampActionStepDown(
     currentAllowance: number,
@@ -771,6 +825,38 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     return expired;
   }
 
+  /**
+   * F-13 (NEW in this tree, not a port - the released tree never
+   * prunes subject windows): delete subject windows that have fully
+   * rolled - by the wall deadline or, for a window this process
+   * anchored, by its monotonic length - and hold no open reservation.
+   * A rolled window's committed cost is dead accounting either way
+   * (the next touch would reset it to 0), so deleting it changes no
+   * decision; a window with an open reservation is kept, because
+   * `ensureSubjectWindow` still needs it to recompute reserved cost
+   * at the roll. Called only on paths that persist state, plus the
+   * sweep (whose return now also reports a prune-only write). Also
+   * drops the window's monotonic anchor so the anchor map cannot
+   * grow with the subjects it mirrors.
+   */
+  function pruneStaleSubjects(state: ActionBudgetState, atMs: number, atMonoMs: number): number {
+    let pruned = 0;
+    for (const [subject, window_] of Object.entries(state.subjects)) {
+      const anchorKey = `subject:${subject}`;
+      const anchor = windowAnchors.get(anchorKey);
+      const monoExpired =
+        anchor !== undefined &&
+        anchor.startWallMs === window_.windowStartMs &&
+        atMonoMs - anchor.startMonoMs >= windowMs;
+      if (atMs - window_.windowStartMs < windowMs && !monoExpired) continue;
+      if (Object.values(state.reservations).some(r => r.subject === subject)) continue;
+      delete state.subjects[subject];
+      windowAnchors.delete(anchorKey);
+      pruned++;
+    }
+    return pruned;
+  }
+
   function dropReservation(state: ActionBudgetState, reservation: ActionReservation): void {
     delete state.reservations[reservation.id];
     for (const [key, reservationId] of Object.entries(state.idempotency)) {
@@ -860,6 +946,11 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
           // Lazy sweep: stale reservations free their subject/cohort
           // reserved cost before any check runs (ledger discipline).
           expireReservations(state, atMs, atMonoMs, true);
+          // F-13: fully-rolled windows with no open reservation are
+          // dead accounting; drop them before the checks below (the
+          // requesting subject's own window is recreated fresh by
+          // ensureSubjectWindow when it was pruned).
+          pruneStaleSubjects(state, atMs, atMonoMs);
 
           if (req.idempotencyKey) {
             const existingId = state.idempotency[req.idempotencyKey];
@@ -1011,23 +1102,24 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       const atMonoMs = monoNowFn();
       try {
         const result = await mutate<{ committed: boolean; reason?: string }>(state => {
-        const atMs = now();
-        expireReservations(state, atMs, atMonoMs, true);
-        const reservation = state.reservations[reservationId];
-        if (!reservation) {
-          return { state: null, value: { committed: false, reason: "unknown_or_expired_reservation" } };
-        }
-        const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs, atMonoMs, true);
-        subjectWindow.committedCost += reservation.cost;
-        subjectWindow.reservedCost = Math.max(0, subjectWindow.reservedCost - reservation.cost);
-        if (reservation.cohortId) {
-          const cohort = state.declaredCohorts[reservation.cohortId];
-          if (cohort) {
-            ensureCohortWindow(state, reservation.cohortId, cohort, atMs, atMonoMs, true);
-            cohort.committedCost += reservation.cost;
-            cohort.reservedCost = Math.max(0, cohort.reservedCost - reservation.cost);
+          const atMs = now();
+          expireReservations(state, atMs, atMonoMs, true);
+          pruneStaleSubjects(state, atMs, atMonoMs);
+          const reservation = state.reservations[reservationId];
+          if (!reservation) {
+            return { state: null, value: { committed: false, reason: "unknown_or_expired_reservation" } };
           }
-        }
+          const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs, atMonoMs, true);
+          subjectWindow.committedCost += reservation.cost;
+          subjectWindow.reservedCost = Math.max(0, subjectWindow.reservedCost - reservation.cost);
+          if (reservation.cohortId) {
+            const cohort = state.declaredCohorts[reservation.cohortId];
+            if (cohort) {
+              ensureCohortWindow(state, reservation.cohortId, cohort, atMs, atMonoMs, true);
+              cohort.committedCost += reservation.cost;
+              cohort.reservedCost = Math.max(0, cohort.reservedCost - reservation.cost);
+            }
+          }
           dropReservation(state, reservation);
           syncOverrides(state);
           return { state, value: { committed: true } };
@@ -1045,6 +1137,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       try {
         const result = await mutate<{ released: boolean; reason?: string }>(state => {
           const atMs = now();
+          pruneStaleSubjects(state, atMs, atMonoMs);
           const reservation = state.reservations[reservationId];
           if (!reservation) return { state: null, value: { released: false } };
           const subjectWindow = ensureSubjectWindow(state, reservation.subject, atMs, atMonoMs, true);
@@ -1071,8 +1164,13 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     async sweepExpired() {
       try {
         return await mutate(state => {
-          const expired = expireReservations(state, now(), monoNowFn(), true);
-          return { state: expired > 0 ? state : null, value: { expired } };
+          const atMs = now();
+          const atMonoMs = monoNowFn();
+          const expired = expireReservations(state, atMs, atMonoMs, true);
+          // F-13: a sweep is also the host's cleanup trigger for stale
+          // subject windows; a prune-only sweep still persists.
+          const pruned = pruneStaleSubjects(state, atMs, atMonoMs);
+          return { state: expired > 0 || pruned > 0 ? state : null, value: { expired } };
         });
       } catch (error) {
         if (isStoreFailure(error)) return { expired: 0, reason: "store_conflict" };
@@ -1087,24 +1185,25 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       let createdNewCohort = false;
       try {
         const result = await mutate(state => {
-        createdNewCohort = false;
-        const existing = state.declaredCohorts[req.cohortId];
-        if (existing) {
-          // Re-declaration updates membership and ceiling but does NOT
-          // reset the window accounting: re-declaring must not launder
-          // cost already counted against the ceiling.
-          existing.subjects = unique;
-          existing.ceilingCostPerWindow = Math.max(0, req.ceilingCostPerWindow);
-        } else {
-          createdNewCohort = true;
-          state.declaredCohorts[req.cohortId] = {
-            subjects: unique,
-            ceilingCostPerWindow: Math.max(0, req.ceilingCostPerWindow),
-            windowStartMs: declareWallMs,
-            committedCost: 0,
-            reservedCost: 0,
-          };
-        }
+          createdNewCohort = false;
+          pruneStaleSubjects(state, declareWallMs, declareMonoMs);
+          const existing = state.declaredCohorts[req.cohortId];
+          if (existing) {
+            // Re-declaration updates membership and ceiling but does NOT
+            // reset the window accounting: re-declaring must not launder
+            // cost already counted against the ceiling.
+            existing.subjects = unique;
+            existing.ceilingCostPerWindow = Math.max(0, req.ceilingCostPerWindow);
+          } else {
+            createdNewCohort = true;
+            state.declaredCohorts[req.cohortId] = {
+              subjects: unique,
+              ceilingCostPerWindow: Math.max(0, req.ceilingCostPerWindow),
+              windowStartMs: declareWallMs,
+              committedCost: 0,
+              reservedCost: 0,
+            };
+          }
           syncOverrides(state);
           return { state, value: { registered: unique.length } };
         });
@@ -1125,30 +1224,31 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
     async setCohortPacing(req) {
       try {
         return await mutate(state => {
-        const pacingBurst = Math.max(0, req.burst);
-        const refillPerSecond = Math.max(0, req.refillPerSecond);
-        const existing = state.cohortPacing[req.cohortKey];
-        state.cohortPacing[req.cohortKey] = {
-          subjects: [...new Set(req.subjects)],
-          // Re-applying pacing for the same scope UPDATES membership
-          // and the bucket parameters but PRESERVES the bucket's
-          // spent state (tokens + refill clock): a growing subject
-          // list must never mint a fresh burst for a cohort that has
-          // already drained one.
-          bucket: existing
-            ? {
-                tokens: existing.bucket.tokens,
-                lastRefillMs: existing.bucket.lastRefillMs,
-                burst: pacingBurst,
-                refillPerSecond,
-              }
-            : {
-                tokens: pacingBurst,
-                lastRefillMs: now(),
-                burst: pacingBurst,
-                refillPerSecond,
-              },
-        };
+          pruneStaleSubjects(state, now(), monoNowFn());
+          const pacingBurst = Math.max(0, req.burst);
+          const refillPerSecond = Math.max(0, req.refillPerSecond);
+          const existing = state.cohortPacing[req.cohortKey];
+          state.cohortPacing[req.cohortKey] = {
+            subjects: [...new Set(req.subjects)],
+            // Re-applying pacing for the same scope UPDATES membership
+            // and the bucket parameters but PRESERVES the bucket's
+            // spent state (tokens + refill clock): a growing subject
+            // list must never mint a fresh burst for a cohort that has
+            // already drained one.
+            bucket: existing
+              ? {
+                  tokens: existing.bucket.tokens,
+                  lastRefillMs: existing.bucket.lastRefillMs,
+                  burst: pacingBurst,
+                  refillPerSecond,
+                }
+              : {
+                  tokens: pacingBurst,
+                  lastRefillMs: now(),
+                  burst: pacingBurst,
+                  refillPerSecond,
+                },
+          };
           syncOverrides(state);
           return { state, value: { applied: true } };
         });
@@ -1162,6 +1262,7 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       try {
         return await mutate<{ cleared: boolean; reason?: string }>(state => {
           if (!state.cohortPacing[cohortKey]) return { state: null, value: { cleared: false } };
+          pruneStaleSubjects(state, now(), monoNowFn());
           delete state.cohortPacing[cohortKey];
           syncOverrides(state);
           return { state, value: { cleared: true } };
@@ -1178,6 +1279,29 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       else overrideMap.set(subject, Math.max(0, allowance));
     },
 
+    async flushOverrides() {
+      const flushed = overrideTouched.size;
+      const enforced = mode === "enforce";
+      if (flushed === 0) return { flushed: 0, mode, enforced };
+      try {
+        await mutate<null>(state => {
+          pruneStaleSubjects(state, now(), monoNowFn());
+          syncOverrides(state);
+          // Always persist (return the state, never null): the whole
+          // point of the flush is that the mirror reaches shared state
+          // even when nothing else about the state changed.
+          return { state, value: null };
+        });
+      } catch (error) {
+        // F-06 discipline, extended to this 2.7-only entry (the
+        // released tree has no flush): a dead or corrupt store must
+        // not throw out of a public method either.
+        if (isStoreFailure(error)) return { flushed: 0, mode, enforced, reason: "store_conflict" };
+        throw error;
+      }
+      return { flushed, mode, enforced };
+    },
+
     clampActionStepDown(currentAllowance, targetAllowance, context) {
       return clampActionStepDown(currentAllowance, targetAllowance, {
         ...context,
@@ -1189,7 +1313,10 @@ export function createActionBudget(options: ActionBudgetOptions): ActionBudget {
       const buildSnapshot = (view: ActionBudgetState): ActionBudgetSnapshot => {
         const atMs = now();
         const atMonoMs = monoNowFn();
-        // View-only: anchors and the mono mirror map are read, never written.
+        // View-only: anchors and the mono mirror map are read, never
+        // written, and nothing here persists (the F-13 prune lives on
+        // the persisting mutation paths, not on this read path - a
+        // snapshot must not publish state, per the override contract).
         expireReservations(view, atMs, atMonoMs, false);
         for (const subject of Object.keys(view.subjects)) {
           ensureSubjectWindow(view, subject, atMs, atMonoMs, false);
