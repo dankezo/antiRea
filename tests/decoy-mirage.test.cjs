@@ -168,6 +168,96 @@ test('seedScope mixes into generation: different scopes see different documents,
   assert.deepEqual(plain.body, vanilla.body);
 });
 
+test('middleware survives a host res that throws at setHeader (NV-4)', async () => {
+  const mirage = sdk.createDecoyMirage();
+  const res = {
+    setHeader() { throw new Error('headers already sent'); },
+    status(code) { return { json() {} }; },
+    json() {},
+    end() {},
+  };
+  let nextArg = 'not-called';
+  // Pre-fix this rejected out of the async middleware (unhandled on Express 4).
+  await mirage.middleware(mockReq('/api/v1/internal/schema-export'), res, err => { nextArg = err ?? 'called-no-err'; });
+  assert.equal(nextArg, 'not-called');
+});
+
+test('middleware survives a host res that throws at status().json (NV-4)', async () => {
+  const mirage = sdk.createDecoyMirage();
+  const res = {
+    setHeader() {},
+    status(code) { return { json() { throw new Error('socket closed'); } }; },
+    json() { throw new Error('must not fall through to res.json after a chained json throw'); },
+    end() { throw new Error('must not fall through to res.end'); },
+  };
+  let nextCalled = false;
+  await mirage.middleware(mockReq('/api/v1/internal/schema-export'), res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+});
+
+test('middleware survives a host res that throws at res.json (NV-4)', async () => {
+  const mirage = sdk.createDecoyMirage();
+  const res = {
+    setHeader() {},
+    json() { throw new Error('json boom'); },
+    end() { throw new Error('must not fall through to res.end'); },
+  };
+  let nextCalled = false;
+  await mirage.middleware(mockReq('/api/v1/internal/schema-export'), res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+});
+
+test('middleware survives a host res that throws at res.end (NV-4)', async () => {
+  const mirage = sdk.createDecoyMirage();
+  const res = {
+    setHeader() {},
+    end() { throw new Error('end boom'); },
+  };
+  let nextCalled = false;
+  await mirage.middleware(mockReq('/api/v1/internal/schema-export'), res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+});
+
+test('middleware absorbs async rejections from res writes instead of leaking unhandled rejections (NV-4)', async () => {
+  const unhandled = [];
+  const onUnhandled = err => unhandled.push(err);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const mirage = sdk.createDecoyMirage();
+    const res = {
+      setHeader() {},
+      status(code) { return { json() { return Promise.reject(new Error('async json boom')); } }; },
+      end() {},
+    };
+    let nextCalled = false;
+    await mirage.middleware(mockReq('/api/v1/internal/schema-export'), res, () => { nextCalled = true; });
+    assert.equal(nextCalled, false);
+    // Give any floating rejection a chance to surface before asserting none did.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.removeListener('unhandledRejection', onUnhandled);
+  }
+});
+
+test('middleware still writes the authorize 404 when res is healthy and survives it throwing (NV-4)', async () => {
+  const mirage = sdk.createDecoyMirage({ authorize: () => false });
+  const healthy = mockRes();
+  let nextCalled = false;
+  await mirage.middleware(mockReq('/api/v1/internal/schema-export'), healthy, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+  assert.equal(healthy.statusCode, 404);
+  assert.deepEqual(healthy.body, { error: 'not_found' });
+
+  const throwing = {
+    setHeader() { throw new Error('headers already sent'); },
+    status(code) { return { json() {} }; },
+    end() {},
+  };
+  await mirage.middleware(mockReq('/api/v1/internal/schema-export'), throwing, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+});
+
 test('middleware serves the decoy on a match and passes everything else through', async () => {
   const mirage = sdk.createDecoyMirage();
   const hitRes = mockRes();
