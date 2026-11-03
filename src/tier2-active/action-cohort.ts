@@ -98,6 +98,16 @@
 
 import { monoNowMs } from "../internal/mono-clock";
 
+/**
+ * Largest |ms| value a `Date` can represent (ECMA-262 TimeClip range,
+ * +/-8.64e15). An event `ts` outside it makes the flag snapshot's
+ * `new Date(ts).toISOString()` throw (and, before it can even get
+ * there, makes the window prune compare against a cutoff no real
+ * event can survive - wiping the group's live state), so observe()
+ * refuses such events before any state is read (F-21).
+ */
+const MAX_DATE_MS = 8_640_000_000_000_000;
+
 /* ------------------------------------------------------------------------ */
 /* Canary action registry                                                    */
 /* ------------------------------------------------------------------------ */
@@ -262,7 +272,14 @@ export interface ActionEvaluationEvent {
 export interface ActionCohortEvaluationCluster {
   groupId: number;
   mechanism: "complement";
-  /** True when the cluster has a live flag (the same `flagged` state snapshots and `groups()` report). */
+  /**
+   * True when the cluster has a live flag (the same `flagged` state
+   * snapshots and `groups()` report). F-17: only clusters with member
+   * activity still inside the trailing window are reported at all -
+   * a fully expired cluster is pruned from the result exactly as
+   * observe() would prune it from state, so this flag can no longer
+   * be a stale latch from a group that died outside the window.
+   */
   flagged: boolean;
   /** True when the evaluated event would join this cluster under the observe-time link logic. */
   wouldJoin: boolean;
@@ -280,16 +297,16 @@ export interface ActionCohortEvaluationCluster {
 export interface ActionCohortEvaluationSharedTarget {
   action: string;
   targetKey: string;
-  /** True when the shared-target group has a live flag. */
+  /** True when the shared-target group has a live flag. (F-17: fully expired groups are pruned from the result, as for clusters.) */
   flagged: boolean;
-  /** Distinct subjects currently in the shared-target group. */
+  /** Distinct subjects currently in the shared-target group (with activity inside the trailing window). */
   subjectCount: number;
 }
 
 export interface ActionCohortEvaluation {
-  /** Every complement cluster of the event's action, each with its live flag state and join verdict. */
+  /** Every live complement cluster of the event's action, each with its live flag state and join verdict. */
   clusters: ActionCohortEvaluationCluster[];
-  /** The shared-target group the event's (action, targetKey) matches, when one exists. */
+  /** The shared-target group the event's (action, targetKey) matches, when a live one exists. */
   sharedTargets: ActionCohortEvaluationSharedTarget[];
 }
 
@@ -318,7 +335,11 @@ export interface ActionCohortTracker {
    * of a target the cluster already holds. PURE: records nothing,
    * mutates no state, fires no `onFlag`, and records no canary taint,
    * so a host may call it BEFORE serving the action and repeat the
-   * call freely.
+   * call freely. Verdicts are computed over the LIVE (in-window)
+   * slice of the stored state (F-17): a cluster or shared-target
+   * group whose activity has fully expired out of the trailing
+   * window is pruned from the result, so a stale flag is never
+   * reported.
    */
   evaluateAction(event: ActionEvaluationEvent): ActionCohortEvaluation;
   /** Diagnostic listing of current groups (complement clusters and shared-target groups). */
@@ -488,8 +509,17 @@ export function createActionCohortTracker(
   };
 
   const allowanceOf = (subject: string): number => {
-    const fromHost = options.getAllowance?.(subject);
-    return fromHost !== undefined && fromHost > 0 ? fromHost : defaultAllowance;
+    // F-20: this was the one host callback in the file invoked bare -
+    // every sibling (isProtected, isCanaryTarget, onFlag) swallows
+    // callback errors. A throwing getAllowance escaped observe() at
+    // flag-evaluation time; a failed lookup is treated as no host
+    // allowance (the configured fallback applies).
+    try {
+      const fromHost = options.getAllowance?.(subject);
+      return fromHost !== undefined && fromHost > 0 ? fromHost : defaultAllowance;
+    } catch {
+      return defaultAllowance;
+    }
   };
 
   const isCanary = (action: string, targetKey: string): boolean => {
@@ -606,6 +636,40 @@ export function createActionCohortTracker(
     for (let i = taintList.length - 1; i >= 0; i--) {
       if ((taintList[i] as InternalTaint).tsMono <= cutoff) taintList.splice(i, 1);
     }
+  };
+
+  /**
+   * Whole-tracker pruning (F-18): the header promises state "bounded
+   * by the activity window", but pruning used to run only for the
+   * action / shared-target key the current event touched, subject
+   * entries were filtered but never deleted, and empty cluster lists
+   * stayed in `clustersByAction` forever - so subjects and groups for
+   * actions nobody touched again lived until a manual `reset()`.
+   * This pass applies the window law to EVERY map: subjects whose
+   * events have all expired are deleted, clusters and shared groups
+   * left with no live member are removed, and emptied per-action
+   * cluster lists are dropped. It runs at the top of every observe()
+   * (in the incoming event's time domain) and on every groups()
+   * diagnostic read, so after 2x the window with no activity the
+   * tracker's key count falls to zero with no reset.
+   */
+  const pruneAll = (atMonoMs: number): void => {
+    for (const [subject, state] of [...subjects]) {
+      pruneSubject(state, atMonoMs);
+      if (state.events.length === 0) subjects.delete(subject);
+    }
+    for (const [action, clusters] of [...clustersByAction]) {
+      for (const cluster of [...clusters]) pruneCluster(cluster, atMonoMs);
+      for (let i = clusters.length - 1; i >= 0; i--) {
+        if ((clusters[i] as ComplementCluster).members.size === 0) clusters.splice(i, 1);
+      }
+      if (clusters.length === 0) clustersByAction.delete(action);
+    }
+    for (const [key, group] of [...sharedGroups]) {
+      pruneShared(group, atMonoMs);
+      if (group.members.size === 0) sharedGroups.delete(key);
+    }
+    pruneTaints(atMonoMs);
   };
 
   /* --------------------------- snapshot / flags --------------------------- */
@@ -849,6 +913,39 @@ export function createActionCohortTracker(
     return 1 - distinct / total;
   };
 
+  /**
+   * L4-F1 merge guard (registered fix, AMENDMENT-L4F1): the aggregate
+   * overlap ratio alone lets a large cluster absorb a singleton whose
+   * only target duplicates one of the cluster's targets (a 1-instance
+   * duplicate joining a 9-instance / 9-target cluster scores exactly
+   * 0.10), putting a bystander inside the flag snapshot AND zeroing
+   * the herd member's unique-target count for the duplicated target.
+   * Complement merging exists to group DISJOINT coverage, so a merge
+   * is permitted only if the smaller side carries grouping evidence
+   * of its own: it contributes >= 1 target NEW to the other side, or
+   * it has >= 2 total instances (the mass prong - a duplicate-only
+   * cluster with real mass still merges). A zero-new-target singleton
+   * carries no grouping evidence and stays its own cluster. On a tie
+   * both sides are "the smaller side", so either side may satisfy the
+   * rule. `linkOverlapCeiling` itself is unchanged.
+   */
+  const complementMergeAllowed = (a: ComplementCluster, b: ComplementCluster): boolean => {
+    const sides: [ComplementCluster, ComplementCluster][] =
+      a.totalInstances === b.totalInstances
+        ? [
+            [a, b],
+            [b, a],
+          ]
+        : a.totalInstances < b.totalInstances
+          ? [[a, b]]
+          : [[b, a]];
+    return sides.some(
+      ([smaller, other]) =>
+        smaller.totalInstances >= 2 ||
+        [...smaller.refcount.keys()].some(target => !other.refcount.has(target)),
+    );
+  };
+
   const mergeInto = (dst: ComplementCluster, src: ComplementCluster): void => {
     for (const [subject, member] of src.members) dst.members.set(subject, member);
     for (const [subject, announced] of src.announced) {
@@ -880,7 +977,11 @@ export function createActionCohortTracker(
       const other = clusters.find(
         candidate =>
           candidate !== current &&
-          overlapRatioAfterMerge(current, candidate) <= linkOverlapCeiling + 1e-12,
+          overlapRatioAfterMerge(current, candidate) <= linkOverlapCeiling + 1e-12 &&
+          // L4-F1 merge guard: the ratio alone is not enough - the
+          // smaller side must carry grouping evidence (see
+          // `complementMergeAllowed`).
+          complementMergeAllowed(current, candidate),
       );
       if (!other) return current;
       if (other.id < current.id) {
@@ -918,12 +1019,34 @@ export function createActionCohortTracker(
     ) {
       return { recorded: false };
     }
+    /*
+     * Input discipline (F-21, same family as the CUSUM F-16 validation
+     * and the herd detector's identical check): a present-but-unusable
+     * `ts` - not a number, non-finite, or outside the representable
+     * Date range (|ts| > 8.64e15) - refuses the event as a structured
+     * no-op BEFORE any state is touched. Before this check, a finite
+     * but out-of-range ts (e.g. 1e16) drove the window prune with a
+     * cutoff no live event could survive, wiping the action's whole
+     * grouping state in silence (and, had a snapshot been built, its
+     * `new Date(atMs).toISOString()` would have thrown a bare
+     * RangeError out of observe() after the flag latch was set).
+     */
+    if (
+      event.ts !== undefined &&
+      (typeof event.ts !== "number" || !Number.isFinite(event.ts) || Math.abs(event.ts) > MAX_DATE_MS)
+    ) {
+      return { recorded: false };
+    }
     const hasTs = typeof event.ts === "number" && Number.isFinite(event.ts);
     const atMs = hasTs ? (event.ts as number) : clock();
     // Host-ts events stay in the host's time domain (twin mirrors ts);
     // internal-clock events stamp the monotonic twin (L-DEEP-2).
     const atMonoMs = hasTs ? atMs : monoClock();
     const cost = typeof event.cost === "number" && Number.isFinite(event.cost) ? Math.max(0, event.cost) : 0;
+
+    // F-18: apply the activity-window bound to the whole tracker, not
+    // just to the slices this event touches.
+    pruneAll(atMonoMs);
 
     let subjectState = subjects.get(event.subject);
     if (!subjectState) {
@@ -1046,8 +1169,23 @@ export function createActionCohortTracker(
    * subject joins when the merged overlap ratio - the cluster's
    * aggregate refcount plus the event's single target instance -
    * stays at or below `linkOverlapCeiling`, the same comparison
-   * (including tolerance) `attemptMerges` makes. An event with no
+   * (including tolerance) `attemptMerges` makes, AND the L4-F1 merge
+   * guard passes (for a one-instance join that means the target is
+   * new to the cluster - see `complementMergeAllowed`). An event with no
    * targetKey never joins (observe returns before grouping).
+   *
+   * Freshness (F-17): pruning runs in observe(), so the stored state
+   * this function reads can hold clusters whose activity has already
+   * expired out of the trailing window - and before F-17 their stored
+   * `flagged` latch was reported verbatim, indefinitely. The verdicts
+   * are therefore computed over a LIVE VIEW of each cluster - the
+   * member events whose monotonic timestamps are still inside the
+   * window at evaluation time, exactly the slice observe() would
+   * keep if it pruned now - without mutating anything (the purity
+   * contract above is unchanged, and the result shape is unchanged).
+   * A cluster or shared-target group with no live events is pruned
+   * from the result entirely, exactly as observe-side pruning would
+   * remove it from state: a dead group's flag is never reported.
    */
   const evaluateAction = (event: ActionEvaluationEvent): ActionCohortEvaluation => {
     if (!event || typeof event.action !== "string" || event.action.length === 0) {
@@ -1061,25 +1199,53 @@ export function createActionCohortTracker(
           : undefined;
     if (subject === undefined) return { clusters: [], sharedTargets: [] };
 
+    const cutoffMono = monoClock() - windowMs;
+    /** Live view of one member list: aggregates over in-window events only. */
+    const liveView = (
+      members: Map<string, MemberData>,
+    ): { refcount: Map<string, number>; totalInstances: number; liveMembers: Set<string> } => {
+      const refcount = new Map<string, number>();
+      const liveMembers = new Set<string>();
+      let totalInstances = 0;
+      for (const member of members.values()) {
+        for (const memberEvent of member.events) {
+          if (memberEvent.tsMono <= cutoffMono) continue;
+          liveMembers.add(member.subject);
+          refcount.set(memberEvent.targetKey, (refcount.get(memberEvent.targetKey) ?? 0) + 1);
+          totalInstances++;
+        }
+      }
+      return { refcount, totalInstances, liveMembers };
+    };
+
     const clusters: ActionCohortEvaluationCluster[] = [];
     for (const cluster of clustersByAction.get(event.action) ?? []) {
       if (cluster.members.size === 0) continue;
+      const live = liveView(cluster.members);
+      if (live.liveMembers.size === 0) continue; // F-17: fully expired - pruned from the result.
       let wouldJoin = false;
-      if (cluster.members.has(subject)) {
+      if (live.liveMembers.has(subject)) {
         wouldJoin = true;
       } else if (event.targetKey !== undefined) {
-        const distinct =
-          cluster.refcount.size + (cluster.refcount.has(event.targetKey) ? 0 : 1);
-        const total = cluster.totalInstances + 1;
+        const distinct = live.refcount.size + (live.refcount.has(event.targetKey) ? 0 : 1);
+        const total = live.totalInstances + 1;
         const ratio = total === 0 ? 0 : 1 - distinct / total;
-        wouldJoin = ratio <= linkOverlapCeiling + 1e-12;
+        // L4-F1 merge guard, join-gate form: the evaluated event is a
+        // single instance, so the smaller (incoming) side can never
+        // satisfy the mass prong (>= 2 instances); its new-target
+        // prong holds exactly when the target is NOT already in the
+        // cluster's refcount. A duplicate-only singleton join is
+        // therefore refused here just as `attemptMerges` refuses the
+        // corresponding merge, keeping this pure evaluation in step
+        // with observe-time grouping.
+        wouldJoin = ratio <= linkOverlapCeiling + 1e-12 && !live.refcount.has(event.targetKey);
       }
       clusters.push({
         groupId: cluster.id,
         mechanism: "complement",
         flagged: cluster.flagged,
         wouldJoin,
-        targetKnown: event.targetKey !== undefined && cluster.refcount.has(event.targetKey),
+        targetKnown: event.targetKey !== undefined && live.refcount.has(event.targetKey),
       });
     }
 
@@ -1087,12 +1253,15 @@ export function createActionCohortTracker(
     if (event.targetKey !== undefined) {
       const group = sharedGroups.get(`${event.action}\0${event.targetKey}`);
       if (group && group.members.size > 0) {
-        sharedTargets.push({
-          action: group.action,
-          targetKey: group.targetKey,
-          flagged: group.flagged,
-          subjectCount: group.members.size,
-        });
+        const live = liveView(group.members);
+        if (live.liveMembers.size > 0) {
+          sharedTargets.push({
+            action: group.action,
+            targetKey: group.targetKey,
+            flagged: group.flagged,
+            subjectCount: live.liveMembers.size,
+          });
+        }
       }
     }
     return { clusters, sharedTargets };
@@ -1101,6 +1270,10 @@ export function createActionCohortTracker(
   /* --------------------------- diagnostics -------------------------------- */
 
   const groups = (): ActionGroupInfo[] => {
+    // F-18: the diagnostic listing applies the same window law as
+    // observe() (the pattern taints() already used), so a group whose
+    // window has fully expired is not reported as if it were live.
+    pruneAll(monoClock());
     const out: ActionGroupInfo[] = [];
     for (const clusters of clustersByAction.values()) {
       for (const cluster of clusters) {
