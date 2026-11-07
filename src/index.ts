@@ -19,6 +19,7 @@ export * from "./tier2-active/watchlist-signal";
 export * from "./tier2-active/decoy-tripwire";
 export * from "./tier2-active/bunching-monitor";
 export * from "./tier2-active/herd-phase-signal";
+export * from "./tier2-active/herd-tightness-signal";
 export * from "./tier2-active/seat-occupancy-signal";
 export * from "./tier2-active/activity-phase-signal";
 export * from "./tier2-active/vote-brigading-signal";

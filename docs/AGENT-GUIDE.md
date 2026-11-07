@@ -18,6 +18,7 @@
 | "Our live room crashes / freezes when bots swarm in" | Join flood at the application layer (hundreds of fresh accounts joining at once, then doing nothing) | Meter + step up **new joins** under pressure: `createVerificationGrace` `guardStepUp` driven by your own join-rate check; feed joins to `createHerdPhaseSignal` for the fleet picture | A, B |
 | "The karaoke seats are always full of silent accounts" | Seat squatting: fresh accounts take limited seats and hold them with zero activity | `createSeatOccupancySignal` (one instance per room; step up **new** seat claims via Section B while it flags) | C, B |
 | "Bots keep rejoining / retrying on a fixed rhythm" | One scheduler driving a fleet: joins/retries phase-locked to a shared timer | `createHerdPhaseSignal` | A |
+| "A whole group of accounts moves like one machine, but no single account misbehaves" | One scheduler driving a cohort: the group's timing points pile onto one spot of the phase plane | `createHerdTightnessSignal` (needs a reference stream from established users; cohort-level evidence, names nobody) | H |
 | "Chat / emotes arrive in machine-locked bursts" | A fleet that joined normally but acts on one shared scheduler | `createActivityPhaseSignal` on ONE activity stream, evaluated scoped | D |
 | "Songs keep getting skip-voted by brand-new accounts" | Vote brigading: fresh accounts voting together, song after song | `createVoteBrigadingSignal` (room state; step up new voters while it flags) | E |
 | "Something is crawling all our rooms / member lists" | Room enumeration: one account joining room after room | `createRoomHopSignal` (step up the named identities) | F |
@@ -221,6 +222,33 @@ Contract details: **never use an IP as the source key**. Known blind spot, state
 
 Field note (real site, inspected 2026-11-06): wetube ciné's own room rules give a dropped connection up to **2 minutes** to reconnect before the seat is lost. Hosts commonly hold a seat through a grace window like this, so legitimate reconnects legitimately cluster inside it - that is exactly the flaky-client population the rate leg was calibrated to stay clear of.
 
+## Section H - `createHerdTightnessSignal` (new in 2.7.4)
+
+The companion statistic to Section A, one level up: where herd-phase asks whether a fleet's members share one timer *offset*, herd-tightness asks whether a whole cohort's timing points pile onto **one spot** of the phase plane - the shape one scheduler leaves on a group all at once. Each identity with >= 8 events becomes one point (its mean phase vector on the 900 s grid); the module measures how spread out the cohort's cloud of points is (the longest minimum-spanning-tree edge, d0max), standardised against a **reference population you feed it** - your established, known-legitimate users. A shared-scheduler herd reads tight (lab: 0.26-0.28 against the frozen bar 0.81); ordinary users (1.09-1.36) and an office-hours group behind one NAT (1.39-1.72) read spread.
+
+```ts
+import { createHerdTightnessSignal } from "@dannyphan190/anti-rea";
+
+const tightness = createHerdTightnessSignal(); // defaults are the lab-frozen law
+
+// Feed your established legitimate population as the reference
+// (long-lived accounts, known-good traffic - the standardisation
+// baseline), and the population under watch as the cohort. One
+// homogeneous stream each: session starts OR room joins.
+tightness.observeReference({ identity: establishedAccountId, ts });
+tightness.observe({ identity: accountId, ts });
+
+const r = tightness.evaluate();
+if (r.status === "scored" && r.tight) {
+  // Cohort-level evidence that this group is driven by one
+  // scheduler. Feed it to your accumulator / human review.
+  // r names NO identity - there is nobody to step up from this
+  // signal alone; pair it with Section A to find the members.
+}
+```
+
+Contract details: **the output never names an identity** - tightness is a property of a cloud, and any wiring that turns it into a per-account action is a misuse. Without a scored reference population the module returns `status: "uncalibrated"` with `tight: null` - wire your alerting to treat that as "not wired yet", never as "not tight". A herd whose bots each keep their **own** timer offset reads spread and is not flagged (that shape is Section A's cohort leg); the two signals are companions, not substitutes. Evaluate is O(n^2) in scored identities - this is a small-cohort instrument (the lab clouds were 9-16 points), not a fleet-wide scan.
+
 ## Safe defaults (do not retune silently)
 
 | Module | Option | Default | Why |
@@ -238,6 +266,9 @@ Field note (real site, inspected 2026-11-06): wetube ciné's own room rules give
 | `createRoomHopSignal` | `threshold` / `windowMs` | 16 / 3,600,000 | Frozen in the CAND-273-5 pin (heavy legit max 11/hour) |
 | | `disarmShare` | 0.25 | C35-pattern insurance; lowering it mutes the signal, raising it risks mass flags |
 | `createReconnectStormSignal` | `minConnects` / `maxMedianDurationMs` | 40 / 5,000 | Frozen in the CAND-273-6 pin (legit max 21/10 min) |
+| `createHerdTightnessSignal` | `periodSec` | 900 | Only lab-validated scheduler grid |
+| | `tightnessBar` | 0.805436 | Frozen C148 calibration midpoint (herd bootstrap max 0.645, legit bootstrap min 0.965); recalibrate only against your own reference population, with the recalibration recorded |
+| | `minEvents` / `minIdentities` | 8 / 8 | Lab scoring floor / lab cloud floor (below 8 scored identities the lab voided the reading) |
 
 ## Never do this
 
