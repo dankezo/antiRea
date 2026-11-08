@@ -34,7 +34,7 @@
 
 ### Honest note on the room guard's history (read this before wiring it)
 
-A combined room-guard module (`createRoomGuard`) was designed for 2.7.3 and **deliberately not shipped in that version**: in its pre-registered lab pin, the frozen signal combination caught join floods (60 s), slow drips (31 min) and churn (30 s) with zero false alarms across four legitimate room cells - but it **missed the seat-squatting cell completely**, because squatting attacks occupancy, not join velocity. Under this project's release rule (no gate loosened after the numbers), the module was excluded rather than shipped half-blind. **Since 2.7.5 it exists** (Section I): the combination was re-registered as RECOMB-06 with the occupancy leg declared up front - the leg that had meanwhile passed its own pin and shipped standalone as `createSeatOccupancySignal` (Section C) - and passed all six frozen gates on fresh seeds, including the squat cell at +690 s against the 900 s gate taken from that leg's own pin. If you are working against a 2.7.3 or 2.7.4 install, `createRoomGuard` really is absent there; upgrade rather than improvising a substitute.
+A combined room-guard module (`createRoomGuard`) was designed for 2.7.3 and **deliberately not shipped in that version**: in its pre-registered lab pin, the frozen signal combination caught join floods (60 s), slow drips (31 min) and churn (30 s) with zero false alarms across four legitimate room cells - but it **missed the seat-squatting cell completely**, because squatting attacks occupancy, not join velocity. Under this project's release rule (no gate loosened after the numbers), the module was excluded rather than shipped half-blind. **Since 2.8.0 it exists** (Section I): the combination was re-registered as RECOMB-06 with the occupancy leg declared up front - the leg that had meanwhile passed its own pin and shipped standalone as `createSeatOccupancySignal` (Section C) - and passed all six frozen gates on fresh seeds, including the squat cell at +690 s against the 900 s gate taken from that leg's own pin. If you are working against a 2.7.3 or 2.7.4 install, `createRoomGuard` really is absent there; upgrade rather than improvising a substitute.
 
 ## Section A - `createHerdPhaseSignal` (new in 2.7.3)
 
@@ -251,7 +251,7 @@ if (r.status === "scored" && r.tight) {
 
 Contract details: **the output never names an identity** - tightness is a property of a cloud, and any wiring that turns it into a per-account action is a misuse. Without a scored reference population the module returns `status: "uncalibrated"` with `tight: null` - wire your alerting to treat that as "not wired yet", never as "not tight". A herd whose bots each keep their **own** timer offset reads spread and is not flagged (that shape is Section A's cohort leg); the two signals are companions, not substitutes. Evaluate is O(n^2) in scored identities - this is a small-cohort instrument (the lab clouds were 9-16 points), not a fleet-wide scan.
 
-## Section I - `createRoomGuard` (new in 2.7.5)
+## Section I - `createRoomGuard` (new in 2.8.0)
 
 The combined room-pressure guard: one instance per room, fed the same `join` / `leave` / `activity` events as Section C, evaluating pressure on 30-second ticks across four frozen paths - burst, sustained, churn (join velocity against the room's own trailing baseline, new-account concentration, post-join inactivity, fast-leave cycling) plus the occupancy leg of Section C under its FAST and DRIP laws. RECOMB-06 lab record (seeded simulation, 20,161 ticks per cell): pressure never fired on five legitimate cells (including a karaoke audience with 60% of seat sessions silent); flood +60 s, drip +32.5 min, churn +30 s, squat +690 s via occupancy alone, squat-drip warned 5,100 s before the last seat was taken.
 
@@ -274,7 +274,7 @@ if (r.recommendStepUpForNewJoins) {
 
 Contract details: `flagged` is history (pressure has been high at some tick); the live recommendation is `pressureHighNow` / `recommendStepUpForNewJoins` at the latest tick - do not latch a step-up forever off a stale `flagged`. The path constants are the lab-frozen law (exported as `ROOM_GUARD_LAW`); they are not options. Known hole, declared: a squatter who emits even 1-2 activity events escapes the occupancy leg's zero-activity definition (hole A1) - the guard does not claim that shape. Prefer the guard when the room faces mixed shapes; keep Section C wired separately only if you also need its standalone ratio readout.
 
-## Section J - The evidence layer (new in 2.7.5)
+## Section J - The evidence layer (new in 2.8.0)
 
 Four small exact modules that pin down what verdicts mean. Wire them around the signals, not instead of them:
 
@@ -335,4 +335,4 @@ Run through this before reporting the integration done:
 - [ ] Room-hop / reconnect-storm wiring keys on identity/session keys (never IPs), and your code checks `disarmed` before reading `flagged`.
 - [ ] `snapshot()` counters on each instance show no unexpected `invalidTs` growth (that means your timestamps are malformed somewhere upstream).
 - [ ] A synthetic squat (30 fresh silent joins into a 30-seat room) fed to `createRoomGuard` in a test flags via the occupancy path, `recommendStepUpForNewJoins` is true while they sit and false after they leave, and the same stream with the joiners chatting does not flag (hole A1, expected).
-- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.7.5).
+- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0).

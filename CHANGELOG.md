@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.7.5 - 2026-11-09
+## 2.8.0 - 2026-11-09
 
 An additive, advisory-only release with five new modules: the combined room guard that 2.7.3 excluded at its frozen gate, rebuilt under a new pre-registered pin with the occupancy leg it lacked (RECOMB-06), and a four-module evidence layer ported from the neighbour-dissection candidates CS-02, BS-01, CAP-01 and KT-01, each past its own frozen Step 0. Nothing on the default path changes: no existing module imports a new one, and all 758 pre-existing tests pass unmodified.
 
