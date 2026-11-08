@@ -31,14 +31,14 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.7.5
+## New in v2.8.0
 
 The short version: the room guard that 2.7.3 deliberately did not ship is here - rebuilt under a new pre-registered pin with the occupancy leg it lacked - and it arrives with an evidence layer of four small, exact modules that pin down what every other signal's verdict means: which configuration produced it, what identity verification does and does not prove, how a passed step-up is remembered, and which evidence may ground a consequence. Everything is additive and advisory; nothing on the default path changes.
 
 - **The guard, whole this time.** `createRoomGuard` evaluates one room on 30-second ticks across four frozen paths: burst, sustained and churn (join velocity against the room's own baseline, new-account concentration, post-join inactivity, fast-leave churn) plus occupancy - the share of seats held by fresh, silent accounts, sustained. In the RECOMB-06 lab pin (seeded simulation, 20,161 ticks per cell), pressure never fired on five legitimate cells, including a karaoke audience where 60% of seated sessions never say a word; flood flagged at +60 s, drip at +32.5 min, churn at +30 s, and the seat squat the 2.7.3 combination missed entirely flagged at +690 s through the occupancy leg. Its output is a room state and a step-up recommendation for NEW joins only - seated members are never named or touched. One hole is declared open in the docs, not buried: a squatter who chats even 1-2 messages leaves the occupancy leg's zero-activity definition.
 - **An evidence layer, from four dissections.** `createConfigProvenance` (CS-02) hashes a signal's effective configuration (canonical serialization plus SHA-256) so every verdict can name the exact detector that produced it - the shipped port reproduces the lab probe's digests byte-for-byte. `classifyWebBotAuthVerdict` and `classifyHostVerificationFact` (BS-01) freeze verified-neutral semantics: a verified identity moves suspicion by exactly 0, every ambiguous failure is "unverified", and only proven forgery is evidence. `issueStepUpProof` and `createStepUpProofVerifier` (CAP-01) give hosts a single-use Ed25519 proof that an identity passed a specific challenge under a specific configuration. `evidentiaryRoleOf`, `auditEvidencePack` and `decorateSignalResult` (KT-01) write down each channel's evidentiary role and make a corroborating-only evidence pack mechanically ineligible for consequences.
 
-Full technical write-up: [v2.7.5 deep dive](docs/v2.7.5-deep-dive.md). What the previous release changed: [v2.7.4 deep dive](docs/v2.7.4-deep-dive.md).
+Full technical write-up: [v2.8.0 deep dive](docs/v2.8.0-deep-dive.md). What the previous release changed: [v2.7.4 deep dive](docs/v2.7.4-deep-dive.md).
 
 ## Browser benchmark harness
 

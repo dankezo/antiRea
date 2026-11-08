@@ -30,14 +30,14 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.7.5
+## Mới trong v2.8.0
 
 Nói ngắn gọn: room guard mà 2.7.3 đã chủ động không ship nay đã có mặt - được xây lại theo một pin đăng ký trước mới, kèm đúng vế occupancy mà nó từng thiếu - và đi cùng nó là một lớp bằng chứng gồm bốn module nhỏ, chính xác, chốt rõ ý nghĩa của mọi phán quyết từ các tín hiệu còn lại: cấu hình nào đã tạo ra nó, xác minh danh tính chứng minh được gì và không chứng minh được gì, một lượt step-up đã qua được ghi nhớ ra sao, và bằng chứng nào được phép làm căn cứ cho hậu quả. Mọi thứ đều là cộng thêm và chỉ tư vấn; đường mặc định không đổi.
 
 - **Lần này là guard trọn vẹn.** `createRoomGuard` đánh giá một phòng theo tick 30 giây trên bốn đường đóng băng: burst, sustained và churn (tốc độ join so với baseline của chính phòng, mức tập trung tài khoản mới, mức bất hoạt sau join, churn rời phòng nhanh) cộng thêm occupancy - tỉ lệ ghế bị tài khoản mới và im lặng giữ, duy trì liên tục. Trong pin lab RECOMB-06 (mô phỏng bằng seed, 20.161 tick mỗi ô), pressure không bao giờ bật ở năm ô hợp lệ, kể cả ô khán giả karaoke mà 60% session ghế không nói một lời; flood bị gắn cờ ở +60 giây, drip ở +32,5 phút, churn ở +30 giây, và ô chiếm ghế mà tổ hợp 2.7.3 bỏ sót hoàn toàn bị gắn cờ ở +690 giây nhờ vế occupancy. Đầu ra của nó là trạng thái phòng và một khuyến nghị step-up chỉ cho lượt join MỚI - thành viên đang ngồi không bao giờ bị nêu tên hay đụng chạm. Một lỗ được khai mở trong tài liệu, không chôn giấu: kẻ chiếm ghế chỉ cần chat 1-2 câu là thoát khỏi định nghĩa zero-activity của vế occupancy.
 - **Một lớp bằng chứng, từ bốn cuộc giải phẫu.** `createConfigProvenance` (CS-02) băm cấu hình hiệu lực của một tín hiệu (chuỗi hóa canonical cộng SHA-256) để mọi phán quyết đều nêu được đúng detector đã tạo ra nó - bản port phát hành tái lập digest của probe lab từng byte. `classifyWebBotAuthVerdict` và `classifyHostVerificationFact` (BS-01) đóng băng ngữ nghĩa verified-neutral: danh tính đã xác minh làm mức nghi ngờ dịch đúng 0, mọi lỗi mơ hồ đều là "unverified", và chỉ giả mạo đã chứng minh mới là bằng chứng. `issueStepUpProof` và `createStepUpProofVerifier` (CAP-01) cho host một proof Ed25519 dùng một lần, chứng minh một danh tính đã qua một thử thách cụ thể dưới một cấu hình cụ thể. `evidentiaryRoleOf`, `auditEvidencePack` và `decorateSignalResult` (KT-01) ghi thành luật vai trò bằng chứng của từng kênh và khiến một gói bằng chứng chỉ gồm corroborating trở nên không đủ điều kiện cho hậu quả một cách cơ học.
 
-Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.7.5](docs/v2.7.5-deep-dive.vi.md). Bản phát hành trước thay đổi những gì: [Tìm hiểu sâu v2.7.4](docs/v2.7.4-deep-dive.vi.md).
+Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.8.0](docs/v2.8.0-deep-dive.vi.md). Bản phát hành trước thay đổi những gì: [Tìm hiểu sâu v2.7.4](docs/v2.7.4-deep-dive.vi.md).
 ## Bộ khung benchmark trình duyệt
 
 Repo kèm một bộ khung Playwright chạy SaaS giả lập (**Northstar**: dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ) ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)** trên Chromium, Firefox và WebKit - bản tái lập được ngay trong repo, đi cùng mục kết quả đã đo ở dưới.

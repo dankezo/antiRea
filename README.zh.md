@@ -30,14 +30,14 @@ npm install @dannyphan190/anti-rea
 
 您也可以通过 [GitHub Release](https://github.com/dankezo/antiRea/releases) 安装。
 
-## v2.7.5 新功能
+## v2.8.0 新功能
 
 简短版：2.7.3 当初特意没有发布的房间守卫来了，它在一个新的预注册 pin 下重建，补上了它所缺的占用腿。同时到来的还有一个由四个小而精确的模块组成的证据层，它把其他每个信号的裁决到底意味着什么固定下来：是哪一个配置产生了它、身份验证能证明什么和不能证明什么、一次通过的 step-up 如何被记住、哪些证据可以作为后果的依据。一切都是新增且仅具咨询性；默认路径没有任何变化。
 
 - **这一次是完整的守卫。** `createRoomGuard` 以 30 秒 tick 在四条冻结路径上评估一个房间：burst、sustained 和 churn（加入速度与房间自身基线的对比、新账户集中度、加入后的不活动、快速离开的 churn），外加 occupancy：被新鲜、沉默账户持续占据的座位比例。在 RECOMB-06 实验室 pin 中（种子模拟，每格 20,161 个 tick），pressure 在五个合法格中从未触发，包括一格有 60% 在座会话从不发一言的 karaoke 观众格；flood 在 +60 秒被标记，drip 在 +32.5 分钟，churn 在 +30 秒，而 2.7.3 的组合完全漏掉的占座攻击通过 occupancy 腿在 +690 秒被标记。它的输出是一个房间状态，以及仅针对新加入者的 step-up 建议，已在座的成员永远不会被点名或触及。有一个漏洞在文档中公开声明，没有被掩盖：占座者只要发出哪怕 1-2 条消息，就离开了 occupancy 腿的零活动定义。
 - **一个证据层，来自四次解剖。** `createConfigProvenance`（CS-02）对信号的有效配置做哈希（规范序列化加 SHA-256），让每个裁决都能说出产生它的确切检测器，发布的移植版逐字节复现了实验室探针的摘要。`classifyWebBotAuthVerdict` 和 `classifyHostVerificationFact`（BS-01）冻结了 verified-neutral 语义：已验证的身份让怀疑度恰好移动 0，一切含糊的失败都是 "unverified"，只有被证实的伪造才是证据。`issueStepUpProof` 和 `createStepUpProofVerifier`（CAP-01）给宿主一个一次性 Ed25519 proof，证明某身份在某配置下通过了某项具体挑战。`evidentiaryRoleOf`、`auditEvidencePack` 和 `decorateSignalResult`（KT-01）把每个通道的证据角色写成规则，并让仅有佐证的证据包在机制上没有资格产生后果。
 
-完整技术说明：[v2.7.5 深入解析](docs/v2.7.5-deep-dive.zh.md)。上一版改了什么：[v2.7.4 深入解析](docs/v2.7.4-deep-dive.zh.md)。
+完整技术说明：[v2.8.0 深入解析](docs/v2.8.0-deep-dive.zh.md)。上一版改了什么：[v2.7.4 深入解析](docs/v2.7.4-deep-dive.zh.md)。
 ## 浏览器基准测试工具
 
 本仓库附带一个 Playwright 测试工具，在 Chromium、Firefox 和 WebKit 上以 **baseline（`:4173`）** 和 **protected（`:4174`）** 两种模式运行一个合成 SaaS（**Northstar**：仪表板、客户搜索、线索创建、CSV 导出、图表视图）——这是与下文实测结果配套的、可在仓库内复现的工具。
