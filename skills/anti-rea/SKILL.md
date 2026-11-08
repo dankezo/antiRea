@@ -1,6 +1,7 @@
 ---
 name: anti-rea
-description: Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to detect and meter automated abuse: bot herds driven by a single scheduler, silent accounts squatting limited live-room seats, vote brigading, room enumeration, reconnect storms, slow per-identity data harvesting, and republication of derived data. Use when a developer reports bot swarms freezing a live room, seats held by silent accounts, rigged skip votes, crawling of rooms or member lists, or bulk dataset extraction. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new joins only.
+description: >-
+  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to detect and meter automated abuse: bot herds driven by a single scheduler, silent accounts squatting limited live-room seats, vote brigading, room enumeration, reconnect storms, slow per-identity data harvesting, and republication of derived data. Use when a developer reports bot swarms freezing a live room, seats held by silent accounts, rigged skip votes, crawling of rooms or member lists, or bulk dataset extraction. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new joins only.
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
