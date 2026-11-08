@@ -1,5 +1,5 @@
 ---
-name: anti-rea
+name: anti-rea-repo
 description: Audit and responsibly harden web apps against data scraping, unauthorized feature enumeration, accidental source exposure, and automated browser observation. Prefer backend controls, auditability, and privacy-safe canaries over CDP interference or misleading prompt injection.
 license: MIT
 ---
