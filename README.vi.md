@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![độ phủ dòng của dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-756%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-791%20passing-informational)](tests/)
 
 antiRea giúp bạn kiểm tra những gì website để lộ, áp dụng giới hạn quota/phân trang phía server, giữ logic quan trọng ở backend và dùng canary hoặc watermark khi phù hợp. Công cụ **không thể** ngăn người dùng kiểm tra dữ liệu đã gửi tới trình duyệt của họ.
 
@@ -30,15 +30,14 @@ npm install @dannyphan190/anti-rea
 
 Bạn cũng có thể cài từ [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## Mới trong v2.7.4
+## Mới trong v2.7.5
 
-Nói ngắn gọn: một tín hiệu tư vấn mới gia nhập họ herd. herd-phase (v2.7.3) hỏi liệu các thành viên của một đàn có dùng chung một *offset* bộ đếm hay không; herd-tightness hỏi liệu các điểm thời gian của cả một nhóm có nằm chồng lên nhau tới mức đáng ngờ hay không - hình dạng mà một scheduler duy nhất để lại trên toàn bộ một cohort cùng lúc. Đường mặc định không đổi.
+Nói ngắn gọn: room guard mà 2.7.3 đã chủ động không ship nay đã có mặt - được xây lại theo một pin đăng ký trước mới, kèm đúng vế occupancy mà nó từng thiếu - và đi cùng nó là một lớp bằng chứng gồm bốn module nhỏ, chính xác, chốt rõ ý nghĩa của mọi phán quyết từ các tín hiệu còn lại: cấu hình nào đã tạo ra nó, xác minh danh tính chứng minh được gì và không chứng minh được gì, một lượt step-up đã qua được ghi nhớ ra sao, và bằng chứng nào được phép làm căn cứ cho hậu quả. Mọi thứ đều là cộng thêm và chỉ tư vấn; đường mặc định không đổi.
 
-- **Một scheduler, một nút điểm co cụm.** Nạp cho `createHerdTightnessSignal` mới đúng các timestamp lặp lại mà bạn đã nạp cho herd-phase (bắt đầu session, join phòng), cộng thêm một dòng tham chiếu từ những người dùng hợp lệ lâu năm của bạn. Mỗi tài khoản thành một điểm trên bản đồ pha; một đàn do một scheduler lái sẽ đặt mọi điểm của nó vào một nút co cụm duy nhất, trong khi người thật - kể cả cả một văn phòng sau một IP trong giờ hành chính - thì tản ra. Trong lab đã đăng ký trước, một vạch đóng băng duy nhất tách được hai phía trên hai quần thể giữ-lại tươi mà nó chưa từng thấy: đàn dùng chung scheduler đọc 0,26-0,28 so với vạch 0,81, người dùng hợp lệ 1,09-1,36, nhóm giờ hành chính 1,39-1,72, biên nhỏ nhất 35,9%. Module phát hành sau đó được đo lại trên chính các quần thể của lab và tái lập mọi giá trị tới chữ số in cuối cùng.
-- **Điều nó từ chối làm.** Thống kê này mô tả cả một nhóm, không bao giờ mô tả một con người: không output nào nêu tên một tài khoản. Một đàn mà mỗi con bot giữ bộ đếm riêng của nó sẽ đọc ra tản mát và *không* bị gắn cờ - hình dạng đó thuộc về thống kê cohort của herd-phase, không phải của tín hiệu này; hai tín hiệu là bạn đồng hành, không phải thay thế cho nhau. Và khi không có dòng tham chiếu, module không đưa ra phán quyết nào cả: nó báo con số thô với trạng thái "uncalibrated" thay vì đoán. Chỉ tư vấn, như mọi thứ trong tầng này - bằng chứng cho một bộ tích lũy hoặc một con người, không bao giờ là lệnh chặn.
-- **Thiết kế đầu tiên đã trượt, và được ghi vào hồ sơ.** Dạng đăng ký đầu tiên của ứng viên lọc các điểm "ngoại lai" trước khi đo - và bộ lọc đã xóa toàn bộ đám mây bot trên lượt hiệu chuẩn, vì một đàn co cụm ngồi xa trung tâm hợp lệ *trông* giống điểm ngoại lai. Lượt chạy đó bị hủy (void); bộ lọc bị gỡ bỏ, không phải nới lỏng; dạng đăng ký lại mới là dạng đã qua. Toàn bộ câu chuyện, kèm số liệu, nằm trong bản tìm hiểu sâu.
+- **Lần này là guard trọn vẹn.** `createRoomGuard` đánh giá một phòng theo tick 30 giây trên bốn đường đóng băng: burst, sustained và churn (tốc độ join so với baseline của chính phòng, mức tập trung tài khoản mới, mức bất hoạt sau join, churn rời phòng nhanh) cộng thêm occupancy - tỉ lệ ghế bị tài khoản mới và im lặng giữ, duy trì liên tục. Trong pin lab RECOMB-06 (mô phỏng bằng seed, 20.161 tick mỗi ô), pressure không bao giờ bật ở năm ô hợp lệ, kể cả ô khán giả karaoke mà 60% session ghế không nói một lời; flood bị gắn cờ ở +60 giây, drip ở +32,5 phút, churn ở +30 giây, và ô chiếm ghế mà tổ hợp 2.7.3 bỏ sót hoàn toàn bị gắn cờ ở +690 giây nhờ vế occupancy. Đầu ra của nó là trạng thái phòng và một khuyến nghị step-up chỉ cho lượt join MỚI - thành viên đang ngồi không bao giờ bị nêu tên hay đụng chạm. Một lỗ được khai mở trong tài liệu, không chôn giấu: kẻ chiếm ghế chỉ cần chat 1-2 câu là thoát khỏi định nghĩa zero-activity của vế occupancy.
+- **Một lớp bằng chứng, từ bốn cuộc giải phẫu.** `createConfigProvenance` (CS-02) băm cấu hình hiệu lực của một tín hiệu (chuỗi hóa canonical cộng SHA-256) để mọi phán quyết đều nêu được đúng detector đã tạo ra nó - bản port phát hành tái lập digest của probe lab từng byte. `classifyWebBotAuthVerdict` và `classifyHostVerificationFact` (BS-01) đóng băng ngữ nghĩa verified-neutral: danh tính đã xác minh làm mức nghi ngờ dịch đúng 0, mọi lỗi mơ hồ đều là "unverified", và chỉ giả mạo đã chứng minh mới là bằng chứng. `issueStepUpProof` và `createStepUpProofVerifier` (CAP-01) cho host một proof Ed25519 dùng một lần, chứng minh một danh tính đã qua một thử thách cụ thể dưới một cấu hình cụ thể. `evidentiaryRoleOf`, `auditEvidencePack` và `decorateSignalResult` (KT-01) ghi thành luật vai trò bằng chứng của từng kênh và khiến một gói bằng chứng chỉ gồm corroborating trở nên không đủ điều kiện cho hậu quả một cách cơ học.
 
-Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.7.4](docs/v2.7.4-deep-dive.vi.md). Bản phát hành trước thay đổi những gì: [Tìm hiểu sâu v2.7.3](docs/v2.7.3-deep-dive.vi.md).
+Bản kỹ thuật đầy đủ: [Tìm hiểu sâu v2.7.5](docs/v2.7.5-deep-dive.vi.md). Bản phát hành trước thay đổi những gì: [Tìm hiểu sâu v2.7.4](docs/v2.7.4-deep-dive.vi.md).
 ## Bộ khung benchmark trình duyệt
 
 Repo kèm một bộ khung Playwright chạy SaaS giả lập (**Northstar**: dashboard, tìm kiếm khách hàng, tạo yêu cầu, xuất CSV, biểu đồ) ở hai chế độ **baseline (`:4173`)** và **protected (`:4174`)** trên Chromium, Firefox và WebKit - bản tái lập được ngay trong repo, đi cùng mục kết quả đã đo ở dưới.
@@ -99,7 +98,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` gồm biên dịch, **758 kiểm thử tự động** (756 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
+`npm run check` gồm biên dịch, **793 kiểm thử tự động** (791 đạt, 2 vector RSA-PSS bị bỏ qua) và kiểm tra tĩnh. Có thể quét thư mục build công khai bằng `node scripts/run-audit.cjs dist` hoặc `python3 scripts/verify-build.py dist`.
 
 ### 1. Mẫu Middleware giới hạn Quota & Phân trang phía Server (P0)
 

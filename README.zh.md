@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist 代码行覆盖率](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-756%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-791%20passing-informational)](tests/)
 
 antiRea 帮助您审计网站暴露了什么、在服务器端执行速率/分页配额、把关键逻辑移到服务器，并在适当时应用金丝雀或水印控制。它**不能**阻止用户或智能体检查已交付到其浏览器的代码。
 
@@ -30,15 +30,14 @@ npm install @dannyphan190/anti-rea
 
 您也可以通过 [GitHub Release](https://github.com/dankezo/antiRea/releases) 安装。
 
-## v2.7.4 新功能
+## v2.7.5 新功能
 
-简短版：herd 家族新增一个咨询信号。herd-phase（v2.7.3）问的是一支舰队的成员是否共用同一个定时器*偏移*，herd-tightness 问的则是一个群体的全部时间点是否可疑地叠在一起——这是单个调度器一次性在整个群体上留下的形状。默认路径没有任何变化。
+简短版：2.7.3 当初特意没有发布的房间守卫来了，它在一个新的预注册 pin 下重建，补上了它所缺的占用腿。同时到来的还有一个由四个小而精确的模块组成的证据层，它把其他每个信号的裁决到底意味着什么固定下来：是哪一个配置产生了它、身份验证能证明什么和不能证明什么、一次通过的 step-up 如何被记住、哪些证据可以作为后果的依据。一切都是新增且仅具咨询性；默认路径没有任何变化。
 
-- **一个调度器，一团紧凑的点。** 给新的 `createHerdTightnessSignal` 喂你已经喂给 herd-phase 的同一种重复时间戳（会话开始、加入房间），再加上一条来自你已确立的合法用户的参考流。每个账户成为相位图上的一个点；由单个调度器驱动的舰队会把所有点落进一团紧凑的结里，而真实的人——包括共用一个 IP、处于办公时间的整间办公室——则会散开。在预注册实验室中，一条冻结的标准线在它从未见过的两个全新留出人群上把两者分开：共用调度器的 herd 读数为 0.26-0.28，而标准线为 0.81；合法用户 1.09-1.36，办公时间组 1.39-1.72，最小边距 35.9%。发布的模块随后在实验室自己的人群上重新测量，复现了每一个数值，直到最后一位打印数字。
-- **它拒绝做的事。** 这个统计量描述的是整个群体，永远不是某个人：没有任何输出会点名账户。一支其中每个机器人各用自己定时器的舰队读起来是散开的，*不会*被标记——那个形状属于 herd-phase 的群体统计量，不属于这个信号；两个信号是伙伴，不是替代品。而没有参考流时，模块根本不给出裁决：它以 "uncalibrated" 状态报告原始数字，而不是猜测。和本层级的其他一切一样，它只是咨询性的——是给累积器或人类看的证据，永远不是阻断。
-- **第一个设计失败了，并记录在案。** 该候选最初注册的形态在测量前先过滤"离群"点——而这个过滤器在校准抽取中删掉了整个机器人云团，因为一团远离合法中心的紧凑 herd *看起来*就像离群点。那次运行被判无效（void）；过滤器被移除，而不是被放宽；重新注册的形态才是通过的那个。完整的故事连同数字，都在深入解析里。
+- **这一次是完整的守卫。** `createRoomGuard` 以 30 秒 tick 在四条冻结路径上评估一个房间：burst、sustained 和 churn（加入速度与房间自身基线的对比、新账户集中度、加入后的不活动、快速离开的 churn），外加 occupancy：被新鲜、沉默账户持续占据的座位比例。在 RECOMB-06 实验室 pin 中（种子模拟，每格 20,161 个 tick），pressure 在五个合法格中从未触发，包括一格有 60% 在座会话从不发一言的 karaoke 观众格；flood 在 +60 秒被标记，drip 在 +32.5 分钟，churn 在 +30 秒，而 2.7.3 的组合完全漏掉的占座攻击通过 occupancy 腿在 +690 秒被标记。它的输出是一个房间状态，以及仅针对新加入者的 step-up 建议，已在座的成员永远不会被点名或触及。有一个漏洞在文档中公开声明，没有被掩盖：占座者只要发出哪怕 1-2 条消息，就离开了 occupancy 腿的零活动定义。
+- **一个证据层，来自四次解剖。** `createConfigProvenance`（CS-02）对信号的有效配置做哈希（规范序列化加 SHA-256），让每个裁决都能说出产生它的确切检测器，发布的移植版逐字节复现了实验室探针的摘要。`classifyWebBotAuthVerdict` 和 `classifyHostVerificationFact`（BS-01）冻结了 verified-neutral 语义：已验证的身份让怀疑度恰好移动 0，一切含糊的失败都是 "unverified"，只有被证实的伪造才是证据。`issueStepUpProof` 和 `createStepUpProofVerifier`（CAP-01）给宿主一个一次性 Ed25519 proof，证明某身份在某配置下通过了某项具体挑战。`evidentiaryRoleOf`、`auditEvidencePack` 和 `decorateSignalResult`（KT-01）把每个通道的证据角色写成规则，并让仅有佐证的证据包在机制上没有资格产生后果。
 
-完整技术说明：[v2.7.4 深入解析](docs/v2.7.4-deep-dive.zh.md)。上一版改了什么：[v2.7.3 深入解析](docs/v2.7.3-deep-dive.zh.md)。
+完整技术说明：[v2.7.5 深入解析](docs/v2.7.5-deep-dive.zh.md)。上一版改了什么：[v2.7.4 深入解析](docs/v2.7.4-deep-dive.zh.md)。
 ## 浏览器基准测试工具
 
 本仓库附带一个 Playwright 测试工具，在 Chromium、Firefox 和 WebKit 上以 **baseline（`:4173`）** 和 **protected（`:4174`）** 两种模式运行一个合成 SaaS（**Northstar**：仪表板、客户搜索、线索创建、CSV 导出、图表视图）——这是与下文实测结果配套的、可在仓库内复现的工具。
@@ -99,7 +98,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` 会编译、运行 **758 个自动化测试**（756 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
+`npm run check` 会编译、运行 **793 个自动化测试**（791 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
 
 ## 如何集成 SDK
 

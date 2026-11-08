@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-756%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-791%20passing-informational)](tests/)
 <a href="https://launchnest.io/p/antirea" target="_blank"><img src="https://launchnest.io/badge/antirea.svg?variant=featured" alt="antiRea on LaunchNest" width="220" height="56" /></a>
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
@@ -31,15 +31,14 @@ npm install @dannyphan190/anti-rea
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
 
-## New in v2.7.4
+## New in v2.7.5
 
-The short version: one new advisory signal joins the herd family. Where herd-phase (v2.7.3) asks whether a fleet's members share one timer *offset*, herd-tightness asks whether a whole group's timing points sit suspiciously on top of each other - the shape a single scheduler leaves on an entire cohort at once. Nothing on the default path changes.
+The short version: the room guard that 2.7.3 deliberately did not ship is here - rebuilt under a new pre-registered pin with the occupancy leg it lacked - and it arrives with an evidence layer of four small, exact modules that pin down what every other signal's verdict means: which configuration produced it, what identity verification does and does not prove, how a passed step-up is remembered, and which evidence may ground a consequence. Everything is additive and advisory; nothing on the default path changes.
 
-- **One scheduler, one tight knot of points.** Feed the new `createHerdTightnessSignal` the same repeated timestamps you already feed herd-phase (session starts, room joins), plus a reference stream from your established legitimate users. Each account becomes one point on a phase map; a fleet driven by one scheduler lands all its points in one tight knot, while real people - including a whole office behind one IP on office hours - spread out. In the pre-registered lab, a single frozen bar separated the two on two fresh held-out populations it had never seen: the shared-scheduler herd read 0.26-0.28 against the bar 0.81, legitimate users 1.09-1.36, the office-hours group 1.39-1.72, smallest margin 35.9%. The shipped module was then re-measured on the lab's own populations and reproduced every value to the last printed digit.
-- **What it refuses to do.** The statistic describes a whole group, never a person: no output names an account. A fleet whose bots each keep their own timer reads spread out and is *not* flagged - that shape belongs to herd-phase's cohort statistic, not this one; the two signals are companions, not substitutes. And without a reference stream the module issues no verdict at all: it reports the raw number with status "uncalibrated" rather than guessing. Advisory only, like everything in this tier - evidence for an accumulator or a human, never a block.
-- **The first design failed, on the record.** The candidate's first registered form filtered "outlier" points before measuring - and the filter deleted the entire bot cloud on the calibration draw, because a tight herd sitting far from the legitimate centre *looks* like outliers. That run was void; the filter was removed, not loosened; the re-registered form is the one that passed. The full story, with numbers, is in the deep dive.
+- **The guard, whole this time.** `createRoomGuard` evaluates one room on 30-second ticks across four frozen paths: burst, sustained and churn (join velocity against the room's own baseline, new-account concentration, post-join inactivity, fast-leave churn) plus occupancy - the share of seats held by fresh, silent accounts, sustained. In the RECOMB-06 lab pin (seeded simulation, 20,161 ticks per cell), pressure never fired on five legitimate cells, including a karaoke audience where 60% of seated sessions never say a word; flood flagged at +60 s, drip at +32.5 min, churn at +30 s, and the seat squat the 2.7.3 combination missed entirely flagged at +690 s through the occupancy leg. Its output is a room state and a step-up recommendation for NEW joins only - seated members are never named or touched. One hole is declared open in the docs, not buried: a squatter who chats even 1-2 messages leaves the occupancy leg's zero-activity definition.
+- **An evidence layer, from four dissections.** `createConfigProvenance` (CS-02) hashes a signal's effective configuration (canonical serialization plus SHA-256) so every verdict can name the exact detector that produced it - the shipped port reproduces the lab probe's digests byte-for-byte. `classifyWebBotAuthVerdict` and `classifyHostVerificationFact` (BS-01) freeze verified-neutral semantics: a verified identity moves suspicion by exactly 0, every ambiguous failure is "unverified", and only proven forgery is evidence. `issueStepUpProof` and `createStepUpProofVerifier` (CAP-01) give hosts a single-use Ed25519 proof that an identity passed a specific challenge under a specific configuration. `evidentiaryRoleOf`, `auditEvidencePack` and `decorateSignalResult` (KT-01) write down each channel's evidentiary role and make a corroborating-only evidence pack mechanically ineligible for consequences.
 
-Full technical write-up: [v2.7.4 deep dive](docs/v2.7.4-deep-dive.md). What the previous release changed: [v2.7.3 deep dive](docs/v2.7.3-deep-dive.md).
+Full technical write-up: [v2.7.5 deep dive](docs/v2.7.5-deep-dive.md). What the previous release changed: [v2.7.4 deep dive](docs/v2.7.4-deep-dive.md).
 
 ## Browser benchmark harness
 
@@ -101,7 +100,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **758 automated tests** (756 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **793 automated tests** (791 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
