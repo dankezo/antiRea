@@ -1,7 +1,7 @@
 ---
 name: anti-rea
 description: >-
-  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to detect and meter automated abuse: bot herds driven by a single scheduler, silent accounts squatting limited live-room seats, vote brigading, room enumeration, reconnect storms, slow per-identity data harvesting, and republication of derived data. Use when a developer reports bot swarms freezing a live room, seats held by silent accounts, rigged skip votes, crawling of rooms or member lists, or bulk dataset extraction. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new joins only.
+  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
@@ -12,7 +12,7 @@ metadata:
 
 # antiRea integration skill
 
-You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that measures coordinated automated abuse and meters dataset access; the host application decides what to do with its output. This skill covers antiRea 2.7.4.
+You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.7.4.
 
 Install:
 
