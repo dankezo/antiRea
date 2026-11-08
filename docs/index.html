@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>antiRea - meter dataset access per identity</title>
+<meta name="description" content="Server-side TypeScript library that meters dataset access per identity and flags coordinated bot abuse. Advisory only, zero runtime dependencies, MIT.">
+<style>
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:#101418; color:#F5F1E6; }
+  main { max-width: 760px; margin: 0 auto; padding: 64px 24px 80px; }
+  h1 { font-size: 44px; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h1 .r { color:#A3E635; }
+  p.tag { font-size: 19px; line-height: 1.55; color:#D8D2C2; margin: 0 0 28px; }
+  p { line-height: 1.65; color:#CFC9B8; }
+  .links { display:flex; gap:12px; flex-wrap:wrap; margin: 28px 0 40px; }
+  .links a { color:#101418; background:#A3E635; text-decoration:none; font-weight:600; padding:10px 18px; border-radius:8px; }
+  .links a.secondary { background:transparent; color:#F5F1E6; border:1px solid #3A4149; }
+  .badges { margin-top: 48px; }
+  .meta { color:#8B8574; font-size: 14px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>anti<span class="r">Rea</span></h1>
+  <p class="tag">Meters dataset access per identity. Flags coordinated bot abuse.</p>
+  <p>antiRea is an evidence-led, server-side TypeScript toolkit that meters dataset access per identity and detects coordinated bot abuse - advisory signals, zero runtime dependencies, and nothing blocked by default. One identity can only ever receive a capped slice of your dataset, so bulk extraction stops being an export call and becomes an identity problem.</p>
+  <p>It combines per-identity record budgets, priced exports and session-chained cursors, RFC 9421 Web Bot Auth signature verification, canary traps, and a family of advisory coordinated-cohort signals - herd phase, herd tightness, seat occupancy, activity phase, vote brigading, room hopping and reconnect storms. Everything is advisory: antiRea measures and reports, the host application decides. Release 2.7.4 - 758 automated tests (756 passing, 2 skipped RSA-PSS vectors).</p>
+  <div class="links">
+    <a href="https://github.com/dankezo/antiRea">GitHub repository</a>
+    <a class="secondary" href="https://www.npmjs.com/package/@dannyphan190/anti-rea">npm package</a>
+  </div>
+  <div class="badges">
+    <a href="https://launchnest.io/p/antirea" target="_blank"><img src="https://launchnest.io/badge/antirea.svg?variant=featured" alt="antiRea on LaunchNest" width="220" height="56"></a>
+    <p class="meta">MIT license - Node.js 20+ - zero runtime dependencies</p>
+  </div>
+</main>
+</body>
+</html>
