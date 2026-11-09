@@ -1,18 +1,18 @@
 ---
 name: anti-rea
 description: >-
-  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
+  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
-  version: "2.7.4"
+  version: "2.8.0"
   npm-package: "@dannyphan190/anti-rea"
   source-repository: "https://github.com/dankezo/antiRea"
 ---
 
 # antiRea integration skill
 
-You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.7.4.
+You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.8.0.
 
 Install:
 
@@ -44,15 +44,17 @@ Read the ground rules first - they override any pattern you find elsewhere. Then
 | "Something is crawling all our rooms / member lists" | Room enumeration: one account joining room after room | `createRoomHopSignal` (step up the named identities) | F |
 | "The realtime server keeps dying and reviving at night" | Reconnect storm: sources cycling connect/disconnect at sub-second cadence | `createReconnectStormSignal` on your socket connect/disconnect hooks; enforce backoff host-side | G |
 | "Accounts cycle join -> leave -> join constantly" | Churn against presence/connection limits | `createHerdPhaseSignal` on the join stream (the cycle is a repeated event), plus host-side join-rate metering | A |
+| "The room as a whole is under attack - floods, slow drips, cycling, seats held" | Combined room pressure across all four shapes at once | `createRoomGuard` (one instance per room; step up **new** joins via Section B while `recommendStepUpForNewJoins`) | I, B |
+| "We need verdicts we can audit later" | Evidence hygiene: which config produced a verdict, what verification proves, who may ground a consequence | The evidence layer: `createConfigProvenance`, `classifyWebBotAuthVerdict`, `issueStepUpProof` / `createStepUpProofVerifier`, `auditEvidencePack` | J |
 | "One account has been quietly taking our data for weeks" | Slow per-identity harvesting | `createShrinkSlopeSignal`; accumulate with `createCusumTripwire` / `createEvalueTripwire` | - |
 | "Accounts poll the same pages like metronomes" | Machine-paced revisiting | `createWatchlistSignal` | - |
 | "Something is enumerating our ids / endpoints" | Enumeration walk | `createDecoyTripwire` (plant decoys outside every menu/sitemap/listing) | - |
 | "Our published totals appear on a competitor's site" | Republication of derived data | `createValueWatermark` | - |
 | "Users pile up just under our known limit" | Calibration against a ceiling | `createBunchingMonitor` | - |
 
-### Honest note on the room guard that does not exist (read this before improvising)
+### Honest note on the room guard's history (read this before wiring it)
 
-A combined room-guard module (`createRoomGuard`) was designed for 2.7.3 and **deliberately not shipped**: in its pre-registered lab pin, the frozen signal combination caught join floods (60 s), slow drips (31 min) and churn (30 s) with zero false alarms across four legitimate room cells - but it **missed the seat-squatting cell completely**, because squatting attacks occupancy, not join velocity. Under this project's release rule (no gate loosened after the numbers), the module was excluded rather than shipped half-blind. **Do not invent a `createRoomGuard` API - it does not exist in this version.** The occupancy leg it lacked was afterwards re-registered as its own candidate, passed its own frozen lab pin, and ships as the standalone `createSeatOccupancySignal` (Section C) - the wave-2 modules are separate signals with separate contracts, not a guard under another name.
+A combined room-guard module (`createRoomGuard`) was designed for 2.7.3 and **deliberately not shipped in that version**: in its pre-registered lab pin, the frozen signal combination caught join floods (60 s), slow drips (31 min) and churn (30 s) with zero false alarms across four legitimate room cells - but it **missed the seat-squatting cell completely**, because squatting attacks occupancy, not join velocity. Under this project's release rule (no gate loosened after the numbers), the module was excluded rather than shipped half-blind. **Since 2.8.0 it exists** (Section I): the combination was re-registered as RECOMB-06 with the occupancy leg declared up front - the leg that had meanwhile passed its own pin and shipped standalone as `createSeatOccupancySignal` (Section C) - and passed all six frozen gates on fresh seeds, including the squat cell at +690 s against the 900 s gate taken from that leg's own pin. If you are working against a 2.7.3 or 2.7.4 install, `createRoomGuard` really is absent there; upgrade rather than improvising a substitute.
 
 ## Section A - `createHerdPhaseSignal` (new in 2.7.3)
 
@@ -269,6 +271,38 @@ if (r.status === "scored" && r.tight) {
 
 Contract details: **the output never names an identity** - tightness is a property of a cloud, and any wiring that turns it into a per-account action is a misuse. Without a scored reference population the module returns `status: "uncalibrated"` with `tight: null` - wire your alerting to treat that as "not wired yet", never as "not tight". A herd whose bots each keep their **own** timer offset reads spread and is not flagged (that shape is Section A's cohort leg); the two signals are companions, not substitutes. Evaluate is O(n^2) in scored identities - this is a small-cohort instrument (the lab clouds were 9-16 points), not a fleet-wide scan.
 
+## Section I - `createRoomGuard` (new in 2.8.0)
+
+The combined room-pressure guard: one instance per room, fed the same `join` / `leave` / `activity` events as Section C, evaluating pressure on 30-second ticks across four frozen paths - burst, sustained, churn (join velocity against the room's own trailing baseline, new-account concentration, post-join inactivity, fast-leave cycling) plus the occupancy leg of Section C under its FAST and DRIP laws. RECOMB-06 lab record (seeded simulation, 20,161 ticks per cell): pressure never fired on five legitimate cells (including a karaoke audience with 60% of seat sessions silent); flood +60 s, drip +32.5 min, churn +30 s, squat +690 s via occupancy alone, squat-drip warned 5,100 s before the last seat was taken.
+
+```ts
+import { createRoomGuard } from "@dannyphan190/anti-rea";
+
+const guard = createRoomGuard({ capacity: room.capacity }); // one per room
+guard.observe({ type: "join", identity: accountId, ts, accountCreatedTs });
+guard.observe({ type: "activity", identity: accountId, ts });
+guard.observe({ type: "leave", identity: accountId, ts });
+
+const r = guard.evaluate();
+if (r.recommendStepUpForNewJoins) {
+  // Pressure is high at the latest tick: step up NEW joins only
+  // (Section B). Members already seated are never this module's
+  // business - it names nobody. r.paths shows which path fired;
+  // r.firstFlagTs / r.firstPathTs are the audit history.
+}
+```
+
+Contract details: `flagged` is history (pressure has been high at some tick); the live recommendation is `pressureHighNow` / `recommendStepUpForNewJoins` at the latest tick - do not latch a step-up forever off a stale `flagged`. The path constants are the lab-frozen law (exported as `ROOM_GUARD_LAW`); they are not options. Known hole, declared: a squatter who emits even 1-2 activity events escapes the occupancy leg's zero-activity definition (hole A1) - the guard does not claim that shape. Prefer the guard when the room faces mixed shapes; keep Section C wired separately only if you also need its standalone ratio readout.
+
+## Section J - The evidence layer (new in 2.8.0)
+
+Four small exact modules that pin down what verdicts mean. Wire them around the signals, not instead of them:
+
+- **Config provenance (CS-02).** At construction, pin each signal instance's effective config: `createConfigProvenance({ kind, version, defaults, options })` returns a SHA-256 `hash`. Attach that hash to every evaluation you log or forward - an evidence item that cannot name the exact detector configuration that produced it cannot be audited later.
+- **Verified-neutral facts (BS-01).** Classify identity-verification outcomes with `classifyWebBotAuthVerdict(verdict)` (and `classifyHostVerificationFact` for FCrDNS / range checks). The law: verified moves suspicion by exactly 0, every ambiguous outcome is `unverified` with delta 0, and only a `spoofed` fact (proven forgery) carries evidence. Never treat a verified fact as innocence or an unverified one as guilt, and never key enforcement on a verdict's `detail` string yourself - the classifier exists so you do not have to.
+- **Step-up proofs (CAP-01).** When an identity passes a step-up, remember it with `issueStepUpProof` (Ed25519; binds the identity, the stepping-up signal's CS-02 hash, and your challenge config's hash; single-use nonce; lifetime at most 3,600 s) and check presentations with `createStepUpProofVerifier` - the consume hook is required at construction, because single-use is part of the shape. A config change invalidates outstanding proofs by construction (the `cfg` binding stops matching).
+- **Evidentiary roles (KT-01).** Before composing signals into any consequence, run the pack through `auditEvidencePack`: unknown channels and mis-claimed roles are invalid, and a pack whose fired items are all CORROBORATING is **ineligible** - corroboration supports, it never grounds. `decorateSignalResult(result, { configHash })` attaches role, config hash and fired state to a signal result in the pinned format. The tier rules ship as data (`ENFORCEMENT_TIER_EVIDENCE_RULES`): tier 3 is forbidden for inferred evidence at any composition.
+
 ## Safe defaults (do not retune silently)
 
 | Module | Option | Default | Why |
@@ -289,6 +323,7 @@ Contract details: **the output never names an identity** - tightness is a proper
 | `createHerdTightnessSignal` | `periodSec` | 900 | Only lab-validated scheduler grid |
 | | `tightnessBar` | 0.805436 | Frozen C148 calibration midpoint (herd bootstrap max 0.645, legit bootstrap min 0.965); recalibrate only against your own reference population, with the recalibration recorded |
 | | `minEvents` / `minIdentities` | 8 / 8 | Lab scoring floor / lab cloud floor (below 8 scored identities the lab voided the reading) |
+| `createRoomGuard` | (path constants) | `ROOM_GUARD_LAW` | Frozen in the RECOMB-06 pin; the paths are not options - only `capacity` (required), `tickMs` (30,000), `newnessWindowMs` (24 h) and `maxSessions` (100,000) are options |
 
 ## Never do this
 
@@ -302,7 +337,10 @@ Contract details: **the output never names an identity** - tightness is a proper
 - Never eject or punish current room occupants because a population signal (seat-occupancy, vote-brigading) flagged the room - those outputs name no one and accuse no one.
 - Never present lab numbers as real-traffic performance in a summary, README, or sales copy.
 - Never claim this package stops network DDoS. It does not see packets.
-- Never invent APIs. If a function is not in `dist/index.d.ts`, it does not exist - in particular, **there is no `createRoomGuard` in 2.7.3**.
+- Never invent APIs. If a function is not in `dist/index.d.ts`, it does not exist.
+- Never treat a BS-01 `verified` fact as innocence or an `unverified` one as guilt - both carry an evidence delta of exactly 0 by law; only `spoofed` is evidence.
+- Never verify a CAP-01 proof with a verifier built without a real single-use nonce store - a `consumeNonce` that always returns true deletes the replay protection the shape exists for.
+- Never ground a consequence on a pack `auditEvidencePack` reports ineligible (corroborating-only) or invalid (unknown channel, mis-claimed role).
 
 ## Post-integration verification checklist
 
@@ -316,4 +354,5 @@ Run through this before reporting the integration done:
 - [ ] A synthetic squat (16+ fresh silent joins into a 30-seat room, no activity) fed to `createSeatOccupancySignal` in a test flags after the 600 s sustain, and the same stream with the joiners chatting does not.
 - [ ] Room-hop / reconnect-storm wiring keys on identity/session keys (never IPs), and your code checks `disarmed` before reading `flagged`.
 - [ ] `snapshot()` counters on each instance show no unexpected `invalidTs` growth (that means your timestamps are malformed somewhere upstream).
-- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and that the combined `createRoomGuard` does **not** exist in this version.
+- [ ] A synthetic squat (30 fresh silent joins into a 30-seat room) fed to `createRoomGuard` in a test flags via the occupancy path, `recommendStepUpForNewJoins` is true while they sit and false after they leave, and the same stream with the joiners chatting does not flag (hole A1, expected).
+- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0).
