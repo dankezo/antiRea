@@ -19,8 +19,8 @@ Everything is advisory: antiRea measures and reports, the host application decid
 - Package: https://www.npmjs.com/package/@dannyphan190/anti-rea
 - Source: https://github.com/dankezo/antiRea
 - Landing: https://antirea.dannyphan.me
-- Current version: 2.8.0
-- Tests: 812 automated tests (810 passing, 2 skipped)
+- Current version: 2.8.1
+- Tests: 817 automated tests (815 passing, 2 skipped)
 
 ## Key modules and capabilities (from canonical listing copy)
 
