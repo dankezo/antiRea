@@ -303,7 +303,7 @@ Four small exact modules that pin down what verdicts mean. Wire them around the 
 | `createHerdTightnessSignal` | `periodSec` | 900 | Only lab-validated scheduler grid |
 | | `tightnessBar` | 0.805436 | Frozen C148 calibration midpoint (herd bootstrap max 0.645, legit bootstrap min 0.965); recalibrate only against your own reference population, with the recalibration recorded |
 | | `minEvents` / `minIdentities` | 8 / 8 | Lab scoring floor / lab cloud floor (below 8 scored identities the lab voided the reading) |
-| `createRoomGuard` | (path constants) | `ROOM_GUARD_LAW` | Frozen in the RECOMB-06 pin; the paths are not options - only `capacity` (required), `tickMs` (30,000), `newnessWindowMs` (24 h) and `maxSessions` are |
+| `createRoomGuard` | (path constants) | `ROOM_GUARD_LAW` | Frozen in the RECOMB-06 pin; the paths are not options - only `capacity` (required), `tickMs` (30,000), `newnessWindowMs` (24 h) and `maxSessions` (100,000) are options |
 
 ## Never do this
 
