@@ -15,6 +15,21 @@
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
 
+## MCP server
+
+antiRea also ships with an official MCP (Model Context Protocol) server: [`@dannyphan190/anti-rea-mcp`](https://www.npmjs.com/package/@dannyphan190/anti-rea-mcp) ([source](https://github.com/dankezo/anti-rea-mcp)), built on the official `@modelcontextprotocol/sdk` and speaking MCP over the stdio transport. It exposes the library's eight advisory signal evaluations as MCP tools - `list_signals`, `create_signal`, `observe`, `observe_reference`, `evaluate`, `close_signal` - so an AI agent can open a signal session, feed it events and read the verdict. It is an evaluation and demo channel; production integrations still import the library in-process.
+
+```json
+{
+  "mcpServers": {
+    "anti-rea": {
+      "command": "npx",
+      "args": ["-y", "@dannyphan190/anti-rea-mcp"]
+    }
+  }
+}
+```
+
 ## The short story
 
 **A normal web app, unprotected.** Anyone with an account can take the data home. In our tests, one account and a single export call walked away with the entire 10,000-record dataset in under 200 requests - quietly, leaving nothing unusual behind.
