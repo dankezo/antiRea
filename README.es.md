@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![cobertura de líneas de dist](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-810%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-815%20passing-informational)](tests/)
 
 antiRea ayuda a auditar lo que expone un sitio web, aplicar cuotas de velocidad y paginación en el servidor, mover la lógica crítica al servidor y aplicar controles canary o de marca de agua donde corresponda. **No puede** impedir que usuarios o agentes inspeccionen el código entregado a su navegador.
 
@@ -29,6 +29,10 @@ npm install @dannyphan190/anti-rea
 ```
 
 También se puede instalar mediante [GitHub Release](https://github.com/dankezo/antiRea/releases).
+
+## Novedades de v2.8.1
+
+Una versión de parche con una sola corrección: la puerta de span para las señales de fase. Dentro de una fracción de un periodo de rejilla (900 s por defecto), las fases de eventos de cualquier población caen en un arco pequeño, por lo que las señales herd-phase y activity-phase (`createHerdPhaseSignal`, `createActivityPhaseSignal`) podían confirmar erróneamente una población observada en una ventana corta - detectado en vivo en el propio entorno de pruebas del proyecto, donde 12 lectores legítimos fueron confirmados con R_cohort 1,0000 en una ventana de 40 s. Ahora la confirmación exige además que el span de eventos de cada miembro contabilizado cubra al menos un periodo de rejilla completo, solo los miembros elegibles son nombrados y los resultados incluyen el nuevo campo `spanEligibleMembers`. Informe completo: [Análisis detallado de v2.8.1](docs/v2.8.1-deep-dive.es.md).
 
 ## Novedades de v2.8.0
 
@@ -98,7 +102,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compila, ejecuta **812 pruebas automatizadas** (810 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compila, ejecuta **817 pruebas automatizadas** (815 superadas, 2 vectores RSA-PSS omitidos) y realiza comprobaciones estáticas. Escanea el directorio público de compilación antes del despliegue con `node scripts/run-audit.cjs /path/to/dist` o `python3 scripts/verify-build.py /path/to/dist`.
 
 ## Cómo integrar el SDK
 

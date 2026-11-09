@@ -1,6 +1,6 @@
 {
   "name": "@dannyphan190/anti-rea",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "private": false,
   "description": "Evidence-led web anti-cloning toolkit: server-side quota/pagination guards, Web Bot Auth (RFC 9421) signed-agent verification, canary traps, a Python/FastAPI quota-guard port, controlled twin-SaaS benchmark and REA envelope guidance.",
   "type": "commonjs",
@@ -39,6 +39,9 @@
     "web-security",
     "reverse-engineering",
     "anti-scraping",
+    "anti-bot",
+    "bot-detection",
+    "bot-management",
     "rate-limiting",
     "saas-security",
     "source-map",
@@ -50,7 +53,12 @@
     "rfc-9421",
     "http-message-signatures",
     "ed25519",
-    "fastapi"
+    "fastapi",
+    "typescript",
+    "zero-dependencies",
+    "dataset-protection",
+    "abuse-detection",
+    "quota"
   ],
   "author": "Danny Phan <dannyphan190@gmail.com>",
   "license": "MIT",
@@ -65,7 +73,7 @@
     "type": "git",
     "url": "git+https://github.com/dankezo/antiRea.git"
   },
-  "homepage": "https://github.com/dankezo/antiRea#readme",
+  "homepage": "https://antirea.dannyphan.me",
   "bugs": {
     "url": "https://github.com/dankezo/antiRea/issues"
   }

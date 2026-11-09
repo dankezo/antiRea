@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist 代码行覆盖率](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-810%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-815%20passing-informational)](tests/)
 
 antiRea 帮助您审计网站暴露了什么、在服务器端执行速率/分页配额、把关键逻辑移到服务器，并在适当时应用金丝雀或水印控制。它**不能**阻止用户或智能体检查已交付到其浏览器的代码。
 
@@ -30,6 +30,10 @@ npm install @dannyphan190/anti-rea
 
 您也可以通过 [GitHub Release](https://github.com/dankezo/antiRea/releases) 安装。
 
+## v2.8.1 新功能
+
+一个补丁版本，只有一处修复：为相位信号加 span 门。在一个网格周期（默认 900 秒）的一小部分内，任何群体的事件相位都落在一段小弧内，因此 herd-phase 与 activity-phase 信号（`createHerdPhaseSignal`、`createActivityPhaseSignal`）可能把短窗口内观察到的群体误确认为协调群体 - 这个问题是在本项目自己的测试 range 上实时发现的：12 名合法读者在 40 秒窗口内以 R_cohort 1.0000 被确认。现在，确认还额外要求每个被计入成员的事件跨度至少覆盖一个完整的网格周期，只有符合条件的成员才会被点名，结果中也新增了 `spanEligibleMembers` 字段。完整说明：[v2.8.1 深入解析](docs/v2.8.1-deep-dive.zh.md)。
+
 ## v2.8.0 新功能
 
 简短版：2.7.3 当初特意没有发布的房间守卫来了，它在一个新的预注册 pin 下重建，补上了它所缺的占用腿。同时到来的还有一个由四个小而精确的模块组成的证据层，它把其他每个信号的裁决到底意味着什么固定下来：是哪一个配置产生了它、身份验证能证明什么和不能证明什么、一次通过的 step-up 如何被记住、哪些证据可以作为后果的依据。一切都是新增且仅具咨询性；默认路径没有任何变化。
@@ -40,7 +44,7 @@ npm install @dannyphan190/anti-rea
 完整技术说明：[v2.8.0 深入解析](docs/v2.8.0-deep-dive.zh.md)。上一版改了什么：[v2.7.4 深入解析](docs/v2.7.4-deep-dive.zh.md)。
 ## 浏览器基准测试工具
 
-本仓库附带一个 Playwright 测试工具，在 Chromium、Firefox 和 WebKit 上以 **baseline（`:4173`）** 和 **protected（`:4174`）** 两种模式运行一个合成 SaaS（**Northstar**：仪表板、客户搜索、线索创建、CSV 导出、图表视图）——这是与下文实测结果配套的、可在仓库内复现的工具。
+本仓库附带一个 Playwright 测试工具，在 Chromium、Firefox 和 WebKit 上以 **baseline（`:4173`）** 和 **protected（`:4174`）** 两种模式运行一个合成 SaaS（**Northstar**：仪表板、客户搜索、线索创建、CSV 导出、图表视图）--这是与下文实测结果配套的、可在仓库内复现的工具。
 
 ```bash
 npm install
@@ -68,11 +72,11 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 | 已声明群体上限 | 群体并集恰好停在 **600 条记录**，超出上限的服务为零 |
 | 合法用户 | 已声明团队 **1,200/1,200，零摩擦**；礼貌用户零后果 |
 | 行动预算（实验室） | 功能滥用 herd 完成 **16/80 个操作（20%）**；普通用户 **48/48**，零后果 |
-| 咨询信号（实验室） | 五个慢速形态信号：对合法流量的误标 **0-1.67%**——逐信号数字见完整表格 |
+| 咨询信号（实验室） | 五个慢速形态信号：对合法流量的误标 **0-1.67%**--逐信号数字见完整表格 |
 
 完整的逐层表格，包括记录在其自身单元格内的盲点：[docs/EVIDENCE.zh.md](docs/EVIDENCE.zh.md)。
 
-**这一切意味着什么。** 该技术栈消除了随意的单次克隆，并把批量提取变成一个身份问题：数据集的每一个额外切片都要付出另一个账号和更多可见性的代价。它无法阻止一个决心坚定、资源充足的重建者，而一个身份的真实价格（注册摩擦、已验证账号、付款）由您——主机方——设定，这正是预算按身份执行、群体标记区分"削减预算"和"加强审查"而不是发出一种钝性响应的原因。
+**这一切意味着什么。** 该技术栈消除了随意的单次克隆，并把批量提取变成一个身份问题：数据集的每一个额外切片都要付出另一个账号和更多可见性的代价。它无法阻止一个决心坚定、资源充足的重建者，而一个身份的真实价格（注册摩擦、已验证账号、付款）由您--主机方--设定，这正是预算按身份执行、群体标记区分"削减预算"和"加强审查"而不是发出一种钝性响应的原因。
 
 ## 四个层级与实施优先级
 
@@ -81,8 +85,8 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 | **P0 - 基础** | 服务器端配额/分页中间件（`createQuotaGuard`）、按记录授权、秘密隔离 | 核心的反抓取和反克隆保障 | 无法隐藏已经提供给已授权用户的数据 |
 | **第 1 层** | 隐藏公开源映射（`verify-build.py` / `run-audit.cjs`）；版权声明；SVG/文本来源签名 | 防止意外暴露完整源代码 | 决心坚定的用户很容易去除 |
 | **第 2 层** | 规范化 API 金丝雀陷阱（`handleCanaryTrapRequest`）、确定性金丝雀迷宫（`createCanaryMaze`）、诱饵路由（`createDecoyMirage`）、低置信度自动化遥测（`detectAutomationSignals`），以及为签署请求的智能体提供的 Web Bot Auth 签名验证（`createWebBotAuthVerifier`） | 记录异常探测以供审查；识别已签名的智能体，使配额策略可以基于稳定的身份 | 不是阻止访问的控制；已验证的签名是身份，不是授权 |
-| **第 2 层 - 数据经济学** | 按记录预算（`createRecordBudget`）、定价导出（`createExportGuard`）、会话链式游标（`mintCursor` / `verifyCursor`）、序列流程评分（`createFlowScorer`） | 限制任何一个身份总共能收到的数据集数量；使完整提取需要付出许多身份的代价（实测：在我们的测试中每个身份上限为 20%） | 攻击者会轮换身份——需在主机端配合真实的注册成本 |
-| **第 2 层 - 群体检测** | 跨身份群体检测器（`createHerdDetector`）及响应阶梯（`applyHerdLadder`） | 标记共同铺满数据集的身份群体，包括跨 IP 的群体；高铺满群体被削减预算，低铺满群体获得分级响应 | 对低铺满群体，检测不等于执行——一个纪律严明的自适应群体被标记后仍完成了提取（见实测结果） |
+| **第 2 层 - 数据经济学** | 按记录预算（`createRecordBudget`）、定价导出（`createExportGuard`）、会话链式游标（`mintCursor` / `verifyCursor`）、序列流程评分（`createFlowScorer`） | 限制任何一个身份总共能收到的数据集数量；使完整提取需要付出许多身份的代价（实测：在我们的测试中每个身份上限为 20%） | 攻击者会轮换身份--需在主机端配合真实的注册成本 |
+| **第 2 层 - 群体检测** | 跨身份群体检测器（`createHerdDetector`）及响应阶梯（`applyHerdLadder`） | 标记共同铺满数据集的身份群体，包括跨 IP 的群体；高铺满群体被削减预算，低铺满群体获得分级响应 | 对低铺满群体，检测不等于执行--一个纪律严明的自适应群体被标记后仍完成了提取（见实测结果） |
 | **第 3 层** | AES-GCM 上下文绑定信封（`encryptPayload` / `decryptPayload`）及有界重放防护（`createInMemoryReplayGuard`） | 防止简单的跨端点重放 | 如果密钥在浏览器中，客户端仍持有解密上下文 |
 | **第 4 层** | 临时令牌水印覆盖层（`mountForensicWatermark`） | 对泄露的屏幕截图可追溯 | 屏幕覆盖层可以被裁剪或编辑掉 |
 
@@ -98,7 +102,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` 会编译、运行 **812 个自动化测试**（810 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
+`npm run check` 会编译、运行 **817 个自动化测试**（815 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。部署前，用 `node scripts/run-audit.cjs /path/to/dist` 或 `python3 scripts/verify-build.py /path/to/dist` 扫描您的公开构建目录。
 
 ## 如何集成 SDK
 
@@ -178,7 +182,7 @@ const decoded = await verifyTransportEnvelope(env, key, scope, { markNonceOnce: 
 
 ### 5. 验证已签名的智能体（Web Bot Auth）
 
-一些爬虫和 AI 智能体会按照 Web Bot Auth 配置文件（RFC 9421，Ed25519）签署其请求。验证器会重建并检查签名，执行有效期窗口，并拒绝重放的 nonce。它从不自行获取密钥——您静态提供密钥，或通过自己的解析器提供（用您自己的缓存和 SSRF 策略从智能体的源获取 `/.well-known/http-message-signatures-directory`）。
+一些爬虫和 AI 智能体会按照 Web Bot Auth 配置文件（RFC 9421，Ed25519）签署其请求。验证器会重建并检查签名，执行有效期窗口，并拒绝重放的 nonce。它从不自行获取密钥--您静态提供密钥，或通过自己的解析器提供（用您自己的缓存和 SSRF 策略从智能体的源获取 `/.well-known/http-message-signatures-directory`）。
 
 ```ts
 import { createWebBotAuthVerifier } from "@dannyphan190/anti-rea";
@@ -230,7 +234,7 @@ herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordId
 
 ### 8. 共享上限和证据（v2.5.0）
 
-对于群体，按身份的预算会被轮换稀释；共享上限不会——但前提是预留是事务性的。声明群体，在提供服务前预留，之后提交：
+对于群体，按身份的预算会被轮换稀释；共享上限不会--但前提是预留是事务性的。声明群体，在提供服务前预留，之后提交：
 
 ```ts
 import {
@@ -289,7 +293,7 @@ if (echoFrom && echoFrom !== identity) {
 }
 ```
 
-对于只有 get/put 的存储，账本会在每个决定上报告 `mode: "audit_only"` 和 `enforced: false`——先测量，等您的存储真正能执行事务时再强制执行。完整语义和局限：[docs/LIMITATIONS.md](docs/LIMITATIONS.md)。
+对于只有 get/put 的存储，账本会在每个决定上报告 `mode: "audit_only"` 和 `enforced: false`--先测量，等您的存储真正能执行事务时再强制执行。完整语义和局限：[docs/LIMITATIONS.md](docs/LIMITATIONS.md)。
 
 ## 校准试点
 
@@ -297,17 +301,17 @@ antiRea 的 CUSUM 证据引擎附带在实验室拟合的表
 （`r6-calib-1`，标注为 `uncalibrated: true`）：它们是在
 脚本化轨迹上拟合的，不是在真实用户群体上拟合的，README 在
 提到这些表的每个地方都这样说明。要弥合这一差距，恰好需要
-一件本项目无法自行生成的东西——来自真实主机的 observe
+一件本项目无法自行生成的东西--来自真实主机的 observe
 模式快照。
 
 **运行一次校准试点。** 如果您使用 antiRea（或正在评估
-它），请以 `mode: "observe"` 运行 CUSUM tripwire——越界会
-被记录，且不会限制任何东西——并分享由此产生的
+它），请以 `mode: "observe"` 运行 CUSUM tripwire--越界会
+被记录，且不会限制任何东西--并分享由此产生的
 **匿名化聚合快照**：群体规模、越界时的分数和
 并集记录计数，其摘要形状与 SDK 的
 `onCampaignFlag` 回调已经发出的相同。
 
-- 只有聚合的、匿名化的快照——**没有原始用户数据，没有
+- 只有聚合的、匿名化的快照--**没有原始用户数据，没有
   记录内容，没有任何可以识别您用户的标识符**。发送前请审查并去除快照；如果某个字段
   看起来具有识别性，请将其省略并说明。
 - 快照会进入离线校准拟合；在

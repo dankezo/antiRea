@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.8.1 - 2026-11-09
+
+A patch release with one fix: a false-confirmation hole in the two phase signals, found live on the project's own test range the same day 2.8.0 shipped. No new modules, no API changes beyond one added result field, and no pre-existing test expectation changed.
+
+- **Fixed - span gate for the phase signals (`createHerdPhaseSignal`, `createActivityPhaseSignal`):** inside a fraction of one grid period (default 900 s), every population's event phases sit in one small arc, so R_i / R_cohort approach 1 by geometry alone and a short-window population could be falsely confirmed - on the antirea-range range, 12 legitimate readers were confirmed at R_cohort 1.0000 over a 40 s window. Confirmation now additionally requires each counting member's observed event span to cover at least one full grid period, and only eligible members are named; the new result field `spanEligibleMembers` reports how many members qualify. Descriptive statistics (`memberCount`, `cohortR`) are unchanged, and lab cells are unaffected because their spans cover many periods.
+- **Tests:** regression coverage in `tests/phase-span-gate.test.cjs` (5 cells: short-span legitimate, long-span legitimate, aligned-herd positive control, mixed spans, herd-phase core). Suite: 817 automated tests (815 passing, 0 failing, 2 skipped - pre-existing RSA-PSS vectors). The fix also passed the mandatory range release gate (`antirea-range/gate.cjs`: SDK suite + frozen FP/detection cells + live range smoke, 6/6 PASS).
+
 ## 2.8.0 - 2026-11-09
 
 An additive, advisory-only release with five new modules: the combined room guard that 2.7.3 excluded at its frozen gate, rebuilt under a new pre-registered pin with the occupancy leg it lacked (RECOMB-06), and a four-module evidence layer ported from the neighbour-dissection candidates CS-02, BS-01, CAP-01 and KT-01, each past its own frozen Step 0. Nothing on the default path changes: no existing module imports a new one, and all 758 pre-existing tests pass unmodified.

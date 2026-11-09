@@ -70,7 +70,8 @@ const ADVISORY_NOTICE =
   "Advisory telemetry only (enforcement: none): Kuramoto phase-lock statistics over one activity " +
   "stream per identity (chat, emotes, reactions) - a cohort is confirmed as sharing one scheduler " +
   "only when at least minMembers identities are grid-locked members (R_i >= memberThreshold) AND " +
-  "R_cohort >= cohortThreshold; members are named only on confirmation. Content-driven simultaneity " +
+  "R_cohort >= cohortThreshold; members are named only on confirmation, and only members whose " +
+  "event span covers a full grid period can confirm (span gate). Content-driven simultaneity " +
   "(a room reacting to the same film moment) measured zero members in the lab's premiere cell. " +
   "Evaluate scoped (cohortWindowMs, 24 h for room streams): unscoped whole-population runs dilute " +
   "R_cohort and were measured NOT to confirm even a real shared herd. All lab numbers are seeded " +
@@ -97,6 +98,8 @@ export interface ActivityPhaseResult {
   cohortIdentities: number;
   scoredIdentities: number;
   memberCount: number;
+  /** Members whose event span covers at least one full grid period; only they can confirm (span gate, inherited from the herd-phase core). */
+  spanEligibleMembers: number;
   /** Member identities, named ONLY when the cohort is confirmed. Empty otherwise. */
   members: string[];
   cohortR: number | null;
@@ -174,6 +177,7 @@ export function createActivityPhaseSignal(
           cohortIdentities: r.cohortIdentities,
           scoredIdentities: r.scoredIdentities,
           memberCount: r.memberCount,
+          spanEligibleMembers: r.spanEligibleMembers,
           members: r.members,
           cohortR: r.cohortR,
           meanPhaseRad: r.meanPhaseRad,

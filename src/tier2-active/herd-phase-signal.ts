@@ -113,6 +113,9 @@ const ADVISORY_NOTICE =
   "only when at least minMembers identities are grid-locked members (R_i >= memberThreshold) " +
   "AND the cohort mean-phase resultant R_cohort >= cohortThreshold; members are named only " +
   "on confirmation. Grid-lock alone (an independent herd, a personal cron) is not evidence. " +
+  "Confirmation additionally requires every member's event span to cover at least one full " +
+  "grid period (span gate): inside a fraction of one period every population reads as " +
+  "phase-locked, legitimate or not, so a short observation window can never confirm. " +
   "All lab numbers are seeded simulation (H7-01 Step 1; roomguard room-join pin), the only " +
   "validated scheduler period is 900 s, and legitimate groups with their own fixed machine " +
   "schedules were not in the lab populations - never use this signal as the sole basis for " +
@@ -195,6 +198,14 @@ export interface HerdPhaseResult {
   scoredIdentities: number;
   /** Scored identities with R_i >= memberThreshold (descriptive count, confirmed or not). */
   memberCount: number;
+  /**
+   * Scored identities whose event span covers at least one full grid
+   * period (max - min ts >= periodSec). Only span-eligible members can
+   * confirm a cohort: inside a fraction of one period, phase-lock is
+   * the null geometry of ANY population (legitimate or not), so a
+   * short observation window carries no evidence either way.
+   */
+  spanEligibleMembers: number;
   /**
    * The member identities, named ONLY when the cohort is
    * confirmed (the lab law: no flagged members without a
@@ -373,19 +384,23 @@ export function createHerdPhaseSignal(
     let cohortIdentities = 0;
     let scoredIdentities = 0;
     let memberCount = 0;
+    let spanEligibleMembers = 0;
     const memberIds: string[] = [];
+    const eligibleMemberIds: string[] = [];
     let sumRe = 0;
     let sumIm = 0;
 
     for (const [identity, stored] of streams) {
       // Events in scope: stored, and at or before asOfTs when given.
       let firstSeen = Infinity;
+      let lastSeen = -Infinity;
       let count = 0;
       let re = 0;
       let im = 0;
       for (const ts of stored) {
         if (asOfTs !== undefined && ts > asOfTs) continue;
         if (ts < firstSeen) firstSeen = ts;
+        if (ts > lastSeen) lastSeen = ts;
         count++;
         const phase = 2 * Math.PI * ((((ts % periodMs) + periodMs) % periodMs) / periodMs);
         re += Math.cos(phase);
@@ -406,6 +421,15 @@ export function createHerdPhaseSignal(
       if (ri >= memberThreshold) {
         memberCount++;
         memberIds.push(identity);
+        // Span gate: a member's phase-lock is evidence only when its
+        // observed span covers at least one full grid period. Inside
+        // a fraction of one period R_i is near 1 by geometry for ANY
+        // population (the range FP of 2026-11-09: 12 legitimate
+        // readers confirmed at cohortR 1.0000 over a 40 s window).
+        if (lastSeen - firstSeen >= periodMs) {
+          spanEligibleMembers++;
+          eligibleMemberIds.push(identity);
+        }
       }
     }
 
@@ -417,6 +441,7 @@ export function createHerdPhaseSignal(
         cohortIdentities,
         scoredIdentities: 0,
         memberCount: 0,
+        spanEligibleMembers: 0,
         members: [],
         cohortR: null,
         meanPhaseRad: null,
@@ -424,7 +449,8 @@ export function createHerdPhaseSignal(
     }
     const cohortR = Math.hypot(sumRe, sumIm) / scoredIdentities;
     const meanPhaseRad = Math.atan2(sumIm, sumRe);
-    const confirmed = memberCount >= minMembers && cohortR >= cohortThreshold;
+    const confirmed =
+      memberCount >= minMembers && cohortR >= cohortThreshold && spanEligibleMembers >= minMembers;
     return {
       ...base,
       status: "scored",
@@ -432,7 +458,8 @@ export function createHerdPhaseSignal(
       cohortIdentities,
       scoredIdentities,
       memberCount,
-      members: confirmed ? memberIds.sort() : [],
+      spanEligibleMembers,
+      members: confirmed ? eligibleMemberIds.sort() : [],
       cohortR,
       meanPhaseRad,
     };

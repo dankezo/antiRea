@@ -10,7 +10,7 @@
 [![npm version](https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg)](https://www.npmjs.com/package/@dannyphan190/anti-rea)
 [![CI](https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg)](https://github.com/dankezo/antiRea/actions/workflows/ci.yml)
 [![dist line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dankezo/antiRea/badges/badges/coverage.json)](https://github.com/dankezo/antiRea/blob/main/docs/LIMITATIONS.md)
-[![tests](https://img.shields.io/badge/tests-810%20passing-informational)](tests/)
+[![tests](https://img.shields.io/badge/tests-815%20passing-informational)](tests/)
 <a href="https://launchnest.io/p/antirea" target="_blank"><img src="https://launchnest.io/badge/antirea.svg?variant=featured" alt="antiRea on LaunchNest" width="220" height="56" /></a>
 
 antiRea helps you audit what your website exposes, enforce server-side rate/pagination quotas, move critical logic to the server, and apply canary or watermark controls where appropriate. It **cannot** prevent users or agents from inspecting code delivered to their browser.
@@ -45,6 +45,10 @@ npm install @dannyphan190/anti-rea
 ```
 
 You can also install via [GitHub Release](https://github.com/dankezo/antiRea/releases).
+
+## New in v2.8.1
+
+A patch release with one fix: the span gate for the phase signals. Inside a fraction of one grid period (default 900 s), every population's event phases sit in one small arc, so the herd-phase and activity-phase signals (`createHerdPhaseSignal`, `createActivityPhaseSignal`) could falsely confirm a short-window population - found live on this project's own test range, where 12 legitimate readers were confirmed at R_cohort 1.0000 over a 40 s window. Confirmation now additionally requires each counting member's event span to cover at least one full grid period, only eligible members are named, and results carry the new `spanEligibleMembers` field. Full write-up: [v2.8.1 deep dive](docs/v2.8.1-deep-dive.md).
 
 ## New in v2.8.0
 
@@ -115,7 +119,7 @@ npm run check
 npm run build
 ```
 
-`npm run check` compiles, runs **812 automated tests** (810 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
+`npm run check` compiles, runs **817 automated tests** (815 passing, 2 skipped RSA-PSS vectors), and performs static checks. Scan your public build directory before deployment with `node scripts/run-audit.cjs /path/to/dist` or `python3 scripts/verify-build.py /path/to/dist`.
 
 ## How to Integrate the SDK
 
