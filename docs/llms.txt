@@ -1,0 +1,21 @@
+# antiRea
+
+> antiRea is an evidence-led, server-side TypeScript toolkit that meters dataset access per identity and detects coordinated bot abuse for web apps and SaaS. Advisory signals only, zero runtime dependencies, nothing blocked by default. Version 2.8.0, MIT, Node 20+.
+
+antiRea meters data per record: one identity can only receive a capped slice of a dataset, so bulk extraction becomes an identity problem instead of a single export call. It combines per-identity record budgets, priced exports and session-chained cursors, RFC 9421 Web Bot Auth verification, canary traps, and advisory coordinated-cohort signals. Everything is advisory - antiRea measures and reports, the host application decides. Release 2.8.0: 812 automated tests (810 passing, 2 skipped).
+
+## Core
+
+- [Landing page](https://antirea.dannyphan.me/): what antiRea does, how metering works, and links to install
+- [GitHub repository](https://github.com/dankezo/antiRea): source code, README, changelog and issues
+- [npm package](https://www.npmjs.com/package/@dannyphan190/anti-rea): install with npm i @dannyphan190/anti-rea
+- [Full description](https://antirea.dannyphan.me/llms-full.txt): complete overview, install, key modules and measured test setup results
+
+## Packages and registries
+
+- [MCP wrapper on npm](https://www.npmjs.com/package/@dannyphan190/anti-rea-mcp): @dannyphan190/anti-rea-mcp, the MCP server wrapper exposing antiRea signal evaluations to AI agents
+- [JSR](https://jsr.io/@dannyphan190/anti-rea): antiRea on the JSR registry
+
+## Optional
+
+- [GitHub issues](https://github.com/dankezo/antiRea/issues): bug reports and feature requests
