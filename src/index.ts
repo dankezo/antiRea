@@ -6,6 +6,7 @@ export * from "./tier2-active/route-obfuscator";
 export * from "./tier2-active/quota-guard";
 export * from "./tier2-active/record-budget";
 export * from "./tier2-active/export-guard";
+export * from "./tier2-active/surface-guard";
 export * from "./tier2-active/cursor";
 export * from "./tier2-active/canary-echo";
 export * from "./tier2-active/policy-signals";

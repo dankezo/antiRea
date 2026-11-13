@@ -199,7 +199,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "url": "https://antirea.dannyphan.me/",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Node.js 20+",
-      "softwareVersion": "2.8.1",
+      "softwareVersion": "2.9.0",
       "license": "https://opensource.org/licenses/MIT",
       "isAccessibleForFree": true,
       "offers": {
@@ -226,7 +226,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "programmingLanguage": "TypeScript",
       "runtimePlatform": "Node.js 20+",
       "license": "https://opensource.org/licenses/MIT",
-      "version": "2.8.1",
+      "version": "2.9.0",
       "targetProduct": {
         "@id": "https://antirea.dannyphan.me/#software"
       }
@@ -239,11 +239,11 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
 
 <header class="site">
   <div class="wrap hd">
-    <a class="wordmark" href="#">anti<b>Rea</b><sup>V2.8.1</sup></a>
+    <a class="wordmark" href="#">anti<b>Rea</b><sup>V2.9.0</sup></a>
     <nav class="main">
       <a class="anch" href="#signals">Signals</a>
       <a class="anch" href="#how">Protocol</a>
-      <a class="anch" href="#release">2.8.0</a>
+      <a class="anch" href="#release">2.9.0</a>
       <a class="anch" href="#mcp">MCP</a>
       <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea">npm</a>
       <a class="ext" href="https://github.com/dankezo/antiRea">GitHub</a>
@@ -267,7 +267,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
           <button class="copybtn" type="button" data-copy="npm install @dannyphan190/anti-rea">Copy</button>
         </div>
         <div class="facts">
-          <div><span>VERSION</span><span>2.8.1</span></div>
+          <div><span>VERSION</span><span>2.9.0</span></div>
           <div><span>SIGNAL KINDS</span><span>8</span></div>
           <div><span>RUNTIME DEPS</span><span>0</span></div>
           <div><span>LICENSE</span><span>MIT</span></div>
@@ -351,20 +351,20 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
     </div>
   </section>
 
-  <!-- 2.8.0 -->
+  <!-- 2.9.0 -->
   <section class="band" id="release">
     <div class="wrap">
       <div class="rel-grid">
         <div>
-          <p class="kicker"><span class="a">03</span> - Release 2.8.0</p>
-          <h2>A guard for the whole room. A ledger for every flag.</h2>
-          <p class="intro">2.8.0 adds <b>createRoomGuard</b>, a combined module that watches one room across floods, slow drips, churn and held seats at once. Under it, a new evidence layer makes every flag auditable after the fact.</p>
+          <p class="kicker"><span class="a">03</span> - Release 2.9.0</p>
+          <h2>A guard on every field. A cap on every cohort.</h2>
+          <p class="intro">2.9.0 adds <b>createSurfaceGuard</b>, a field-level guard on what enters and leaves your server - the password hash riding along in a profile response, the <b>role</b> smuggled into a profile update. Beside it, the declared-cohort pattern closes the burst that identity rotation used to open.</p>
         </div>
         <div class="ledger">
-          <div class="led"><code>CS-02</code><div><h4>Config provenance</h4><p>Every verdict carries a hash of the exact configuration that produced it. Reproduce any flag, bit for bit.</p></div></div>
-          <div class="led"><code>BS-01</code><div><h4>Verification facts</h4><p>Verified facts are recorded separately from inferred ones - the ledger never confuses the two.</p></div></div>
-          <div class="led"><code>CAP-01</code><div><h4>Step-up proofs</h4><p>When you do challenge an identity, the proof is signed and single-use - a replayed proof is a rejected proof.</p></div></div>
-          <div class="led"><code>KT-01</code><div><h4>Evidentiary roles</h4><p>Every signal kind has a declared role in the evidence pack. Nothing testifies beyond its station.</p></div></div>
+          <div class="led"><code>SG-OUT</code><div><h4>Response fields</h4><p>Every outgoing payload is checked against a sensitive-field denylist and your route allowlists - before the hash, the national id or the bank account can ride along.</p></div></div>
+          <div class="led"><code>SG-IN</code><div><h4>Request fields</h4><p>Writes are checked for privileged fields the form never offered - role, is_superuser, owner_id - the mass-assignment classics.</p></div></div>
+          <div class="led"><code>UNION</code><div><h4>Declared-cohort budget</h4><p>One record budget keyed by a cohort you declare: rotation inside it stops diluting the cap. Measured: a declared herd halts at exactly 150 of 500.</p></div></div>
+          <div class="led"><code>GATE</code><div><h4>Measured, not promised</h4><p>0 false positives on 2,000 legitimate responses and 2,000 requests; 1,194 of 1,194 injected sensitive fields caught. Suite: 830 tests, range gate 6/6.</p></div></div>
         </div>
       </div>
     </div>
@@ -374,8 +374,8 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
   <section class="band" style="padding-top:72px;padding-bottom:72px">
     <div class="wrap">
       <div class="stats">
-        <div class="stat"><div class="stat-num">2.8<span class="u">.1</span></div><div class="stat-cap">Current release</div></div>
-        <div class="stat"><div class="stat-num">817</div><div class="stat-cap">Automated tests<br>815 passing</div></div>
+        <div class="stat"><div class="stat-num">2.9<span class="u">.0</span></div><div class="stat-cap">Current release</div></div>
+        <div class="stat"><div class="stat-num">830</div><div class="stat-cap">Automated tests<br>828 passing</div></div>
         <div class="stat"><div class="stat-num">0</div><div class="stat-cap">Runtime<br>dependencies</div></div>
         <div class="stat"><div class="stat-num">MIT</div><div class="stat-cap">License<br>Use it anywhere</div></div>
       </div>

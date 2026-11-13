@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-815%20passing-informational" alt="tests: 815 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
 </p>
 
 <p align="center">
@@ -173,6 +173,30 @@ in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
 
+### v2.9.0 - surface guard, và pattern cohort khai báo
+
+- **Vấn đề:** budget chặn được BAO NHIÊU một identity lấy, chứ không
+  chặn được CÁI GÌ một response mang theo. Vụ rò rỉ lặp đi lặp lại
+  ngoài đời là một payload trả thừa: response profile hoặc tìm kiếm
+  kéo theo password hash, số CCCD và tài khoản ngân hàng (Spoutible
+  2024, vụ rò data sinh viên eHUST, Power Apps 2021). Ảnh gương ở
+  chiều vào là mass assignment - lượt ghi bind luôn `role` hay
+  `owner_id` chỉ vì người gọi đã gửi chúng.
+- **Module mới - `createSurfaceGuard`:** kiểm tra payload JSON ở cả
+  hai chiều theo denylist field nhạy cảm/đặc quyền có sẵn cộng
+  allowlist theo route của bạn. Mặc định chỉ advisory; strip hay
+  block chỉ khi bạn nói. Đo trên corpus có seed: FP 0 trên 2.000
+  response hợp lệ và 2.000 request; bắt 1.194 trên 1.194 field nhạy
+  cảm tiêm vào và 918 trên 918 field đặc quyền.
+- **Pattern mới - ngân sách union theo cohort khai báo:** đàn vét
+  sạch range kiểm thử trong 15 giây có đáp án tài liệu chính thức:
+  một record budget khóa theo id cohort do host khai báo, để việc
+  xoay identity trong một cohort đã khai không còn pha loãng trần
+  (ví dụ chạy được kèm kiểm chứng:
+  [examples/declared-cohort-budget](examples/declared-cohort-budget)).
+- Bài viết đầy đủ: [Tìm hiểu sâu v2.9.0](docs/v2.9.0-deep-dive.vi.md) -
+  bản trước: [Tìm hiểu sâu v2.8.1](docs/v2.8.1-deep-dive.vi.md).
+
 ### v2.8.1 - bản vá cổng span
 
 - **Vấn đề:** bên trong một phần của một chu kỳ lưới (mặc định
@@ -289,8 +313,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **817
-test tự động** (815 đạt, 2 bị bỏ qua là vector RSA-PSS) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **830
+test tự động** (828 đạt, 2 bị bỏ qua là vector RSA-PSS) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.
@@ -318,7 +342,7 @@ Email **dannyphan190@gmail.com**.
 - [Giới hạn](docs/LIMITATIONS.md) - những gì nó không làm
 - [Bằng chứng](docs/EVIDENCE.vi.md) - toàn bộ kết quả đã đo và phương pháp
 - [Ghi chú pháp lý và quyền riêng tư](docs/LEGAL_PRIVACY.md)
-- Tìm hiểu sâu: [v2.8.1](docs/v2.8.1-deep-dive.vi.md) - [v2.8.0](docs/v2.8.0-deep-dive.vi.md)
+- Tìm hiểu sâu: [v2.9.0](docs/v2.9.0-deep-dive.vi.md) - [v2.8.1](docs/v2.8.1-deep-dive.vi.md) - [v2.8.0](docs/v2.8.0-deep-dive.vi.md)
 - [Changelog](CHANGELOG.md)
 
 ## Đóng góp và bảo mật

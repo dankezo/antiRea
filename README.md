@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-815%20passing-informational" alt="tests: 815 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
 </p>
 
 <p align="center">
@@ -96,11 +96,12 @@ flag can feed straight into a budget cut via `applyHerdLadder()`.
 
 ## What's inside
 
-Four groups. Start at the top; each layer is independent.
+Five groups. Start at the top; each layer is independent.
 
 | Group | What it does, in plain words | Main pieces | Honest limit |
 |---|---|---|---|
 | **Meter** | Caps how much data any one identity can ever receive, and how fast | Record budget (`createRecordBudget`), quota and pagination guard (`createQuotaGuard`), priced exports (`createExportGuard`), session cursors (`mintCursor` / `verifyCursor`), flow scoring (`createFlowScorer`) | Attackers can rotate identities - pair with real signup cost on your side |
+| **Surface** | Controls WHAT may cross the boundary: fields a response never declared (the password hash in a profile payload) and fields a request was never offered (the `role` in a profile update) | Field guard, both directions (`createSurfaceGuard`) - built-in sensitive/privileged denylists plus per-route schema allowlists; advisory by default, strip or block only when the host says so | Sees field names, not values or ownership - a declared field filled with someone else's data is still your authorization logic's job |
 | **Watch** | Spots coordination: many identities quietly tiling your dataset, probing decoys, or crowding a room | Herd detector (`createHerdDetector` + `applyHerdLadder`), phase signals (`createHerdPhaseSignal`, `createActivityPhaseSignal`), room guard (`createRoomGuard`), canary traps and decoys (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), automation telemetry (`detectAutomationSignals`), source-map hygiene (`verify-build.py` / `run-audit.cjs`) | Detection is not enforcement - low-tiling herds get a graduated response, and one adaptive herd was flagged yet still finished |
 | **Prove** | Pins down what a verdict means: which config produced it, who actually signed, what may ground a consequence | Config provenance (`createConfigProvenance`), Web Bot Auth verification (`createWebBotAuthVerifier`), step-up proofs (`issueStepUpProof`, `createStepUpProofVerifier`), evidence roles (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | A verified signature is identity, not authorization - your auth checks stay exactly as they are |
 | **Trace** | Optional client-side aids for leaks and replay | Context-bound envelopes (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), forensic watermark (`mountForensicWatermark`) | Traceability, not access control - overlays can be cropped, and the browser holds its own context |
@@ -165,6 +166,31 @@ It is an evaluation and demo channel. Production protection still
 belongs in-process, in your own app.
 
 ## Latest release
+
+### v2.9.0 - the surface guard, and the declared-cohort pattern
+
+- **Problem:** budgets cap how MUCH an identity takes, not WHAT a
+  response carries. The recurring real-world leak is one over-broad
+  payload: a profile or search response riding along the password
+  hash, national id and bank account (Spoutible 2024, the eHUST
+  student-search leak, Power Apps 2021). The mirror image on the way
+  in is mass assignment - a write that binds `role` or `owner_id`
+  because the caller submitted it.
+- **New module - `createSurfaceGuard`:** inspects JSON payloads in
+  both directions against a built-in sensitive/privileged field
+  denylist plus your per-route allowlists. Advisory by default;
+  strip or block only when you say so. Measured on seeded corpora:
+  0 false positives on 2,000 legitimate responses and 2,000
+  requests; 1,194 of 1,194 injected sensitive fields and 918 of
+  918 injected privileged fields caught.
+- **New pattern - declared-cohort union budget:** the herd burst
+  that drained the test range in 15 seconds gets its documented
+  answer: one record budget keyed by a host-declared cohort id, so
+  rotation inside a declared cohort stops diluting the cap
+  (runnable example with verification:
+  [examples/declared-cohort-budget](examples/declared-cohort-budget)).
+- Write-up: [v2.9.0 deep dive](docs/v2.9.0-deep-dive.md) -
+  previous: [v2.8.1 deep dive](docs/v2.8.1-deep-dive.md).
 
 ### v2.8.1 - the span gate fix
 
@@ -239,6 +265,11 @@ app.use("/api/", createExpressQuotaMiddleware({
   transactional reservation across a whole declared cohort, with
   protected cohorts whose telemetry accrues but never draws a
   consequence: semantics in [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
+- **Declared-cohort union budget** - the single-process form of the
+  same law: one `createRecordBudget` keyed by a host-declared cohort
+  id, so identity rotation inside a declared cohort stops diluting
+  the cap. Pattern with runnable verification:
+  [examples/declared-cohort-budget](examples/declared-cohort-budget).
 - **Watermark and envelopes** - see the Trace group above; never
   embed a person's email, IP or raw user ID in watermark pixels.
 
@@ -273,8 +304,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **817
-automated tests** (815 passing, 2 skipped RSA-PSS vectors) and
+Working on the repo itself: `npm run check` compiles, runs **830
+automated tests** (828 passing, 2 skipped RSA-PSS vectors) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.
@@ -301,7 +332,7 @@ Email **dannyphan190@gmail.com**.
 - [Limitations](docs/LIMITATIONS.md) - what it does not do
 - [Evidence](docs/EVIDENCE.md) - full measured results and method
 - [Legal and privacy notes](docs/LEGAL_PRIVACY.md)
-- Deep dives: [v2.8.1](docs/v2.8.1-deep-dive.md) - [v2.8.0](docs/v2.8.0-deep-dive.md)
+- Deep dives: [v2.9.0](docs/v2.9.0-deep-dive.md) - [v2.8.1](docs/v2.8.1-deep-dive.md) - [v2.8.0](docs/v2.8.0-deep-dive.md)
 - [Changelog](CHANGELOG.md)
 
 ## Contributing and security

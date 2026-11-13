@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-815%20passing-informational" alt="tests: 815 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
 </p>
 
 <p align="center">
@@ -159,6 +159,25 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 
 ## 最新版本
 
+### v2.9.0：surface guard 与已声明 cohort 模式
+
+- **问题：** 预算限制的是一个身份能拿走多少，而不是一个响应能携带什么。
+  现实中反复出现的泄露正是一个过宽的负载：个人资料或搜索响应顺带带出
+  密码哈希、身份证号和银行账号（Spoutible 2024、eHUST 学生数据泄露、
+  Power Apps 2021）。入站方向的镜像问题是批量赋值——一次写入仅仅因为
+  调用方提交了 `role` 或 `owner_id` 就把它们绑定了。
+- **新模块 `createSurfaceGuard`：** 按内置的敏感/特权字段 denylist 加上
+  你按路由声明的 allowlist，双向检查 JSON 负载。默认仅咨询；只有你
+  明确要求时才 strip 或 block。在带种子语料上测量：2,000 个合法响应
+  与 2,000 个合法请求误报为 0；注入的敏感字段捕获 1,194 / 1,194，
+  注入的特权字段捕获 918 / 918。
+- **新模式——已声明 cohort 的联合预算：** 15 秒内掏空测试靶场的那次
+  herd 突发有了成文的答案：一个以主机声明的 cohort id 为键的记录
+  预算，使已声明 cohort 内部的身份轮换不再稀释上限（可运行示例，
+  附验证：[examples/declared-cohort-budget](examples/declared-cohort-budget)）。
+- 完整说明：[v2.9.0 深入解析](docs/v2.9.0-deep-dive.zh.md)；
+  上一版：[v2.8.1 深入解析](docs/v2.8.1-deep-dive.zh.md)。
+
 ### v2.8.1：span 门修复
 
 - **问题：** 在一个网格周期（默认 900 秒）的一小部分时间内，herd-phase
@@ -258,8 +277,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-在本仓库本身上工作：`npm run check` 会编译代码、运行 **817 个自动化
-测试**（815 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。在部署
+在本仓库本身上工作：`npm run check` 会编译代码、运行 **830 个自动化
+测试**（828 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。在部署
 前扫描公开构建：`node scripts/run-audit.cjs /path/to/dist` 或
 `python3 scripts/verify-build.py /path/to/dist`。
 
@@ -283,7 +302,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 - [局限性](docs/LIMITATIONS.md)：它不做什么
 - [证据](docs/EVIDENCE.zh.md)：完整的实测结果和方法
 - [法律与隐私说明](docs/LEGAL_PRIVACY.md)
-- 深入解析：[v2.8.1](docs/v2.8.1-deep-dive.zh.md) - [v2.8.0](docs/v2.8.0-deep-dive.zh.md)
+- 深入解析：[v2.9.0](docs/v2.9.0-deep-dive.zh.md) - [v2.8.1](docs/v2.8.1-deep-dive.zh.md) - [v2.8.0](docs/v2.8.0-deep-dive.zh.md)
 - [更新日志](CHANGELOG.md)
 
 ## 贡献与安全

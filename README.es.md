@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-815%20passing-informational" alt="tests: 815 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
 </p>
 
 <p align="center">
@@ -177,6 +177,33 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
 
+### v2.9.0 - el surface guard y el patrón de cohorte declarada
+
+- **Problema:** los presupuestos limitan CUÁNTO puede tomar una
+  identidad, no QUÉ transporta una respuesta. La filtración recurrente
+  en el mundo real es una sola carga sobrecargada: una respuesta de
+  perfil o de búsqueda que arrastra el hash de la contraseña, el
+  documento nacional y la cuenta bancaria (Spoutible 2024, la
+  filtración de estudiantes de eHUST, Power Apps 2021). La imagen
+  especular en la entrada es la asignación masiva: una escritura que
+  vincula `role` u `owner_id` porque quien llama los envió.
+- **Módulo nuevo - `createSurfaceGuard`:** inspecciona cargas JSON en
+  ambas direcciones contra una denylist integrada de campos sensibles
+  y privilegiados, más tus allowlists por ruta. Consultivo por
+  defecto; recorta o bloquea solo cuando tú lo dices. Medido sobre
+  corpus con semilla: 0 falsos positivos en 2.000 respuestas y 2.000
+  solicitudes legítimas; 1.194 de 1.194 campos sensibles inyectados y
+  918 de 918 campos privilegiados capturados.
+- **Patrón nuevo - presupuesto de unión por cohorte declarada:** la
+  ráfaga en grupo que vació el entorno de pruebas en 15 segundos
+  recibe su respuesta documentada: un presupuesto de registros
+  indexado por el id de una cohorte declarada por el host, para que
+  rotar identidades dentro de una cohorte declarada deje de diluir el
+  techo (ejemplo ejecutable con verificación:
+  [examples/declared-cohort-budget](examples/declared-cohort-budget)).
+- Informe completo: [Análisis detallado de v2.9.0](docs/v2.9.0-deep-dive.es.md) -
+  anterior: [Análisis detallado de v2.8.1](docs/v2.8.1-deep-dive.es.md).
+
 ### v2.8.1 - la corrección de la puerta de span
 
 - **Problema:** dentro de una fracción de un periodo de rejilla
@@ -293,7 +320,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**817 pruebas automatizadas** (815 superadas, 2 omitidas de vectores
+**830 pruebas automatizadas** (828 superadas, 2 omitidas de vectores
 RSA-PSS) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.
@@ -321,7 +348,7 @@ Escribe a **dannyphan190@gmail.com**.
 - [Limitaciones](docs/LIMITATIONS.md): lo que no hace
 - [Evidencia](docs/EVIDENCE.es.md): resultados medidos completos y método
 - [Notas legales y de privacidad](docs/LEGAL_PRIVACY.md)
-- Análisis detallados: [v2.8.1](docs/v2.8.1-deep-dive.es.md) - [v2.8.0](docs/v2.8.0-deep-dive.es.md)
+- Análisis detallados: [v2.9.0](docs/v2.9.0-deep-dive.es.md) - [v2.8.1](docs/v2.8.1-deep-dive.es.md) - [v2.8.0](docs/v2.8.0-deep-dive.es.md)
 - [Changelog](CHANGELOG.md)
 
 ## Contribuciones y seguridad
