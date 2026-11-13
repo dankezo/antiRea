@@ -1,18 +1,18 @@
 ---
 name: anti-rea
 description: >-
-  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
+  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Version 2.8.1 adds a span gate to the two phase signals: a member counts toward a confirmed cohort only when its observed event span covers at least one full grid period. Version 2.9.0 adds the surface guard - field-level control of what enters and leaves the server - and documents the declared-cohort union budget pattern. Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
-  version: "2.8.0"
+  version: "2.9.0"
   npm-package: "@dannyphan190/anti-rea"
   source-repository: "https://github.com/dankezo/antiRea"
 ---
 
 # antiRea integration skill
 
-You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.8.0.
+You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.9.0.
 
 Install:
 
@@ -46,6 +46,8 @@ Read the ground rules first - they override any pattern you find elsewhere. Then
 | "Accounts cycle join -> leave -> join constantly" | Churn against presence/connection limits | `createHerdPhaseSignal` on the join stream (the cycle is a repeated event), plus host-side join-rate metering | A |
 | "The room as a whole is under attack - floods, slow drips, cycling, seats held" | Combined room pressure across all four shapes at once | `createRoomGuard` (one instance per room; step up **new** joins via Section B while `recommendStepUpForNewJoins`) | I, B |
 | "We need verdicts we can audit later" | Evidence hygiene: which config produced a verdict, what verification proves, who may ground a consequence | The evidence layer: `createConfigProvenance`, `classifyWebBotAuthVerdict`, `issueStepUpProof` / `createStepUpProofVerifier`, `auditEvidencePack` | J |
+| "Our API leaked fields we never meant to publish (password hash, national id, bank account)" | Excessive data exposure: the data layer returns the whole record and the route ships it | `createSurfaceGuard` on responses (sensitive denylist + per-route allowlists) | K |
+| "Attackers set fields we never offered - role, owner, admin flags" | Mass assignment on writes | `createSurfaceGuard` on requests (privileged denylist + per-route allowlists) | K |
 | "One account has been quietly taking our data for weeks" | Slow per-identity harvesting | `createShrinkSlopeSignal`; accumulate with `createCusumTripwire` / `createEvalueTripwire` | - |
 | "Accounts poll the same pages like metronomes" | Machine-paced revisiting | `createWatchlistSignal` | - |
 | "Something is enumerating our ids / endpoints" | Enumeration walk | `createDecoyTripwire` (plant decoys outside every menu/sitemap/listing) | - |
@@ -303,6 +305,39 @@ Four small exact modules that pin down what verdicts mean. Wire them around the 
 - **Step-up proofs (CAP-01).** When an identity passes a step-up, remember it with `issueStepUpProof` (Ed25519; binds the identity, the stepping-up signal's CS-02 hash, and your challenge config's hash; single-use nonce; lifetime at most 3,600 s) and check presentations with `createStepUpProofVerifier` - the consume hook is required at construction, because single-use is part of the shape. A config change invalidates outstanding proofs by construction (the `cfg` binding stops matching).
 - **Evidentiary roles (KT-01).** Before composing signals into any consequence, run the pack through `auditEvidencePack`: unknown channels and mis-claimed roles are invalid, and a pack whose fired items are all CORROBORATING is **ineligible** - corroboration supports, it never grounds. `decorateSignalResult(result, { configHash })` attaches role, config hash and fired state to a signal result in the pinned format. The tier rules ship as data (`ENFORCEMENT_TIER_EVIDENCE_RULES`): tier 3 is forbidden for inferred evidence at any composition.
 
+## Section K - `createSurfaceGuard` (new in 2.9.0)
+
+Field-level control of the payload boundary, in both directions. Budgets cap how MUCH an identity takes; the surface guard caps WHAT a single response carries and what a single request may set - the failure behind the Spoutible and eHUST leaks (profile/search responses shipping password hashes, national ids and bank accounts) and behind mass assignment (GitHub 2012, Rocket.Chat, Langflow).
+
+```ts
+import { createSurfaceGuard } from "@dannyphan190/anti-rea";
+
+const surface = createSurfaceGuard({
+  mode: "advisory", // default - report only, never touches the payload
+  routes: {
+    "GET /api/users/:id": { responseFields: ["id", "name", "email", "avatarUrl"] },
+    "PATCH /api/users/:id": { requestFields: ["name", "email", "bio"] },
+  },
+  onViolation: (e) => log.warn("surface", e),
+});
+
+// before sending a response / after building the payload object:
+const out = surface.inspectResponse("GET /api/users/:id", payload);
+// before binding a write body to your model:
+const inc = surface.inspectRequest("PATCH /api/users/:id", req.body);
+```
+
+The law of the module:
+
+- Two layers. A built-in DENYLIST of field-name patterns (sensitive outbound, privileged inbound) needs no configuration and catches over-broad payloads on undeclared routes. A per-route SCHEMA allowlist flags anything undeclared; a field the host declared is exempt from the denylist (a login response legitimately returns a token).
+- Field names are normalized before matching (case and `_`/`-` removed), so renaming games do not slip past.
+- Consequences are the host's choice and never escalate themselves: `advisory` reports, `strip` returns a sanitized copy, `block` marks the inspection not-ok. Start in advisory, read your own traffic's violations, declare schemas for the noisy routes, and only then consider strip.
+- Traversal is capped (`maxScanNodes`, default 10,000) and reports `truncated` rather than scanning hostile payloads forever.
+- It reads field NAMES, not values or ownership: a declared field holding another user's data still passes. BOLA/ownership stays your authorization logic - wire the guard beside it, never instead of it.
+- Lab record (pre-registered, seeded synthetic corpora): 0 false positives on 2,000 legitimate responses and 2,000 requests; 1,194/1,194 injected sensitive fields and 918/918 injected privileged fields caught.
+
+**Declared-cohort union budget (pattern, 2.9.0).** When several accounts belong to one principal you know about, do not give each its own record budget and stop there: give the cohort ONE `createRecordBudget` keyed by the cohort id, checked and consumed beside the per-identity budget, so rotation inside a declared cohort stops diluting the cap (measured: a declared herd halts at exactly 150 of 500; undeclared, the same herd takes everything - declaration-gating is the law, never invent a cohort from inferred evidence). Runnable wiring and verification: `examples/declared-cohort-budget` in the repo. Single-process only; scaled hosts use the disclosure ledger's `reserveDisclosure`.
+
 ## Safe defaults (do not retune silently)
 
 | Module | Option | Default | Why |
@@ -324,6 +359,8 @@ Four small exact modules that pin down what verdicts mean. Wire them around the 
 | | `tightnessBar` | 0.805436 | Frozen C148 calibration midpoint (herd bootstrap max 0.645, legit bootstrap min 0.965); recalibrate only against your own reference population, with the recalibration recorded |
 | | `minEvents` / `minIdentities` | 8 / 8 | Lab scoring floor / lab cloud floor (below 8 scored identities the lab voided the reading) |
 | `createRoomGuard` | (path constants) | `ROOM_GUARD_LAW` | Frozen in the RECOMB-06 pin; the paths are not options - only `capacity` (required), `tickMs` (30,000), `newnessWindowMs` (24 h) and `maxSessions` (100,000) are options |
+| `createSurfaceGuard` | `mode` | `advisory` | The tiering law: observe first; strip/block only by the host's explicit choice after reading advisory output on real traffic |
+| | `maxScanNodes` | 10,000 | Cost bound against hostile payloads; past the cap the result is `truncated`, never silently complete |
 
 ## Never do this
 
@@ -355,4 +392,4 @@ Run through this before reporting the integration done:
 - [ ] Room-hop / reconnect-storm wiring keys on identity/session keys (never IPs), and your code checks `disarmed` before reading `flagged`.
 - [ ] `snapshot()` counters on each instance show no unexpected `invalidTs` growth (that means your timestamps are malformed somewhere upstream).
 - [ ] A synthetic squat (30 fresh silent joins into a 30-seat room) fed to `createRoomGuard` in a test flags via the occupancy path, `recommendStepUpForNewJoins` is true while they sit and false after they leave, and the same stream with the joiners chatting does not flag (hole A1, expected).
-- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0).
+- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0; the surface guard exists since 2.9.0).
