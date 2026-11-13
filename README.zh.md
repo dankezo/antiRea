@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
 </p>
 
 <p align="center">
@@ -99,9 +99,10 @@ herd.observe({ type: "list", identity: "account:123", ip: serverSeenIp, recordId
 | 组 | 用大白话说它做什么 | 主要组件 | 坦白的局限 |
 |---|---|---|---|
 | **Meter** | 限制一个身份总共能收到多少数据，以及能以多快的速度收到 | 记录预算（`createRecordBudget`）、配额与分页守卫（`createQuotaGuard`）、计价导出（`createExportGuard`）、会话游标（`mintCursor` / `verifyCursor`）、流评分（`createFlowScorer`） | 攻击者可以轮换身份：请在你这边配合真实的注册成本 |
-| **Watch** | 发现协同行为：许多身份悄悄地把你的数据集铺满、试探诱饵，或者挤占一个房间 | 群体检测器（`createHerdDetector` + `applyHerdLadder`）、相位信号（`createHerdPhaseSignal`、`createActivityPhaseSignal`）、房间守卫（`createRoomGuard`）、金丝雀陷阱与诱饵（`handleCanaryTrapRequest`、`createCanaryMaze`、`createDecoyMirage`）、自动化遥测（`detectAutomationSignals`）、source map 卫生检查（`verify-build.py` / `run-audit.cjs`） | 检测不等于执法：低铺放的群体得到的是渐进式响应，而且有一个自适应群体被标记后仍然完成了任务 |
-| **Prove** | 把一个裁决的含义固定下来：是哪个配置产生了它、到底是谁签的名、什么可以作为后果的依据 | 配置溯源（`createConfigProvenance`）、Web Bot Auth 验证（`createWebBotAuthVerifier`）、step-up 证明（`issueStepUpProof`、`createStepUpProofVerifier`）、证据角色（`evidentiaryRoleOf`、`auditEvidencePack`、`decorateSignalResult`） | 已验证的签名是身份，不是授权：你的权限检查保持原样，一点不变 |
-| **Trace** | 可选的客户端辅助工具，用于泄漏追踪和重放防护 | 上下文绑定信封（`encryptPayload` / `decryptPayload`、`createInMemoryReplayGuard`）、取证水印（`mountForensicWatermark`） | 是可追溯性，不是访问控制：覆盖层可以被裁剪，浏览器也保管着它自己的上下文 |
+| **Ownership** | 发现一个身份横扫他人对象的行为（BOLA/IDOR 式遍历：顺序 id、随机 id，或数小时的慢速铺开），并附证据报告 | 所有权探针（`createOwnershipProbe`）：按身份统计滚动窗口内不同所有者的占比（默认 1 小时，慢速横扫可加 6 小时），公共路由豁免，增量状态、O(1) 读判定；仅 advisory | 标记只是一种形态，不是证据，授权仍是你的职责，低于地板或集中于少数所有者的横扫不在其范围内 |
+| **Watch** | 发现协同行为：许多身份悄悄地把你的数据集铺满、试探诱饵，或者挤占一个房间 | 群体检测器（`createHerdDetector` + `applyHerdLadder`）、相位信号（`createHerdPhaseSignal`、`createActivityPhaseSignal`）、房间守卫（`createRoomGuard`）、金丝雀陷阱与诱饵（`handleCanaryTrapRequest`、`createCanaryMaze`、`createDecoyMirage`）、自动化遥测（`detectAutomationSignals`）、source map 卫生检查（`verify-build.py` / `run-audit.cjs`）、按量排名规则（`applyVolumeRankRule`）、经验混合校准（`selectEmpMixThreshold`）、会话时序特征（`computeHoldTypeFeatures` / `createHoldTypeScorer`）、早期最小占用信号（`createOccupancyEarlyMinimalSignal`） | 检测不等于执法：低铺放的群体得到的是渐进式响应，而且有一个自适应群体被标记后仍然完成了任务 |
+| **Prove** | 把一个裁决的含义固定下来：是哪个配置产生了它、到底是谁签的名、什么可以作为后果的依据 | 配置溯源（`createConfigProvenance`）、Web Bot Auth 验证（`createWebBotAuthVerifier`）、step-up 证明（`issueStepUpProof`、`createStepUpProofVerifier`）、step-up 后果塑形（`createStepUp402Responder`）、证据角色（`evidentiaryRoleOf`、`auditEvidencePack`、`decorateSignalResult`） | 已验证的签名是身份，不是授权：你的权限检查保持原样，一点不变 |
+| **Trace** | 可选的客户端辅助工具，用于泄漏追踪和重放防护 | 上下文绑定信封（`encryptPayload` / `decryptPayload`、`createInMemoryReplayGuard`）、取证水印（`mountForensicWatermark`）、偏好声明日志（`createDeclarationLog`） | 是可追溯性，不是访问控制：覆盖层可以被裁剪，浏览器也保管着它自己的上下文 |
 
 **推荐顺序：** 先配额守卫（见下文），然后是记录预算，再然后是群体
 检测。
@@ -158,6 +159,60 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 应用。
 
 ## 最新版本
+
+### v2.9.1：402 形式的 step-up 答复，与五个实验室毕业模块
+
+- **问题：** step-up 挑战只是叫机器调用方停下，却没有给它任何可机器
+  读取的行动依据；同时研究实验室还有五个毕业成果一直没有建成，其
+  中包括房间占用规则里已公开声明的 A1 漏洞。
+- **新模块 `createStepUp402Responder`：** 把 step-up 触发的后果塑
+  形成 x402 风格的 HTTP 402 响应：`X-Payment-Required` 头，加
+  上带有 pay、appeal、continue-free 后续步骤的 manifest 正文，
+  以及用于会话 token 的 `checkAssertion`。没有结算、没有支付
+  处理，价格只是一个信号。实验室实测（RECOMB-09，PASS-lab）：
+  合作型 agent 在 94.5% 的会话中撤退、在 94.0% 中出示了有效
+  assertion；200 个浏览器会话与 200 个 API 会话中合法
+  dead-end 为 0。忽略 manifest 的 agent 不受影响，这就是该格式
+  诚实的上限。
+- **新模块 `createDeclarationLog`：** 一个仅追加、哈希链相连的主
+  机侧日志，证明某个偏好声明（robots.txt 的 Content-Signal 行、
+  RSL 的 License 行、aipref 的 Content-Usage）在被转载的副本出
+  现之前就已存在；它与 C39 值水印（`createValueWatermark`）配
+  对，后者才是能在转载后存活下来的部分。实验室实测
+  （RECOMB-10，PASS-lab）：带声明的一臂在 18/18 个门控单元上与
+  仅水印一臂持平（100%），200 个诚实数据集上错误归因为 0，日志
+  200/200 验证通过。日志只证明顺序与完整性，既不证明爬虫遵
+  守，也不构成法律承认。
+- **新信号 `applyVolumeRankRule`：** 在成交量分层（冻结边界
+  63.2 / 632.5）上执行 R2 规则：当某身份至少 2 个稀有单元格按
+  双分量 EB05 分数排进全部单元格的前 5% 时，该身份被标记（前
+  10% 仅描述性报告）。实验室实测（RECOMB-04，PASS-lab）：MID
+  层 walker 检出在 kappa 100 / 300 / 1000 时为 0.90 / 0.85 /
+  0.85，每个至少含 20 个合法身份的分层中合法误报至多 0.007；
+  检出只在 MID 层测得，因为所有 walker 都活在那里。
+- **新工具 `selectEmpMixThreshold`：** 用于聚类阈值选择的经验混
+  合校准规则：在 50/50 校准集（零假设置换加平坦经验森林）上读
+  取混合 FMR，选混合 FMR 至多 1% 的最大网格点，无一合格时为
+  null。实验室实测（RECOMB-05，PASS-lab，仅 R14 分支 C 框
+  架）：混合集在 0-30% 污染下把选择保持在 h = 0.36，而仅用零
+  假设的集合在 10% 处翻转，并未通过平坦误报门。
+- **新特征 `computeHoldTypeFeatures` / `createHoldTypeScorer`：**
+  五个会话时序特征（鼠标事件率、点击时长标准差、按键保持标准
+  差、按键间隔标准差、程序化输入比例 s_type），以及冻结的带符
+  号 z 复合分数 S_R2（含 set2/type 子分数），对照主机提供的人
+  类参考分布评分。RECOMB-02 仅为 PASS-LAB Step 0：只测了特征
+  分离度，不发布任何检出主张，阈值留在主机侧（实验室用的是人
+  类复合分布的外侧 5% 尾部）。
+- **新信号 `createOccupancyEarlyMinimalSignal`：** 针对新身份的
+  A1 反制：身份在加入前不到 24 小时创建、迄今保持 1-2 个
+  activity、每个 activity 都在加入后 300 秒内；D2-FAST 在占比
+  至少 0.50 持续 600 秒时标记，D2-DRIP 在至少 0.34 持续 3600
+  秒时标记。实验室实测（A1-COUNTER-D2，PASS-lab）：快速 squat
+  在 +690 秒被标记，DELAY-300 在 +960 秒，drip 在 +1440 秒，
+  合法孪生与新 lurker 单元均未被标记，但 lurker 门只以恰好一
+  个会话的余量通过（d2max 0.3333 对 drip 线 0.34），首次
+  activity 延迟落在（300 秒，~630 秒）区间会按设计绕过两条规
+  则，3 个 activity 的 squat 按构造绕过。仅 advisory。
 
 ### v2.9.0：surface guard 与已声明 cohort 模式
 
@@ -277,8 +332,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-在本仓库本身上工作：`npm run check` 会编译代码、运行 **830 个自动化
-测试**（828 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。在部署
+在本仓库本身上工作：`npm run check` 会编译代码、运行 **890 个自动化
+测试**（888 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。在部署
 前扫描公开构建：`node scripts/run-audit.cjs /path/to/dist` 或
 `python3 scripts/verify-build.py /path/to/dist`。
 

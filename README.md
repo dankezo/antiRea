@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
 </p>
 
 <p align="center">
@@ -102,9 +102,10 @@ Five groups. Start at the top; each layer is independent.
 |---|---|---|---|
 | **Meter** | Caps how much data any one identity can ever receive, and how fast | Record budget (`createRecordBudget`), quota and pagination guard (`createQuotaGuard`), priced exports (`createExportGuard`), session cursors (`mintCursor` / `verifyCursor`), flow scoring (`createFlowScorer`) | Attackers can rotate identities - pair with real signup cost on your side |
 | **Surface** | Controls WHAT may cross the boundary: fields a response never declared (the password hash in a profile payload) and fields a request was never offered (the `role` in a profile update) | Field guard, both directions (`createSurfaceGuard`) - built-in sensitive/privileged denylists plus per-route schema allowlists; advisory by default, strip or block only when the host says so | Sees field names, not values or ownership - a declared field filled with someone else's data is still your authorization logic's job |
-| **Watch** | Spots coordination: many identities quietly tiling your dataset, probing decoys, or crowding a room | Herd detector (`createHerdDetector` + `applyHerdLadder`), phase signals (`createHerdPhaseSignal`, `createActivityPhaseSignal`), room guard (`createRoomGuard`), canary traps and decoys (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), automation telemetry (`detectAutomationSignals`), source-map hygiene (`verify-build.py` / `run-audit.cjs`) | Detection is not enforcement - low-tiling herds get a graduated response, and one adaptive herd was flagged yet still finished |
-| **Prove** | Pins down what a verdict means: which config produced it, who actually signed, what may ground a consequence | Config provenance (`createConfigProvenance`), Web Bot Auth verification (`createWebBotAuthVerifier`), step-up proofs (`issueStepUpProof`, `createStepUpProofVerifier`), evidence roles (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | A verified signature is identity, not authorization - your auth checks stay exactly as they are |
-| **Trace** | Optional client-side aids for leaks and replay | Context-bound envelopes (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), forensic watermark (`mountForensicWatermark`) | Traceability, not access control - overlays can be cropped, and the browser holds its own context |
+| **Ownership** | Spots one identity sweeping through other people's objects (the BOLA/IDOR walk - sequential ids, random ids, or a slow spread over hours) and reports it with evidence | Ownership probe (`createOwnershipProbe`) - per-identity distinct-owner ratio over rolling windows (1 h by default, add 6 h for slow sweeps), public routes exempt, incremental state with O(1) verdict reads; advisory only | A flag is a shape, not proof - authorization stays your job, and a sweep under the floors or concentrated on few owners is out of reach |
+| **Watch** | Spots coordination: many identities quietly tiling your dataset, probing decoys, or crowding a room | Herd detector (`createHerdDetector` + `applyHerdLadder`), phase signals (`createHerdPhaseSignal`, `createActivityPhaseSignal`), room guard (`createRoomGuard`), canary traps and decoys (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), automation telemetry (`detectAutomationSignals`), source-map hygiene (`verify-build.py` / `run-audit.cjs`), volume-rank rule (`applyVolumeRankRule`), empirical-mix calibration (`selectEmpMixThreshold`), session-timing features (`computeHoldTypeFeatures` / `createHoldTypeScorer`), early-minimal occupancy signal (`createOccupancyEarlyMinimalSignal`) | Detection is not enforcement - low-tiling herds get a graduated response, and one adaptive herd was flagged yet still finished |
+| **Prove** | Pins down what a verdict means: which config produced it, who actually signed, what may ground a consequence | Config provenance (`createConfigProvenance`), Web Bot Auth verification (`createWebBotAuthVerifier`), step-up proofs (`issueStepUpProof`, `createStepUpProofVerifier`), step-up consequence shaping (`createStepUp402Responder`), evidence roles (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | A verified signature is identity, not authorization - your auth checks stay exactly as they are |
+| **Trace** | Optional client-side aids for leaks and replay | Context-bound envelopes (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), forensic watermark (`mountForensicWatermark`), preference declaration log (`createDeclarationLog`) | Traceability, not access control - overlays can be cropped, and the browser holds its own context |
 
 **Recommended order:** quota guard first (see below), then the
 record budget, then herd detection.
@@ -166,6 +167,80 @@ It is an evaluation and demo channel. Production protection still
 belongs in-process, in your own app.
 
 ## Latest release
+
+### v2.9.1 - the 402 step-up answer, and five lab graduates
+
+- **Problem:** a step-up challenge tells a machine caller to
+  stop but hands it nothing machine-readable to act on - and
+  five research-lab graduates were still sitting unbuilt,
+  including the declared A1 hole in the room occupancy laws.
+- **New module - `createStepUp402Responder`:** shapes the
+  consequence of a step-up trigger as an HTTP 402 response in
+  x402 style - an `X-Payment-Required` header plus a manifest
+  body with pay, appeal and continue-free next steps, and
+  `checkAssertion` for the session token. No settlement and
+  no payment processing; the price is a signal. Measured in
+  the lab (RECOMB-09, PASS-lab): cooperative agents retreated
+  in 94.5% of sessions and presented a valid assertion in
+  94.0%; 0 legitimate dead-ends across 200 browser and 200
+  API sessions. Agents that ignore the manifest are
+  unaffected - that is the format's honest ceiling.
+- **New module - `createDeclarationLog`:** an append-only,
+  hash-chained host-side log proving a preference
+  declaration (robots.txt Content-Signal, an RSL License
+  line, aipref Content-Usage) existed before a republished
+  copy appeared; it pairs with the C39 value watermark
+  (`createValueWatermark`), which is what survives
+  republication. Measured in the lab (RECOMB-10, PASS-lab):
+  the declaration arm matched watermark-only at 18/18 gated
+  cells (100%), 0 mis-attributions on 200 honest datasets,
+  the log verified 200/200. The log proves ordering and
+  integrity only - not crawler compliance, not legal
+  recognition.
+- **New signal - `applyVolumeRankRule`:** the R2 rule over
+  volume strata (frozen boundaries 63.2 / 632.5): an
+  identity is flagged when at least 2 of its rare cells
+  rank in the top 5% of all cells by two-component EB05
+  score (top 10% reported descriptively). Measured in the
+  lab (RECOMB-04, PASS-lab): walker detection in the MID
+  stratum 0.90 / 0.85 / 0.85 at kappa 100 / 300 / 1000,
+  legitimate false positives at most 0.007 in every stratum
+  with at least 20 legit identities; detection was measured
+  in MID only, where every walker lived.
+- **New helper - `selectEmpMixThreshold`:** the
+  empirical-mix calibration law for clustering-threshold
+  selection: mixed FMR is read over a 50/50 calibration set
+  (null permutations plus flat empirical forests), choosing
+  the largest grid point whose mixed FMR stays at most 1%,
+  or null when none qualifies. Measured in the lab
+  (RECOMB-05, PASS-lab, R14 branch-C frame only): the mixed
+  set held the selection at h = 0.36 across 0-30%
+  contamination, while the null-only set flipped at 10% and
+  failed the flat false-positive gate.
+- **New features - `computeHoldTypeFeatures` /
+  `createHoldTypeScorer`:** five session-timing features
+  (mouse event rate, click duration SD, key hold SD,
+  inter-key SD, programmatic-type ratio s_type) and the
+  frozen signed-z composite S_R2 with set2/type sub-scores,
+  against a host-supplied human reference. RECOMB-02 is
+  PASS-LAB Step 0 only: feature separation was measured,
+  and NO detection claim ships - thresholds stay host-side
+  (the lab used the outer-5% tail of the human composite
+  distribution).
+- **New signal - `createOccupancyEarlyMinimalSignal`:**
+  the A1 counter for fresh identities - sessions of
+  identities created less than 24 h before join, holding
+  1-2 activities so far, every activity within 300 s of
+  join; D2-FAST flags a ratio of at least 0.50 sustained
+  600 s, D2-DRIP at least 0.34 sustained 3600 s. Measured
+  in the lab (A1-COUNTER-D2, PASS-lab): fast squats flagged
+  at +690 s, DELAY-300 at +960 s, drip at +1440 s, and the
+  legit twins and new-lurker cell unflagged - but the
+  lurker gate passed with exactly one session of headroom
+  (d2max 0.3333 against the 0.34 drip bar), first-activity
+  delays in the (300 s, ~630 s) band evade both laws by
+  design, and 3-activity squats evade by construction.
+  Advisory only.
 
 ### v2.9.0 - the surface guard, and the declared-cohort pattern
 
@@ -304,8 +379,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **830
-automated tests** (828 passing, 2 skipped RSA-PSS vectors) and
+Working on the repo itself: `npm run check` compiles, runs **890
+automated tests** (888 passing, 2 skipped RSA-PSS vectors) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.

@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
 </p>
 
 <p align="center">
@@ -108,9 +108,10 @@ Cuatro grupos. Empieza por arriba; cada capa es independiente.
 | Grupo | Qué hace, en palabras simples | Piezas principales | Límite honesto |
 |---|---|---|---|
 | **Meter** | Limita cuántos datos puede recibir una identidad en total, y a qué velocidad | Presupuesto de registros (`createRecordBudget`), guardián de cuotas y paginación (`createQuotaGuard`), exportaciones con precio (`createExportGuard`), cursores de sesión (`mintCursor` / `verifyCursor`), puntuación de flujo (`createFlowScorer`) | Los atacantes pueden rotar identidades: combínalo con un costo real de registro por tu parte |
-| **Watch** | Detecta la coordinación: muchas identidades cubriendo tu conjunto de datos en silencio, sondeando señuelos u ocupando una sala | Detector de grupos (`createHerdDetector` + `applyHerdLadder`), señales de fase (`createHerdPhaseSignal`, `createActivityPhaseSignal`), guardián de salas (`createRoomGuard`), trampas canary y señuelos (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), telemetría de automatización (`detectAutomationSignals`), higiene de source maps (`verify-build.py` / `run-audit.cjs`) | Detectar no es aplicar: los grupos de cobertura fina reciben una respuesta gradual, y un grupo adaptativo fue marcado pero aun así terminó |
-| **Prove** | Fija lo que significa un veredicto: qué configuración lo produjo, quién firmó realmente, qué puede fundamentar una consecuencia | Procedencia de configuración (`createConfigProvenance`), verificación de Web Bot Auth (`createWebBotAuthVerifier`), pruebas de step-up (`issueStepUpProof`, `createStepUpProofVerifier`), roles de evidencia (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | Una firma verificada es identidad, no autorización: tus controles de acceso se quedan exactamente como están |
-| **Trace** | Ayudas opcionales del lado del cliente para filtraciones y repeticiones | Sobres ligados al contexto (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), marca de agua forense (`mountForensicWatermark`) | Trazabilidad, no control de acceso: las capas superpuestas pueden recortarse, y el navegador guarda su propio contexto |
+| **Ownership** | Detecta a una identidad barriendo objetos de otras personas (el recorrido BOLA/IDOR: ids secuenciales, ids aleatorios o una dispersión lenta durante horas) y lo reporta con evidencia | Sonda de propiedad (`createOwnershipProbe`): proporción de propietarios distintos por identidad en ventanas móviles (1 h por defecto, añade 6 h para barridos lentos), rutas públicas exentas, estado incremental con lecturas de veredicto O(1); solo advisory | Una marca es una forma, no una prueba: la autorización sigue siendo tu trabajo, y un barrido bajo los suelos o concentrado en pocos propietarios queda fuera de alcance |
+| **Watch** | Detecta la coordinación: muchas identidades cubriendo tu conjunto de datos en silencio, sondeando señuelos u ocupando una sala | Detector de grupos (`createHerdDetector` + `applyHerdLadder`), señales de fase (`createHerdPhaseSignal`, `createActivityPhaseSignal`), guardián de salas (`createRoomGuard`), trampas canary y señuelos (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), telemetría de automatización (`detectAutomationSignals`), higiene de source maps (`verify-build.py` / `run-audit.cjs`), regla de rango por volumen (`applyVolumeRankRule`), calibración de mezcla empírica (`selectEmpMixThreshold`), rasgos de temporización de sesión (`computeHoldTypeFeatures` / `createHoldTypeScorer`), señal de ocupación mínima temprana (`createOccupancyEarlyMinimalSignal`) | Detectar no es aplicar: los grupos de cobertura fina reciben una respuesta gradual, y un grupo adaptativo fue marcado pero aun así terminó |
+| **Prove** | Fija lo que significa un veredicto: qué configuración lo produjo, quién firmó realmente, qué puede fundamentar una consecuencia | Procedencia de configuración (`createConfigProvenance`), verificación de Web Bot Auth (`createWebBotAuthVerifier`), pruebas de step-up (`issueStepUpProof`, `createStepUpProofVerifier`), modelado de la consecuencia del step-up (`createStepUp402Responder`), roles de evidencia (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | Una firma verificada es identidad, no autorización: tus controles de acceso se quedan exactamente como están |
+| **Trace** | Ayudas opcionales del lado del cliente para filtraciones y repeticiones | Sobres ligados al contexto (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), marca de agua forense (`mountForensicWatermark`), registro de declaraciones de preferencia (`createDeclarationLog`) | Trazabilidad, no control de acceso: las capas superpuestas pueden recortarse, y el navegador guarda su propio contexto |
 
 **Orden recomendado:** primero el guardián de cuotas (ver abajo),
 después el presupuesto de registros y luego la detección de grupos.
@@ -176,6 +177,97 @@ Es un canal de evaluación y demostración. La protección en producción
 sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
+
+### v2.9.1 - la respuesta step-up con 402 y cinco graduados del laboratorio
+
+- **Problema:** un desafío step-up le dice a un llamante
+  automático que se detenga, pero no le entrega nada
+  legible por máquina con lo que actuar, y cinco
+  graduados del laboratorio de investigación seguían sin
+  construir, incluido el agujero A1 declarado en las
+  leyes de ocupación de salas.
+- **Módulo nuevo - `createStepUp402Responder`:** modela
+  la consecuencia de un disparo step-up como una
+  respuesta HTTP 402 al estilo x402: una cabecera
+  `X-Payment-Required` más un cuerpo manifest con los
+  pasos siguientes pay, appeal y continue-free, y
+  `checkAssertion` para el token de sesión. Sin
+  liquidación y sin procesamiento de pagos; el precio es
+  una señal. Medido en el laboratorio (RECOMB-09,
+  PASS-lab): los agentes cooperativos se retiraron en el
+  94,5% de las sesiones y presentaron una aserción
+  válida en el 94,0%; 0 callejones sin salida legítimos
+  en 200 sesiones de navegador y 200 de API. Los agentes
+  que ignoran el manifest no se ven afectados: ese es el
+  techo honesto del formato.
+- **Módulo nuevo - `createDeclarationLog`:** un registro
+  del lado del host, solo de anexado y encadenado por
+  hash, que prueba que una declaración de preferencia
+  (la línea Content-Signal de robots.txt, una línea
+  License de RSL, el Content-Usage de aipref) existía
+  antes de que apareciera una copia republicada; se
+  empareja con la marca de agua de valores C39
+  (`createValueWatermark`), que es lo que sobrevive a la
+  republicación. Medido en el laboratorio (RECOMB-10,
+  PASS-lab): el brazo con declaración igualó al de solo
+  marca en 18/18 celdas con puerta (100%), 0
+  atribuciones erróneas en 200 conjuntos de datos
+  honestos, registro verificado 200/200. El registro
+  prueba solo orden e integridad: ni cumplimiento de los
+  rastreadores ni reconocimiento legal.
+- **Señal nueva - `applyVolumeRankRule`:** la regla R2
+  sobre estratos de volumen (fronteras congeladas 63,2 /
+  632,5): una identidad se marca cuando al menos 2 de
+  sus celdas raras se sitúan en el top 5% de todas las
+  celdas por puntuación EB05 de dos componentes (el top
+  10% se reporta de forma descriptiva). Medido en el
+  laboratorio (RECOMB-04, PASS-lab): detección de
+  walkers en el estrato MID 0,90 / 0,85 / 0,85 con kappa
+  100 / 300 / 1000, falsos positivos legítimos de como
+  máximo 0,007 en cada estrato con al menos 20
+  identidades legítimas; la detección se midió solo en
+  MID, donde vivían todos los walkers.
+- **Ayudante nuevo - `selectEmpMixThreshold`:** la ley
+  de calibración de mezcla empírica para elegir el
+  umbral de clustering: el FMR mezclado se lee sobre un
+  conjunto de calibración 50/50 (permutaciones nulas más
+  bosques empíricos planos), eligiendo el mayor punto de
+  la rejilla cuyo FMR mezclado se mantiene en como
+  máximo 1%, o null cuando ninguno cumple. Medido en el
+  laboratorio (RECOMB-05, PASS-lab, solo el marco R14
+  rama C): el conjunto mezclado mantuvo la selección en
+  h = 0,36 con contaminación del 0-30%, mientras el
+  conjunto solo-nulo se invirtió al 10% y falló la
+  puerta de falsos positivos del conjunto plano.
+- **Rasgos nuevos - `computeHoldTypeFeatures` /
+  `createHoldTypeScorer`:** cinco rasgos de
+  temporización de sesión (tasa de eventos de ratón,
+  desviación típica de la duración del clic, de la
+  retención de tecla, del intervalo entre teclas y la
+  proporción de tecleo programático s_type) y el
+  compuesto z con signo congelado S_R2 con
+  subpuntuaciones set2/type, contra una referencia
+  humana suministrada por el host. RECOMB-02 es PASS-LAB
+  solo Paso 0: se midió la separación de rasgos y NO se
+  publica ninguna afirmación de detección; los umbrales
+  quedan del lado del host (el laboratorio usó la cola
+  outer-5% de la distribución del compuesto humano).
+- **Señal nueva - `createOccupancyEarlyMinimalSignal`:**
+  la respuesta a A1 para identidades frescas: sesiones
+  de identidades creadas menos de 24 h antes de unirse,
+  con 1-2 actividades hasta el momento, cada actividad
+  dentro de los 300 s tras unirse; D2-FAST marca una
+  proporción de al menos 0,50 sostenida 600 s, D2-DRIP
+  al menos 0,34 sostenida 3600 s. Medido en el
+  laboratorio (A1-COUNTER-D2, PASS-lab): los squats
+  rápidos marcados a +690 s, DELAY-300 a +960 s, el drip
+  a +1440 s, y los gemelos legítimos y la celda de
+  lurker nuevo sin marcar, pero la puerta del lurker
+  pasó con exactamente una sesión de margen (d2max
+  0,3333 frente a la barra drip de 0,34), la banda de
+  retraso de la primera actividad (300 s, ~630 s) evade
+  ambas leyes por diseño, y los squats de 3 actividades
+  evaden por construcción. Solo advisory.
 
 ### v2.9.0 - el surface guard y el patrón de cohorte declarada
 
@@ -320,7 +412,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**830 pruebas automatizadas** (828 superadas, 2 omitidas de vectores
+**890 pruebas automatizadas** (888 superadas, 2 omitidas de vectores
 RSA-PSS) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.

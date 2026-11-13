@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-828%20passing-informational" alt="tests: 828 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
 </p>
 
 <p align="center">
@@ -106,9 +106,10 @@ Bốn nhóm. Bắt đầu từ trên xuống; mỗi lớp độc lập với nha
 | Nhóm | Nó làm gì, nói đơn giản | Thành phần chính | Giới hạn, nói thẳng |
 |---|---|---|---|
 | **Meter** | Giới hạn lượng dữ liệu một danh tính có thể nhận trong suốt vòng đời, và cả tốc độ nhận | Ngân sách bản ghi (`createRecordBudget`), quota và chặn phân trang (`createQuotaGuard`), xuất dữ liệu có tính giá (`createExportGuard`), con trỏ phiên (`mintCursor` / `verifyCursor`), chấm điểm luồng (`createFlowScorer`) | Kẻ tấn công có thể xoay vòng danh tính - hãy kết hợp với chi phí đăng ký thật ở phía bạn |
-| **Watch** | Phát hiện sự phối hợp: nhiều danh tính lặng lẽ lát kín bộ dữ liệu của bạn, dò các mồi nhử, hoặc chen chúc trong một phòng | Bộ phát hiện bầy đàn (`createHerdDetector` + `applyHerdLadder`), tín hiệu pha (`createHerdPhaseSignal`, `createActivityPhaseSignal`), room guard (`createRoomGuard`), bẫy canary và mồi nhử (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), telemetry tự động hóa (`detectAutomationSignals`), vệ sinh source-map (`verify-build.py` / `run-audit.cjs`) | Phát hiện không phải là thực thi - bầy đàn lát mỏng nhận phản ứng theo nấc, và một bầy đàn thích ứng đã bị gắn cờ nhưng vẫn lấy xong |
-| **Prove** | Chốt rõ một phán quyết nghĩa là gì: cấu hình nào tạo ra nó, ai thực sự đã ký, điều gì được phép làm căn cứ cho hậu quả | Nguồn gốc cấu hình (`createConfigProvenance`), xác minh Web Bot Auth (`createWebBotAuthVerifier`), bằng chứng step-up (`issueStepUpProof`, `createStepUpProofVerifier`), vai trò bằng chứng (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | Chữ ký đã xác minh là danh tính, không phải quyền truy cập - các kiểm tra quyền của bạn vẫn giữ nguyên như cũ |
-| **Trace** | Công cụ phía client tùy chọn, hỗ trợ khi rò rỉ và phát lại | Phong bì gắn ngữ cảnh (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), watermark pháp y (`mountForensicWatermark`) | Truy vết, không phải kiểm soát truy cập - lớp phủ có thể bị cắt, và trình duyệt nắm giữ ngữ cảnh của chính nó |
+| **Ownership** | Phát hiện một danh tính quét qua các đối tượng của người khác (kiểu đi quét BOLA/IDOR - id tuần tự, id ngẫu nhiên, hoặc rải chậm nhiều giờ) và báo kèm bằng chứng | Probe sở hữu (`createOwnershipProbe`) - tỉ lệ chủ sở hữu khác nhau theo từng danh tính trên cửa sổ trượt (mặc định 1 giờ, thêm 6 giờ cho quét chậm), route công khai được miễn, trạng thái tăng dần với lần đọc verdict O(1); chỉ advisory | Một lá cờ là hình dạng, không phải bằng chứng - quyền truy cập vẫn là việc của bạn, và quét dưới sàn hoặc tập trung vào ít chủ sở hữu thì ngoài tầm |
+| **Watch** | Phát hiện sự phối hợp: nhiều danh tính lặng lẽ lát kín bộ dữ liệu của bạn, dò các mồi nhử, hoặc chen chúc trong một phòng | Bộ phát hiện bầy đàn (`createHerdDetector` + `applyHerdLadder`), tín hiệu pha (`createHerdPhaseSignal`, `createActivityPhaseSignal`), room guard (`createRoomGuard`), bẫy canary và mồi nhử (`handleCanaryTrapRequest`, `createCanaryMaze`, `createDecoyMirage`), telemetry tự động hóa (`detectAutomationSignals`), vệ sinh source-map (`verify-build.py` / `run-audit.cjs`), luật hạng theo khối lượng (`applyVolumeRankRule`), hiệu chuẩn trộn thực nghiệm (`selectEmpMixThreshold`), feature thời gian phiên (`computeHoldTypeFeatures` / `createHoldTypeScorer`), tín hiệu chiếm ghế tối thiểu-sớm (`createOccupancyEarlyMinimalSignal`) | Phát hiện không phải là thực thi - bầy đàn lát mỏng nhận phản ứng theo nấc, và một bầy đàn thích ứng đã bị gắn cờ nhưng vẫn lấy xong |
+| **Prove** | Chốt rõ một phán quyết nghĩa là gì: cấu hình nào tạo ra nó, ai thực sự đã ký, điều gì được phép làm căn cứ cho hậu quả | Nguồn gốc cấu hình (`createConfigProvenance`), xác minh Web Bot Auth (`createWebBotAuthVerifier`), bằng chứng step-up (`issueStepUpProof`, `createStepUpProofVerifier`), định hình hậu quả step-up (`createStepUp402Responder`), vai trò bằng chứng (`evidentiaryRoleOf`, `auditEvidencePack`, `decorateSignalResult`) | Chữ ký đã xác minh là danh tính, không phải quyền truy cập - các kiểm tra quyền của bạn vẫn giữ nguyên như cũ |
+| **Trace** | Công cụ phía client tùy chọn, hỗ trợ khi rò rỉ và phát lại | Phong bì gắn ngữ cảnh (`encryptPayload` / `decryptPayload`, `createInMemoryReplayGuard`), watermark pháp y (`mountForensicWatermark`), log khai báo preference (`createDeclarationLog`) | Truy vết, không phải kiểm soát truy cập - lớp phủ có thể bị cắt, và trình duyệt nắm giữ ngữ cảnh của chính nó |
 
 **Thứ tự khuyến nghị:** quota guard trước (xem bên dưới), rồi đến
 ngân sách bản ghi, rồi phát hiện bầy đàn.
@@ -172,6 +173,83 @@ hiệu, nạp sự kiện vào và đọc phán quyết.
 in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
+
+### v2.9.1 - đáp án step-up bằng 402, và năm module tốt nghiệp từ lab
+
+- **Vấn đề:** một thử thách step-up bảo một caller máy dừng
+  lại nhưng không trao cho nó thứ gì đọc được bằng máy để
+  hành động - và năm module tốt nghiệp từ lab nghiên cứu
+  vẫn nằm chưa build, trong đó có lỗ A1 đã khai trong các
+  luật chiếm ghế của phòng.
+- **Module mới - `createStepUp402Responder`:** định hình
+  hậu quả của một lần kích hoạt step-up thành response
+  HTTP 402 theo phong cách x402 - header
+  `X-Payment-Required` cộng body manifest với các bước
+  tiếp theo pay, appeal và continue-free, và
+  `checkAssertion` cho token của phiên. Không settlement,
+  không xử lý thanh toán; cái giá chỉ là một tín hiệu. Đo
+  trong lab (RECOMB-09, PASS-lab): agent hợp tác rút lui
+  ở 94,5% số phiên và xuất trình assertion hợp lệ ở
+  94,0%; dead-end hợp lệ 0 trên 200 phiên trình duyệt và
+  200 phiên API. Agent phớt lờ manifest thì không bị ảnh
+  hưởng - đó là trần trung thực của định dạng.
+- **Module mới - `createDeclarationLog`:** log phía host
+  dạng append-only, nối chuỗi bằng hash, chứng minh một
+  khai báo preference (dòng Content-Signal trong
+  robots.txt, dòng License của RSL, Content-Usage của
+  aipref) đã tồn tại trước khi một bản sao bị đăng lại
+  xuất hiện; nó ghép cặp với watermark giá trị C39
+  (`createValueWatermark`) - thứ còn sống sót qua việc
+  đăng lại. Đo trong lab (RECOMB-10, PASS-lab): arm có
+  khai báo ngang arm chỉ-watermark ở 18/18 ô có cổng
+  (100%), quy sai 0 trên 200 bộ dữ liệu trung thực, log
+  được kiểm chứng 200/200. Log chỉ chứng minh thứ tự và
+  tính toàn vẹn - không chứng minh crawler tuân thủ,
+  không phải sự công nhận pháp lý.
+- **Tín hiệu mới - `applyVolumeRankRule`:** luật R2 trên
+  các tầng khối lượng (biên đông cứng 63,2 / 632,5): một
+  danh tính bị gắn cờ khi ít nhất 2 trong số các ô hiếm
+  của nó nằm trong top 5% của mọi ô theo điểm EB05 hai
+  thành phần (top 10% được báo ở mức mô tả). Đo trong lab
+  (RECOMB-04, PASS-lab): phát hiện walker ở tầng MID
+  0,90 / 0,85 / 0,85 tại kappa 100 / 300 / 1000, FP hợp
+  lệ tối đa 0,007 ở mọi tầng có ít nhất 20 danh tính hợp
+  lệ; phát hiện chỉ được đo ở tầng MID, nơi mọi walker
+  sinh sống.
+- **Công cụ mới - `selectEmpMixThreshold`:** luật hiệu
+  chuẩn trộn thực nghiệm cho việc chọn ngưỡng phân cụm:
+  FMR trộn được đọc trên tập hiệu chuẩn 50/50 (hoán vị
+  null cộng rừng thực nghiệm phẳng), chọn điểm lưới lớn
+  nhất mà FMR trộn còn tối đa 1%, hoặc null khi không
+  điểm nào đạt. Đo trong lab (RECOMB-05, PASS-lab, chỉ
+  khung R14 nhánh C): tập trộn giữ lựa chọn ở h = 0,36
+  xuyên suốt nhiễm 0-30%, trong khi tập chỉ-null lật ở
+  10% và trượt cổng FP trên quần thể phẳng.
+- **Feature mới - `computeHoldTypeFeatures` /
+  `createHoldTypeScorer`:** năm feature thời gian phiên
+  (tỉ lệ sự kiện chuột, độ lệch chuẩn thời lượng click,
+  độ lệch chuẩn giữ phím, độ lệch chuẩn khoảng cách
+  phím, tỉ lệ gõ lập trình s_type) và composite z có dấu
+  đông cứng S_R2 cùng các điểm con set2/type, đối chiếu
+  với phân bố người thật do host cung cấp. RECOMB-02 chỉ
+  PASS-LAB Step 0: mới đo sự tách biệt của feature, và
+  KHÔNG ship khẳng định phát hiện nào - ngưỡng vẫn ở
+  phía host (lab dùng đuôi outer-5% của phân bố
+  composite con người).
+- **Tín hiệu mới - `createOccupancyEarlyMinimalSignal`:**
+  đòn phản A1 cho danh tính mới - các phiên của danh
+  tính được tạo chưa đầy 24 giờ trước khi join, đang giữ
+  1-2 activity, mọi activity trong vòng 300 giây sau
+  join; D2-FAST gắn cờ khi tỉ lệ đạt ít nhất 0,50 duy
+  trì 600 giây, D2-DRIP ít nhất 0,34 duy trì 3600 giây.
+  Đo trong lab (A1-COUNTER-D2, PASS-lab): squat nhanh bị
+  cờ ở +690 giây, DELAY-300 ở +960 giây, drip ở +1440
+  giây, và các ô legit twin cùng ô lurker-mới đều không
+  bị cờ - nhưng cổng lurker qua với đúng một phiên dự
+  trữ (d2max 0,3333 so với vạch drip 0,34), dải trễ
+  activity đầu (300 giây, ~630 giây) né cả hai luật theo
+  thiết kế, và squat 3 activity né theo cấu trúc. Chỉ
+  advisory.
 
 ### v2.9.0 - surface guard, và pattern cohort khai báo
 
@@ -313,8 +391,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **830
-test tự động** (828 đạt, 2 bị bỏ qua là vector RSA-PSS) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **890
+test tự động** (888 đạt, 2 bị bỏ qua là vector RSA-PSS) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.
