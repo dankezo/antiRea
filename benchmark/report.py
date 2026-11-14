@@ -5,11 +5,11 @@ root=pathlib.Path(__file__).resolve().parent
 p=pathlib.Path(sys.argv[1]) if len(sys.argv)>1 else root/'results'/'browser.json'
 if not p.is_file():raise SystemExit('No Playwright evidence; run python benchmark/run_all.py')
 d=json.loads(p.read_text())
-lines=['# antiRea 2.1 — Browser benchmark evidence','',f"Generated: {d['timestamp_utc']}",'',
+lines=['# antiRea 2.1 - Browser benchmark evidence','',f"Generated: {d['timestamp_utc']}",'',
   '> **Scope:** controlled twin-SaaS lab only. This is NOT a measurement of REA defeating/being defeated or protection from independent clones.','',
   '| Engine | Mode | Functional/fixture assertions | Median load (ms) | Export HTTP statuses | JS errors |','|---|---|---:|---:|---|---|']
 for s in d['scenarios']:
- if 'error' in s:lines.append(f"| {s['engine']} | {s['mode']} | ERROR | — | — | {s['error'].splitlines()[0][:130].replace('|','/')} |")
+ if 'error' in s:lines.append(f"| {s['engine']} | {s['mode']} | ERROR | - | - | {s['error'].splitlines()[0][:130].replace('|','/')} |")
  else:lines.append(f"| {s['engine']} | {s['mode']} | {s['passed']}/{s['total']} | {s['load_ms_median']} | {','.join(map(str,s['export_probe_http_statuses']))} | {len(s['page_errors'])} |")
 lines+=['','## Metric interpretations','',
  '- Server export limit: A `429` means the controlled benchmark server enforced an export threshold. It does not mean the browser UI/API is unobservable.',

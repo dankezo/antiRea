@@ -2,7 +2,7 @@
  * Web Bot Auth verifier (Tier 2, server-side): RFC 9421 HTTP Message
  * Signatures profiled by the IETF Web Bot Auth draft
  * (`draft-ietf-webbotauth-httpsig-protocol-00`, September 2026; the draft
- * revision current at implementation time expires March 2027 and MAY change —
+ * revision current at implementation time expires March 2027 and MAY change -
  * pin your expectations to the reason codes below, not to draft permanence).
  *
  * An automated client (search crawler, AI agent, monitoring bot) signs each
@@ -22,15 +22,15 @@
  * bare-string form (`Signature-Agent: "https://..."`) and production
  * signers emit it deliberately, so a dictionary-only verifier would
  * reject the deployed ecosystem. The legacy form is therefore accepted as
- * a deprecated compatibility path — §5.2.1 expressly permits this (a
- * verifier MAY accept it) — under a fail-closed guardrail: it binds only
+ * a deprecated compatibility path - §5.2.1 expressly permits this (a
+ * verifier MAY accept it) - under a fail-closed guardrail: it binds only
  * when exactly one signature covers the `signature-agent` field, via the
  * whole-field covered component (no `;key`), and the verdict reports
  * which form was used (`agentForm`) so operators can watch legacy usage.
  * Revisit this acceptance when the draft becomes an RFC or Cloudflare's
  * production verifier flips to the dictionary form.
  *
- * Threat model — read before wiring this into policy:
+ * Threat model - read before wiring this into policy:
  *
  * - A verified signature proves only that the request was signed, at signing
  *   time, by whoever holds the private key whose public half you resolved for
@@ -49,10 +49,10 @@
  *   signature.
  * - Replay: when the signer includes a `nonce`, this verifier rejects nonce
  *   reuse per key within the signature's validity window (bounded in-memory
- *   store by default; multi-instance deployments need a shared atomic store —
+ *   store by default; multi-instance deployments need a shared atomic store -
  *   see `nonceStore`). Without a nonce, a captured signed request can be
  *   replayed until `expires`; that is why the draft recommends short validity
- *   (<= 24h, and this verifier enforces a configurable cap, default 24h —
+ *   (<= 24h, and this verifier enforces a configurable cap, default 24h -
  *   tighten it to minutes if your traffic allows).
  * - This is an identity input, not an authorization decision. Authorization,
  *   quotas and bans remain server-side policy (see `docs/LIMITATIONS.md`).
@@ -146,7 +146,7 @@ function tryBase64Decode(value: string): Uint8Array | undefined {
 }
 
 /* ------------------------------------------------------------------------ */
-/* RFC 8941 Structured Fields — the small subset RFC 9421 signatures need:  */
+/* RFC 8941 Structured Fields - the small subset RFC 9421 signatures need:  */
 /* dictionaries of items / inner lists, item parameters, and string, token, */
 /* integer, decimal, byte-sequence and boolean values. Raw source slices are */
 /* retained so the `@signature-params` line and component identifiers can   */
@@ -368,7 +368,7 @@ export function parseSfDictionary(headerValue: string): Map<string, SfMember> {
   while (!parser.done) {
     const key = parser.parseKey();
     // RFC 8941 §3.2: dictionary member names are unique. A repeated key is
-    // a structural parse error, not a last-wins overwrite — otherwise this
+    // a structural parse error, not a last-wins overwrite - otherwise this
     // parser and a proxy/host reading the same header with a different
     // convention disagree about which member was signed (F-22).
     if (members.has(key)) throw parser.error(`duplicate dictionary key "${key}"`);
@@ -396,7 +396,7 @@ export function parseSfDictionary(headerValue: string): Map<string, SfMember> {
 
 /**
  * Parse the legacy bare-string `Signature-Agent` form
- * (`Signature-Agent: "https://agent.example"` — one sf-string item and
+ * (`Signature-Agent: "https://agent.example"` - one sf-string item and
  * nothing else). Returns the string value, or `undefined` when the header
  * is anything else. Strict on purpose: parameters, extra members or a
  * non-string item are not the legacy form.
@@ -528,7 +528,7 @@ export type WebBotAuthKeyInput =
   | Uint8Array
   | Ed25519KeyObjectLike;
 
-/** RFC 7638 JWK SHA-256 thumbprint of an Ed25519 public key — the draft's `keyid`. */
+/** RFC 7638 JWK SHA-256 thumbprint of an Ed25519 public key - the draft's `keyid`. */
 export function computeEd25519JwkThumbprint(jwk: { crv: string; kty: string; x: string }): string {
   const crypto = getNodeCrypto();
   // RFC 7638: required members only, lexicographic order, no whitespace.
@@ -617,7 +617,7 @@ export interface ParsedWebBotAuthDirectory {
  *
  * Accepted shapes (parsed defensively; the directory format is defined by a
  * companion draft and may still change):
- * - `{ "keys": [ <JWK>, ... ], "purpose": "..." }` — a JWK Set (RFC 7517);
+ * - `{ "keys": [ <JWK>, ... ], "purpose": "..." }` - a JWK Set (RFC 7517);
  * - a bare array of JWKs;
  * - a single Ed25519 JWK object.
  * Each JWK must be `{ kty: "OKP", crv: "Ed25519", x: "<base64url 32-byte key>" }`;
@@ -627,7 +627,7 @@ export interface ParsedWebBotAuthDirectory {
  * exactly that); a differing `kid` is additionally indexed as an alias.
  *
  * NOTE: in the full protocol the directory *response* is itself signed. This
- * parser validates shape only — response authenticity is the fetcher's job
+ * parser validates shape only - response authenticity is the fetcher's job
  * (your injected resolver / HTTP layer), exactly like TLS on the fetch.
  */
 export function parseWebBotAuthDirectory(document: unknown): ParsedWebBotAuthDirectory {
@@ -733,7 +733,7 @@ export interface WebBotAuthNonceStore {
    * the nonce is fresh (and now recorded until `expiresAtMs`), `false` when
    * it was already seen (replay) OR when the store is at capacity with
    * unexpired entries and refuses to make room by forgetting a live nonce
-   * (fail closed — the verifier reports both as `replay_detected`).
+   * (fail closed - the verifier reports both as `replay_detected`).
    * Implementations backed by Redis should use
    * `SET key 1 NX PX <ttl>` so the check is atomic across instances.
    */
@@ -742,7 +742,7 @@ export interface WebBotAuthNonceStore {
 
 /**
  * Bounded in-memory nonce store: expired entries are pruned on access and
- * the key set is capped. The cap fails closed — only expired entries are
+ * the key set is capped. The cap fails closed - only expired entries are
  * ever evicted; a full store refuses new nonces instead of dropping a live
  * one and reopening its replay window.
  */
@@ -780,7 +780,7 @@ export type WebBotAuthFailureReason =
   | "malformed_headers"
   /** A required signature parameter (`keyid`, `tag`, `created`, `expires`, or `nonce` when required) is absent or ill-typed. */
   | "missing_parameter"
-  /** `tag` is present but not `web-bot-auth` — the signature was made for another protocol profile. */
+  /** `tag` is present but not `web-bot-auth` - the signature was made for another protocol profile. */
   | "wrong_tag"
   /** `alg` names something other than `ed25519`, or the resolved key is not Ed25519. */
   | "unsupported_algorithm"
@@ -790,11 +790,11 @@ export type WebBotAuthFailureReason =
   | "duplicate_covered_components"
   /** `expires` is in the past (beyond clock skew). */
   | "expired"
-  /** `created` is in the future (beyond clock skew) — signature not yet valid. */
+  /** `created` is in the future (beyond clock skew) - signature not yet valid. */
   | "not_yet_valid"
   /** `expires - created` exceeds the configured maximum validity window. */
   | "validity_window_too_long"
-  /** `expires` is not after `created` — the validity window is empty or negative. */
+  /** `expires` is not after `created` - the validity window is empty or negative. */
   | "invalid_validity_window"
   /** The `nonce` parameter exceeds `MAX_NONCE_LENGTH` characters. */
   | "nonce_too_long"
@@ -811,7 +811,7 @@ export interface WebBotAuthVerdict {
   verified: boolean;
   /** The signed `Signature-Agent` URL, when verification got far enough to read it. This is the agent identity to key policy/quota on. */
   agent?: string;
-  /** Which `Signature-Agent` wire form the request used, when the header could be read: the draft's dictionary form, or the deprecated legacy bare-string form (accepted for production compatibility — see the module header). Lets operators measure remaining legacy usage. */
+  /** Which `Signature-Agent` wire form the request used, when the header could be read: the draft's dictionary form, or the deprecated legacy bare-string form (accepted for production compatibility - see the module header). Lets operators measure remaining legacy usage. */
   agentForm?: "dictionary" | "legacy";
   /** The `keyid` (JWK thumbprint) the signature claims, when readable. */
   keyId?: string;
@@ -852,13 +852,13 @@ export interface WebBotAuthVerifierOptions {
    */
   keys?: WebBotAuthKeySource;
   /**
-   * Injected resolver for dynamic directories — fetch
+   * Injected resolver for dynamic directories - fetch
    * `https://<agent>` + WEB_BOT_AUTH_DIRECTORY_PATH yourself (with your own
    * cache/TTL/SSRF policy) and return the JSON document, a parsed directory,
    * or the single key for `keyId`. Consulted after `keys` misses. Returning
    * the raw document is correct, but on hot paths prefer returning the
-   * result of `parseWebBotAuthDirectory(...)` — or reuse the same fetched
-   * document object/string so the verifier's parse cache applies — when
+   * result of `parseWebBotAuthDirectory(...)` - or reuse the same fetched
+   * document object/string so the verifier's parse cache applies - when
    * the directory carries many keys: normalization is per-key crypto work,
    * bounded by MAX_DIRECTORY_KEYS / MAX_DIRECTORY_DOCUMENT_LENGTH.
    */
@@ -1009,7 +1009,7 @@ function lookupInSource(
     const record = source as Record<string, WebBotAuthKeyInput>;
     const direct = record[keyId];
     if (direct !== undefined) return entryFromSourceValue(direct);
-    // A resolver returning a bare JWK means "this is the key" — but only
+    // A resolver returning a bare JWK means "this is the key" - but only
     // accept it when it actually is the requested key.
     if (isJwkLike(record)) {
       const entry = normalizeKeyInput(record);
@@ -1290,7 +1290,7 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
       // Legacy bare-string form: the whole field value IS the agent, bound
       // by the whole-field covered component. A `;key` component selects a
       // dictionary member and cannot be satisfied by a header that has no
-      // members — fail closed rather than guess a binding.
+      // members - fail closed rather than guess a binding.
       if (agentKeyParam !== undefined) {
         return fail(
           "malformed_headers",
@@ -1310,7 +1310,7 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
     }
     if (agent === undefined) {
       // Fall back to the derived field value itself: when the whole
-      // `signature-agent` field is covered, its value is the dictionary —
+      // `signature-agent` field is covered, its value is the dictionary -
       // accept it as the agent only when it unambiguously names one member.
       const derived = deriveComponentValue(req, url, agentComponent);
       if (derived) {

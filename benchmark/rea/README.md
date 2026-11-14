@@ -1,4 +1,4 @@
-# REAL REA capture protocol — operator-run, strictly local
+# REAL REA capture protocol - operator-run, strictly local
 
 This harness captures **real** REA evidence, not a Playwright simulation. It **does not** automatically download or execute an unverified REA installation. The `rea` executable must be installed from the [morluto/rea official distribution](https://github.com/morluto/rea) and its version pinned/reported before comparisons.
 

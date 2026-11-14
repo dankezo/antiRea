@@ -57,6 +57,10 @@
  *   detection is UNMEASURED - the lab cannot say whether the rule
  *   holds for low- or high-volume walkers. Legit FP was measured in
  *   all three strata.
+ * - The lab's legitimate stratum was its generator mixture label;
+ *   this function reports strata from observed total volume. Those
+ *   labels need not agree, so the lab's per-stratum FP rates cannot
+ *   be transferred to this output without regrouping the fixtures.
  * - The detection margin at the two highest heterogeneity levels was
  *   thin (0.85 = 17/20 walkers; two walkers flipping would fail the
  *   frozen 0.80 bar). Treat the rule as viable-in-lab, not robust.
@@ -127,10 +131,10 @@ export interface VolumeRankInput {
 
 /**
  * Assign the frozen volume stratum for one identity volume.
- * Returns null for non-finite volumes (no stratum can be claimed).
+ * Returns null for non-finite or negative volumes (no stratum can be claimed).
  */
 export function volumeStratumOf(volume: number): VolumeStratum | null {
-  if (!Number.isFinite(volume)) return null;
+  if (!Number.isFinite(volume) || volume < 0) return null;
   if (volume < VOLUME_STRATUM_LOW_MAX) return "LOW";
   if (volume <= VOLUME_STRATUM_MID_MAX) return "MID";
   return "HIGH";
@@ -166,6 +170,15 @@ export function applyVolumeRankRule(input: VolumeRankInput): VolumeRankResult {
 
   const cells = input.cells;
   const nCells = cells.length;
+  // Batch input is bounded before allocating ranking/index state.
+  if (nCells > 100_000) throw new RangeError("cells must contain at most 100000 entries");
+  for (const cell of cells) {
+    if (!cell || typeof cell.identityId !== "string" || cell.identityId.length === 0 || cell.identityId.length > 1024) {
+      throw new RangeError("cell identityId must contain 1 to 1024 characters");
+    }
+    if (!Number.isFinite(cell.score)) throw new RangeError("cell score must be finite");
+    if (typeof cell.rare !== "boolean") throw new RangeError("cell rare must be boolean");
+  }
   const cutoff = Math.floor(nCells * topFrac);
   const cutoffDescriptive = Math.floor(nCells * topFracDescriptive);
 
@@ -194,7 +207,8 @@ export function applyVolumeRankRule(input: VolumeRankInput): VolumeRankResult {
         rareCellsInTop: 0,
         rareCellsInTopDescriptive: 0,
         rareCellCount: 0,
-        stratum: volumeStratumOf(input.identityVolumes[cell.identityId] ?? NaN),
+        stratum: volumeStratumOf(Object.prototype.hasOwnProperty.call(input.identityVolumes, cell.identityId)
+          ? input.identityVolumes[cell.identityId]! : NaN),
       };
       acc.set(cell.identityId, entry);
     }
@@ -210,7 +224,8 @@ export function applyVolumeRankRule(input: VolumeRankInput): VolumeRankResult {
   for (const [identityId, entry] of acc) {
     entry.flagged = entry.rareCellsInTop >= VOLUME_RANK_MIN_RARE_CELLS;
     entry.flaggedDescriptive = entry.rareCellsInTopDescriptive >= VOLUME_RANK_MIN_RARE_CELLS;
-    identities[identityId] = entry;
+    // An identity is data even when its name matches Object.prototype.
+    Object.defineProperty(identities, identityId, { value: entry, enumerable: true, configurable: true, writable: true });
     const bucket = summary[entry.stratum ?? "NONE"];
     bucket.identities++;
     if (entry.flagged) bucket.flagged++;

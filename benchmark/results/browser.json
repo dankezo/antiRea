@@ -1,22 +1,348 @@
 {
   "schema": "antirea-benchmark-v1",
-  "timestamp_utc": "2026-10-31T02:44:02.300302+00:00",
+  "timestamp_utc": "2026-11-13T15:07:47.731442+00:00",
   "environment": {
-    "python": "3.13.5",
-    "os": "Linux-6.18.57-x86_64-with-glibc2.41",
-    "playwright": "1.57.0"
+    "python": "3.12.10",
+    "os": "Windows-11-10.0.26200-SP0",
+    "playwright": "1.64.1"
   },
   "disclaimer": "Browser functional/exposure tests only. REA capture NOT implied. Rate-limit measured in local deterministic fixture; results do not prove cloning prevention.",
   "scenarios": [
     {
-      "engine": "chromium",
       "mode": "baseline",
-      "error": "Page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://127.0.0.1:4173/\nCall log:\n  - navigating to \"http://127.0.0.1:4173/\", waiting until \"networkidle\"\n"
+      "origin": "http://127.0.0.1:4173",
+      "engine": "chromium",
+      "load_ms_samples": [
+        856.0,
+        680.1,
+        662.0,
+        656.3,
+        672.1
+      ],
+      "load_ms_median": 672.1,
+      "dom": {
+        "count": 303,
+        "visibleRows": 6,
+        "scripts": [
+          "/app.js"
+        ],
+        "hasA11yLandmark": true,
+        "hasNotice": false,
+        "hasWatermark": false,
+        "performance": {
+          "domContentLoadedMs": 84,
+          "transferSize": 8168
+        }
+      },
+      "checks": {
+        "initial_summary": true,
+        "initial_accounts": true,
+        "keyboard_accessible_search": true,
+        "navigation": true,
+        "search": true,
+        "create_ticket": true,
+        "export_download": true,
+        "focus_search": true,
+        "canary_returns_404": true,
+        "rate_limit_protected": true,
+        "canary_alert_protected": true,
+        "public_content_remains_visible": true
+      },
+      "passed": 12,
+      "total": 12,
+      "export_probe_http_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "event_kinds": [],
+      "page_errors": [],
+      "screenshot": "chromium-baseline.png"
     },
     {
-      "engine": "chromium",
       "mode": "protected",
-      "error": "Page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at http://127.0.0.1:4174/\nCall log:\n  - navigating to \"http://127.0.0.1:4174/\", waiting until \"networkidle\"\n"
+      "origin": "http://127.0.0.1:4174",
+      "engine": "chromium",
+      "load_ms_samples": [
+        746.5,
+        707.1,
+        686.0,
+        683.4,
+        670.5
+      ],
+      "load_ms_median": 686.0,
+      "dom": {
+        "count": 306,
+        "visibleRows": 6,
+        "scripts": [
+          "/app.js"
+        ],
+        "hasA11yLandmark": true,
+        "hasNotice": true,
+        "hasWatermark": true,
+        "performance": {
+          "domContentLoadedMs": 154,
+          "transferSize": 8169
+        }
+      },
+      "checks": {
+        "initial_summary": true,
+        "initial_accounts": true,
+        "keyboard_accessible_search": true,
+        "navigation": true,
+        "search": true,
+        "create_ticket": true,
+        "export_download": true,
+        "focus_search": true,
+        "canary_returns_404": true,
+        "rate_limit_protected": true,
+        "canary_alert_protected": true,
+        "public_content_remains_visible": true
+      },
+      "passed": 12,
+      "total": 12,
+      "export_probe_http_statuses": [
+        200,
+        200,
+        200,
+        429,
+        429,
+        429
+      ],
+      "event_kinds": [
+        "canary",
+        "export_rate_limited",
+        "weak_client_signal"
+      ],
+      "page_errors": [],
+      "screenshot": "chromium-protected.png"
+    },
+    {
+      "mode": "baseline",
+      "origin": "http://127.0.0.1:4173",
+      "engine": "firefox",
+      "load_ms_samples": [
+        923.0,
+        611.8,
+        659.7,
+        616.3,
+        626.4
+      ],
+      "load_ms_median": 626.4,
+      "dom": {
+        "count": 303,
+        "visibleRows": 6,
+        "scripts": [
+          "/app.js"
+        ],
+        "hasA11yLandmark": true,
+        "hasNotice": false,
+        "hasWatermark": false,
+        "performance": {
+          "domContentLoadedMs": 247,
+          "transferSize": 8168
+        }
+      },
+      "checks": {
+        "initial_summary": true,
+        "initial_accounts": true,
+        "keyboard_accessible_search": true,
+        "navigation": true,
+        "search": true,
+        "create_ticket": true,
+        "export_download": true,
+        "focus_search": true,
+        "canary_returns_404": true,
+        "rate_limit_protected": true,
+        "canary_alert_protected": true,
+        "public_content_remains_visible": true
+      },
+      "passed": 12,
+      "total": 12,
+      "export_probe_http_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "event_kinds": [],
+      "page_errors": [],
+      "screenshot": "firefox-baseline.png"
+    },
+    {
+      "mode": "protected",
+      "origin": "http://127.0.0.1:4174",
+      "engine": "firefox",
+      "load_ms_samples": [
+        656.8,
+        709.3,
+        852.3,
+        659.2,
+        673.9
+      ],
+      "load_ms_median": 673.9,
+      "dom": {
+        "count": 306,
+        "visibleRows": 6,
+        "scripts": [
+          "/app.js"
+        ],
+        "hasA11yLandmark": true,
+        "hasNotice": true,
+        "hasWatermark": true,
+        "performance": {
+          "domContentLoadedMs": 62,
+          "transferSize": 8169
+        }
+      },
+      "checks": {
+        "initial_summary": true,
+        "initial_accounts": true,
+        "keyboard_accessible_search": true,
+        "navigation": true,
+        "search": true,
+        "create_ticket": true,
+        "export_download": true,
+        "focus_search": true,
+        "canary_returns_404": true,
+        "rate_limit_protected": true,
+        "canary_alert_protected": true,
+        "public_content_remains_visible": true
+      },
+      "passed": 12,
+      "total": 12,
+      "export_probe_http_statuses": [
+        200,
+        200,
+        200,
+        429,
+        429,
+        429
+      ],
+      "event_kinds": [
+        "canary",
+        "export_rate_limited",
+        "weak_client_signal"
+      ],
+      "page_errors": [],
+      "screenshot": "firefox-protected.png"
+    },
+    {
+      "mode": "baseline",
+      "origin": "http://127.0.0.1:4173",
+      "engine": "webkit",
+      "load_ms_samples": [
+        739.2,
+        631.0,
+        632.0,
+        620.3,
+        632.5
+      ],
+      "load_ms_median": 632.0,
+      "dom": {
+        "count": 303,
+        "visibleRows": 6,
+        "scripts": [
+          "/app.js"
+        ],
+        "hasA11yLandmark": true,
+        "hasNotice": false,
+        "hasWatermark": false,
+        "performance": {
+          "domContentLoadedMs": 172,
+          "transferSize": 8168
+        }
+      },
+      "checks": {
+        "initial_summary": true,
+        "initial_accounts": true,
+        "keyboard_accessible_search": true,
+        "navigation": true,
+        "search": true,
+        "create_ticket": true,
+        "export_download": true,
+        "focus_search": true,
+        "canary_returns_404": true,
+        "rate_limit_protected": true,
+        "canary_alert_protected": true,
+        "public_content_remains_visible": true
+      },
+      "passed": 12,
+      "total": 12,
+      "export_probe_http_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "event_kinds": [],
+      "page_errors": [],
+      "screenshot": "webkit-baseline.png"
+    },
+    {
+      "mode": "protected",
+      "origin": "http://127.0.0.1:4174",
+      "engine": "webkit",
+      "load_ms_samples": [
+        685.9,
+        670.4,
+        649.5,
+        675.3,
+        655.1
+      ],
+      "load_ms_median": 670.4,
+      "dom": {
+        "count": 306,
+        "visibleRows": 6,
+        "scripts": [
+          "/app.js"
+        ],
+        "hasA11yLandmark": true,
+        "hasNotice": true,
+        "hasWatermark": true,
+        "performance": {
+          "domContentLoadedMs": 81,
+          "transferSize": 8169
+        }
+      },
+      "checks": {
+        "initial_summary": true,
+        "initial_accounts": true,
+        "keyboard_accessible_search": true,
+        "navigation": true,
+        "search": true,
+        "create_ticket": true,
+        "export_download": true,
+        "focus_search": true,
+        "canary_returns_404": true,
+        "rate_limit_protected": true,
+        "canary_alert_protected": true,
+        "public_content_remains_visible": true
+      },
+      "passed": 12,
+      "total": 12,
+      "export_probe_http_statuses": [
+        200,
+        200,
+        200,
+        429,
+        429,
+        429
+      ],
+      "event_kinds": [
+        "canary",
+        "export_rate_limited",
+        "weak_client_signal"
+      ],
+      "page_errors": [],
+      "screenshot": "webkit-protected.png"
     }
   ],
   "skipped": []

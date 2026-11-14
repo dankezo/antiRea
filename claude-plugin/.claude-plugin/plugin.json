@@ -1,1 +1,23 @@
-{"author":{"email":"dannyphan190@gmail.com","name":"Danny Phan"},"description":"Integration skill for the antiRea npm library: per-identity dataset metering and server-side advisory signals against coordinated automated abuse - record budgets against bulk extraction, scheduler-driven bot herds, and coordinated-cohort abuse such as seat squatting, vote brigading, room hopping and reconnect storms. Advisory only; the host application decides the response.","homepage":"https://github.com/dankezo/antiRea#readme","keywords":["web-security","anti-scraping","bot-detection","rate-limiting","saas-security","ai-agents","web-bot-auth","canary","typescript"],"license":"MIT","name":"anti-rea","repository":"https://github.com/dankezo/antiRea","version":"2.8.0"}
+{
+  "author": {
+    "email": "dannyphan190@gmail.com",
+    "name": "Danny Phan"
+  },
+  "description": "Integration skill for the antiRea npm library: per-identity dataset metering and server-side advisory signals against coordinated automated abuse - record budgets against bulk extraction, scheduler-driven bot herds, and coordinated-cohort abuse such as seat squatting, vote brigading, room hopping and reconnect storms. Advisory only; the host application decides the response.",
+  "homepage": "https://github.com/dankezo/antiRea#readme",
+  "keywords": [
+    "web-security",
+    "anti-scraping",
+    "bot-detection",
+    "rate-limiting",
+    "saas-security",
+    "ai-agents",
+    "web-bot-auth",
+    "canary",
+    "typescript"
+  ],
+  "license": "MIT",
+  "name": "anti-rea",
+  "repository": "https://github.com/dankezo/antiRea",
+  "version": "2.9.2"
+}

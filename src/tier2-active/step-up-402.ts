@@ -58,7 +58,7 @@
  * same status, same two headers, same body fields in the same
  * order. The one deliberate hardening over the lab stub: the
  * assertion comparison is constant-time (node:crypto
- * timingSafeEqual over UTF-8 bytes, length-guarded) instead of a
+ * timingSafeEqual over UTF-16 code units, length-guarded) instead of a
  * plain string equality; the validity semantics are unchanged.
  * `respond` is pure: the same options, session and token always
  * produce the same response, and no state is kept between calls.
@@ -93,11 +93,11 @@ export interface StepUp402Options {
   manifestUrl: string;
   /** Facilitator label declared in the body. A label only - it is never contacted. */
   facilitator: string;
-  /** Base URL of the pay next step; `?session=<id>` is appended per response. */
+  /** HTTP(S) pay URL; the encoded session query parameter is added per response. */
   payUrl: string;
-  /** Base URL of the appeal next step; `?session=<id>` is appended per response. */
+  /** HTTP(S) appeal URL; the encoded session query parameter is added per response. */
   appealUrl: string;
-  /** Base URL of the continue-free next step; `?session=<id>` is appended per response. */
+  /** HTTP(S) continue-free URL; the encoded session query parameter is added per response. */
   continueFreeUrl: string;
 }
 
@@ -148,8 +148,13 @@ function validateOptions(options: StepUp402Options, caller: string): StepUp402Op
   }
   const stringFields = ["manifestUrl", "facilitator", "payUrl", "appealUrl", "continueFreeUrl"] as const;
   for (const field of stringFields) {
-    if (typeof options[field] !== "string" || options[field].length === 0) {
+    if (typeof options[field] !== "string" || options[field].length === 0 || options[field].length > 4096 || /[\u0000-\u001f\u007f]/.test(options[field])) {
       throw new TypeError(caller + ": options." + field + " must be a non-empty string");
+    }
+    if (field !== "facilitator") {
+      let url: URL;
+      try { url = new URL(options[field]); } catch { throw new TypeError(caller + ": options." + field + " must be an absolute HTTP(S) URL"); }
+      if (url.protocol !== "https:" && url.protocol !== "http:") throw new TypeError(caller + ": options." + field + " must be an absolute HTTP(S) URL");
     }
   }
   return {
@@ -189,25 +194,46 @@ export function manifestDocument(options: StepUp402Options): StepUp402Manifest {
 
 /**
  * True iff `presented` is exactly the token that was issued for
- * the session. Constant-time over the UTF-8 bytes (length-guarded,
+ * the session. Constant-time over UTF-16 code units (length-guarded,
  * so different lengths return false without calling
- * timingSafeEqual); anything that is not a string is false. This
+ * timingSafeEqual); non-strings, empty tokens and tokens over
+ * 4096 UTF-16 code units are false. This
  * validates possession of the issued token and nothing else - see
  * the header on what it must never be recorded as.
  */
 export function checkAssertion(presented: unknown, issued: unknown): boolean {
   if (typeof presented !== "string" || typeof issued !== "string") return false;
-  const encoder = new TextEncoder();
-  const a = encoder.encode(presented);
-  const b = encoder.encode(issued);
-  if (a.length !== b.length) return false;
+  if (presented.length === 0 || presented.length > 4096 || issued.length > 4096 || presented.length !== issued.length) return false;
+  // UTF-8 encoding replaces distinct lone surrogates with the same
+  // replacement character. Preserve every code unit for exact equality.
+  const a = new Uint8Array(presented.length * 2);
+  const b = new Uint8Array(issued.length * 2);
+  for (let i = 0; i < presented.length; i++) {
+    const x = presented.charCodeAt(i);
+    const y = issued.charCodeAt(i);
+    a[i * 2] = x & 255; a[i * 2 + 1] = x >>> 8;
+    b[i * 2] = y & 255; b[i * 2 + 1] = y >>> 8;
+  }
   return getNodeCrypto().timingSafeEqual(a, b);
+}
+
+function sessionUrl(base: string, sessionId: string): string {
+  // Retain byte parity for the registered ASCII fixtures while
+  // preserving existing query parameters and fragments on host URLs.
+  if (!base.includes("?") && !base.includes("#")) return base + "?session=" + encodeURIComponent(sessionId);
+  const url = new URL(base);
+  url.searchParams.set("session", sessionId);
+  return url.toString();
 }
 
 export function createStepUp402Responder(options: StepUp402Options): StepUp402Responder {
   const opts = validateOptions(options, "createStepUp402Responder");
   return {
     respond(sessionId: string, token: string): StepUp402Response {
+      if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 1024) throw new TypeError("stepUp402.respond: sessionId must contain 1-1024 code units");
+      if (typeof token !== "string" || token.length === 0 || token.length > 4096) throw new TypeError("stepUp402.respond: token must contain 1-4096 code units");
+      // Reject malformed session strings consistently for every URL form.
+      encodeURIComponent(sessionId);
       // Field set and field order are the lab's shape402, unchanged.
       const body = JSON.stringify({
         error: "payment_required",
@@ -217,9 +243,9 @@ export function createStepUp402Responder(options: StepUp402Options): StepUp402Re
         session: sessionId,
         pay_token_hint: token,
         next_steps: {
-          pay: opts.payUrl + "?session=" + sessionId,
-          appeal: opts.appealUrl + "?session=" + sessionId,
-          continue_free: opts.continueFreeUrl + "?session=" + sessionId,
+          pay: sessionUrl(opts.payUrl, sessionId),
+          appeal: sessionUrl(opts.appealUrl, sessionId),
+          continue_free: sessionUrl(opts.continueFreeUrl, sessionId),
         },
       });
       return {

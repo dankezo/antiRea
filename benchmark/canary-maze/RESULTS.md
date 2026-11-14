@@ -5,20 +5,20 @@ number below comes from the recorded server request log, the crawler's own
 output, or the axe/Playwright JSON output stored next to this file. No
 effectiveness percentages are stated: this is a single-crawler, single-run,
 localhost measurement, and the Playwright measurements are accessibility
-measurements only — they are not REA data.
+measurements only - they are not REA data.
 
 ## Environment and exact configuration
 
 - Package: `@dannyphan190/anti-rea@2.3.0`, built from this repo (`npm run build`, `dist/`)
 - Node: v24.22.1
 - Harness: `server.cjs` in this directory (plain `node:http`), serving:
-  - `/` — homepage: heading, one paragraph, one real link to `/about`, plus the
+  - `/` - homepage: heading, one paragraph, one real link to `/about`, plus the
     bait snippet `canaryTrapLink('/_canary/')`, which renders as
     `<span style="display:none" aria-hidden="true"><a href="/_canary/" tabindex="-1" rel="nofollow">archive</a></span>`
-  - `/about` — a real page; `/api/v1/status` — a real API-like JSON route
-  - `/robots.txt` — `User-agent: *` plus the `canaryRobotsTxt('/_canary/')` line (`Disallow: /_canary/`)
-  - `/__stats` — harness-only counters `{ mazeServed, alerts, mazeRequests }`
-  - any other real path — plain `404`
+  - `/about` - a real page; `/api/v1/status` - a real API-like JSON route
+  - `/robots.txt` - `User-agent: *` plus the `canaryRobotsTxt('/_canary/')` line (`Disallow: /_canary/`)
+  - `/__stats` - harness-only counters `{ mazeServed, alerts, mazeRequests }`
+  - any other real path - plain `404`
 - Maze under test, created exactly as:
   `createCanaryMaze({ enabled: true, prefix: '/_canary/', maxRequestsPerIp: 30, windowMs: 600000, linksPerPage: 8, onAlert })`
   (`maxPerIp` in the test request maps to the package option `maxRequestsPerIp`.
@@ -41,11 +41,11 @@ python3 a11y_test.py http://127.0.0.1:8931 node_modules/axe-core/axe.min.js a11y
 (The wget runs are the commands quoted verbatim in each run section below,
 each preceded by a server restart with a fresh request log.)
 
-## Test 1 — Accessibility (Playwright + axe-core)
+## Test 1 - Accessibility (Playwright + axe-core)
 
 ### Homepage `http://127.0.0.1:8931/`
 
-axe-core, default rules — full violations list (2 rules):
+axe-core, default rules - full violations list (2 rules):
 
 | rule id | impact | nodes |
 |---|---|---|
@@ -67,7 +67,7 @@ Assertions:
 
 ### Maze page `http://127.0.0.1:8931/_canary/`
 
-axe-core, default rules — full violations list (2 rules):
+axe-core, default rules - full violations list (2 rules):
 
 | rule id | impact | nodes |
 |---|---|---|
@@ -81,7 +81,7 @@ Assertions:
 
 - Zero `aria-hidden-focusable` violations: **PASS**.
 - Keyboard: 20 Tab presses cycled through the maze page's own 8 navigation
-  links (expected — they are ordinary links by design, reported as
+  links (expected - they are ordinary links by design, reported as
   information, not as the trap link). The bait trap link does not exist on a
   maze page and never received focus: **PASS**.
 - Accessibility tree (CDP): 62 nodes; link names are exactly the maze page's 8
@@ -90,21 +90,21 @@ Assertions:
 Raw output: `a11y-results.json` (full violation objects, all 20 focus-trail
 entries per page, full link-name lists).
 
-## Test 2 — Real crawler (GNU Wget 1.21.4)
+## Test 2 - Real crawler (GNU Wget 1.21.4)
 
-### Run A — default configuration (robots.txt honored)
+### Run A - default configuration (robots.txt honored)
 
 Command: `wget -r -l inf --no-host-directories -P outA http://127.0.0.1:8931/`
 
 - wget exit code 0; finished in under 1 second.
-- Files downloaded: 3 — `index.html`, `about`, `robots.txt`.
+- Files downloaded: 3 - `index.html`, `about`, `robots.txt`.
 - Maze pages downloaded: **0**.
 - Server counters afterwards: `mazeRequests 0, mazeServed 0, alerts 0`. Wget
-  read `robots.txt`, saw `Disallow: /_canary/`, and never requested the maze —
+  read `robots.txt`, saw `Disallow: /_canary/`, and never requested the maze -
   not even the bait link target. This is the recorded result for a
   robots-honoring copier: the maze is never entered.
 
-### Run B — aggressive copier configuration (robots.txt ignored)
+### Run B - aggressive copier configuration (robots.txt ignored)
 
 Command: `wget -r -l inf -e robots=off --no-host-directories -P outB http://127.0.0.1:8931/`
 
@@ -112,20 +112,20 @@ Server request log (`runB-requests.log`), excluding `/__stats`:
 
 - Total requests: 229 = 2 real (`GET /` 200, `GET /about` 200, both before the
   first maze request) + 227 maze.
-- Maze responses: **30 served with 200 — exactly the configured per-IP cap of
-  30** — and **197 answered 404** after the cap tripped.
+- Maze responses: **30 served with 200 - exactly the configured per-IP cap of
+  30** - and **197 answered 404** after the cap tripped.
 - Alerts fired: **227** (the implementation alerts on every maze hit,
   including capped ones; alert count is therefore not a count of pages served).
-- Depth of pages served (segments under `/_canary/`): max 2 —
-  depth 0 ×1, depth 1 ×7, depth 2 ×22. Depth requested: max 3 —
+- Depth of pages served (segments under `/_canary/`): max 2 -
+  depth 0 ×1, depth 1 ×7, depth 2 ×22. Depth requested: max 3 -
   depth 0 ×1, depth 1 ×7, depth 2 ×53, depth 3 ×166 (all depth-3 and the
   remaining depth-2 requests were answered 404 after the cap).
 - Link containment: all 216 `href` values across all downloaded maze pages
   begin with `/_canary/`; **0 hrefs point outside the maze prefix**. Server
   log cross-check: **0 non-maze requests occurred after the first maze
-  request** — once inside the maze, wget never fetched a real URL from it.
+  request** - once inside the maze, wget never fetched a real URL from it.
 - Termination: wget **terminated on its own** once the queue drained into
-  capped 404s — exit code 8 ("server issued an error response", i.e. the
+  capped 404s - exit code 8 ("server issued an error response", i.e. the
   404s), wget-reported total wall clock time 0.2 s on localhost, the 600 s
   timeout was not reached.
 - Downloaded files: wget reported "Downloaded: 32 files, 33K" (32 = 30 maze
@@ -135,7 +135,7 @@ Server request log (`runB-requests.log`), excluding `/__stats`:
   but wget then reused those paths as directories for their depth-2
   children, replacing the files.
 
-### Run C — targeted-client counter-check (curl, direct requests)
+### Run C - targeted-client counter-check (curl, direct requests)
 
 Fresh server, then:
 
@@ -143,7 +143,7 @@ Fresh server, then:
 - `curl /api/v1/status` → HTTP 200, `{"status":"ok"}`.
 - `curl /does-not-exist` → HTTP 404, plain `not found` (unchanged behaviour
   for unknown real paths).
-- Server counters after all three: `mazeRequests 0, mazeServed 0, alerts 0` —
+- Server counters after all three: `mazeRequests 0, mazeServed 0, alerts 0` -
   direct requests to real paths never touch the maze and never alert.
 
 ## Observations and surprises
@@ -184,7 +184,7 @@ Not supported by this evidence:
   bandwidth-cost claim (localhost, `dripMs` off, one run).
 - Behaviour of any other crawler, of crawlers behind proxies/NAT (the
   per-IP cap keys on one address here), or over a real network.
-- Any SEO outcome, and anything about REA tools — the Playwright runs above
+- Any SEO outcome, and anything about REA tools - the Playwright runs above
   measured accessibility of a local test page only.
 
 ## Addendum (same day, post-fix re-run)

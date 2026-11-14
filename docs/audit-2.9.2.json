@@ -1,0 +1,144 @@
+{
+  "version": "2.9.2",
+  "releaseDateLocal": "2026-11-14",
+  "timezone": "Asia/Bangkok",
+  "measurementDateLocal": "2026-11-13",
+  "suite": {
+    "baseline": {
+      "tests": 890,
+      "pass": 887,
+      "fail": 0,
+      "skipped": 3
+    },
+    "candidate": {
+      "tests": 963,
+      "pass": 960,
+      "fail": 0,
+      "skipped": 3
+    },
+    "addedTests": 73,
+    "skips": [
+      "RSA-PSS architecture-v1 sig1 outside Ed25519-only verifier scope",
+      "RSA-PSS architecture-v1 sig2 outside Ed25519-only verifier scope",
+      "artifact scan symlink test: native Windows symlink unavailable"
+    ],
+    "medianCheckWallSeconds": 12.090606200043112,
+    "runs": 5
+  },
+  "benchmarks": {
+    "environment": {
+      "node": "v24.19.0",
+      "platform": "win32",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 7 H 255 w/ Radeon 780M Graphics      ",
+      "logicalCpus": 16,
+      "totalMemory": 33580437504
+    },
+    "method": "Five sequential fresh Node processes; 2000-touch warmup; 10000 verdict reads averaged per run; full 100000-field scan with cap 200001; in-memory declaration chain.",
+    "medians": {
+      "ownership100kMs": 128.3943,
+      "verdictReadMs": 0.00046951999999999996,
+      "verify10kMs": 39.66699999999997,
+      "surface100kMs": 116.32170000000002
+    },
+    "cappedSurfaceMethod": "Five fresh Node processes per variant, sequential baseline/candidate interleaving. Exactly 100000 numeric-valued fields; createSurfaceGuard() default maxScanNodes=10000; inspectResponse timed once per process, with payload creation and module loading outside the timer. Every run must report truncated=true. No warmup. This measures a truncated default-cap traversal, not a complete 100000-field scan.",
+    "cappedSurfaceMediansMs": {
+      "baseline": 42.6875,
+      "candidate": 42.5796
+    },
+    "baselineOwnership100kMs": 118.6079,
+    "intermediateHardenedOwnership100kMs": 294.8996,
+    "distFiles": 124,
+    "distBytes": 1632577
+  },
+  "mutation": {
+    "ownership": {
+      "killed": 37,
+      "total": 37
+    },
+    "occupancyEarlyMinimal": {
+      "killed": 39,
+      "total": 40,
+      "equivalent": 1
+    },
+    "holdType": {
+      "killed": 37,
+      "total": 37
+    },
+    "volumeRank": {
+      "killed": 35,
+      "total": 35
+    },
+    "empMix": {
+      "killed": 35,
+      "total": 35
+    },
+    "declarationLog": {
+      "killed": 34,
+      "total": 34
+    },
+    "stepUp402": {
+      "killed": 34,
+      "total": 34
+    },
+    "total": 252,
+    "killed": 251,
+    "equivalent": 1,
+    "meaningfulSurvivors": 0
+  },
+  "runtime": {
+    "node": [
+      "20.20.2",
+      "26.13.1"
+    ],
+    "strictRuntimeExports": 205,
+    "cjs": true,
+    "esm": true,
+    "deno": "2.9.8",
+    "denoScope": "Local shim with explicit npm-to-candidate mapping and CommonJS named-export adapter; registry publication not tested."
+  },
+  "parity": {
+    "stepUp402JsonFixtures": 1000,
+    "declarationEntries": 200,
+    "declarationTamperRejections": 200,
+    "declarationSeededOperations": 5000,
+    "volumeComparisons": 4480,
+    "empFrozenCurvePoints": 65,
+    "holdSessions": 90,
+    "holdFeatures": 450,
+    "holdScores": 270,
+    "d2IndependentFixtures": 25,
+    "d2IndependentTicks": 5925,
+    "missingOriginalGenerators": [
+      "roomguard-lab/sim-lib.cjs",
+      "roomguard-lab/cand273-lab/cand-lib.cjs",
+      "r14-lab/common.cjs",
+      "harness-v2/index.cjs",
+      "c27c35-enf-lab/conversion.cjs"
+    ]
+  },
+  "judgments": {
+    "defaultsRetuned": false,
+    "runtimeDependenciesAdded": false,
+    "advisorySignalsStillAdvisory": true,
+    "recomb03Built": false,
+    "d2FastOnlyCandidateShipped": false,
+    "d2FreshSynthetic": {
+      "seedsPerCell": 512,
+      "baselineLurkerFlags": 53,
+      "candidateLurkerFlags": 3,
+      "baselineMinorityDetection": 512,
+      "candidateMinorityDetection": 0
+    },
+    "volumeSdkHighFpAtKappa1000": {
+      "falseFlags": 1,
+      "legitimateIdentities": 115
+    }
+  },
+  "limits": [
+    "Original D2 registered streams could not be regenerated from this bundle.",
+    "Historical quantitative claims are inventoried and remain NOT VERIFIED unless an executed run supports them.",
+    "Fresh synthetic measurements are not production calibration.",
+    "Some previously accepted invalid or oversized inputs now reject; telemetry-capacity errors must not be used as authorization decisions."
+  ]
+}

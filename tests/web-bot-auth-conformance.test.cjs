@@ -1,5 +1,5 @@
 /**
- * L9 — Web Bot Auth CONFORMANCE pack (PREREG-V261 amendment, landscape D1).
+ * L9 - Web Bot Auth CONFORMANCE pack (PREREG-V261 amendment, landscape D1).
  *
  * Purpose: prove the shipped verifier (`createWebBotAuthVerifier`)
  * conforms to RFC 9421 as profiled by draft-ietf-webbotauth-httpsig-
@@ -8,7 +8,7 @@
  *  - Key material is the RFC 9421 Appendix B.1.4 Ed25519 test key
  *    (public AND private halves are published specification test keys;
  *    `x`/`d` below are copied from the RFC / the vendored Cloudflare
- *    fixture which carries the same key — never a production key).
+ *    fixture which carries the same key - never a production key).
  *  - Every signature base is assembled HERE from literal component
  *    lines following RFC 9421 §2.5 serialization (component identifier
  *    in double quotes, `: ` separator, lines joined by `\n`, final
@@ -20,7 +20,7 @@
  *    wrong" are always distinguishable.
  *  - Motivation (landscape D1): an independent 2026-10-26 analysis
  *    rebuilt the signature bases from Visa TAP's and Mastercard Agent
- *    Pay's published examples and found none of them verify — both
+ *    Pay's published examples and found none of them verify - both
  *    reuse a test vector signing a DIFFERENT message than the one
  *    presented, and both ship 60-minute validity windows against their
  *    own 8-minute rule. Those two failure shapes are therefore
@@ -86,7 +86,7 @@ function signIndependently({ components, values, params }) {
   return { paramsRaw, base, signature };
 }
 
-/** Raw node:crypto check of a hand-built base — vector soundness proof. */
+/** Raw node:crypto check of a hand-built base - vector soundness proof. */
 function rawVerify(base, signature) {
   return crypto.verify(null, Buffer.from(base, 'utf8'), publicKey, signature);
 }
@@ -163,7 +163,7 @@ function verifier(over = {}) {
 /* ------------------------------------------------------------------ */
 /* Provenance pin: the key material really is the RFC 9421 test key    */
 /* ------------------------------------------------------------------ */
-test('provenance: RFC 9421 B.1.4 key material — thumbprint matches the draft keyid and private half matches public half', () => {
+test('provenance: RFC 9421 B.1.4 key material - thumbprint matches the draft keyid and private half matches public half', () => {
   // Proves: the x/d pair above is the published RFC test key, and the
   // keyid used in every vector is its genuine RFC 7638 thumbprint.
   assert.equal(thumbprint(RFC_PUBLIC_JWK), RFC_KEYID);
@@ -174,9 +174,9 @@ test('provenance: RFC 9421 B.1.4 key material — thumbprint matches the draft k
 });
 
 /* ------------------------------------------------------------------ */
-/* VALID set — each must verify ok:true                                */
+/* VALID set - each must verify ok:true                                */
 /* ------------------------------------------------------------------ */
-test('V1 VALID: @authority + signature-agent;key (dictionary form), fresh nonce, 300s window — verifies', async () => {
+test('V1 VALID: @authority + signature-agent;key (dictionary form), fresh nonce, 300s window - verifies', async () => {
   // Proves: the core draft profile shape, independently signed over a
   // hand-built RFC 9421 base, is accepted and binds the agent identity.
   const { req, base, signature } = buildRequest();
@@ -189,7 +189,7 @@ test('V1 VALID: @authority + signature-agent;key (dictionary form), fresh nonce,
   assert.equal(verdict.expiresAt, NOW + 300);
 });
 
-test('V2 VALID: @target-uri + whole-field signature-agent (dictionary form) — verifies', async () => {
+test('V2 VALID: @target-uri + whole-field signature-agent (dictionary form) - verifies', async () => {
   // Proves: the @target-uri alternative to @authority satisfies the
   // draft coverage rule, and whole-field coverage of a dictionary
   // Signature-Agent header resolves the single member as the agent.
@@ -202,7 +202,7 @@ test('V2 VALID: @target-uri + whole-field signature-agent (dictionary form) — 
   assert.equal(verdict.agent, AGENT_URL);
 });
 
-test('V3 VALID: @method + @authority + signature-agent;key — verifies', async () => {
+test('V3 VALID: @method + @authority + signature-agent;key - verifies', async () => {
   // Proves: a wider covered-component set (method bound as well)
   // reconstructs byte-for-byte and verifies.
   const { req, base, signature } = buildRequest({
@@ -215,10 +215,10 @@ test('V3 VALID: @method + @authority + signature-agent;key — verifies', async 
 });
 
 /* ------------------------------------------------------------------ */
-/* INVALID set — false-accept budget EXACTLY 0                         */
+/* INVALID set - false-accept budget EXACTLY 0                         */
 /* ------------------------------------------------------------------ */
-test('I1a INVALID (TAP/Mastercard failure mode): signature over a DIFFERENT message — signed for example.com, presented for other.example — invalid_signature', async () => {
-  // Provenance: the Visa TAP / Mastercard published-example failure —
+test('I1a INVALID (TAP/Mastercard failure mode): signature over a DIFFERENT message - signed for example.com, presented for other.example - invalid_signature', async () => {
+  // Provenance: the Visa TAP / Mastercard published-example failure -
   // the signature is genuine, but over request A's message, while
   // request B is presented. The raw asserts prove the signature IS
   // valid over A and is NOT valid over B, so rejection can only be
@@ -245,7 +245,7 @@ test('I1a INVALID (TAP/Mastercard failure mode): signature over a DIFFERENT mess
   assert.equal(verdict.reason, 'invalid_signature');
 });
 
-test('I1b INVALID (TAP/Mastercard failure mode): signature over a DIFFERENT message — same authority, different target path — invalid_signature', async () => {
+test('I1b INVALID (TAP/Mastercard failure mode): signature over a DIFFERENT message - same authority, different target path - invalid_signature', async () => {
   // Same failure class as I1a, subtler shape: authority matches, only
   // the @target-uri inside the signed message differs from the
   // presented request's path.
@@ -266,8 +266,8 @@ test('I1b INVALID (TAP/Mastercard failure mode): signature over a DIFFERENT mess
   assert.equal(verdict.reason, 'invalid_signature');
 });
 
-test('I2 INVALID: tampered covered component value (signature-agent member swapped post-signing) — invalid_signature', async () => {
-  // Proves: the agent identity is inside the signature base — swapping
+test('I2 INVALID: tampered covered component value (signature-agent member swapped post-signing) - invalid_signature', async () => {
+  // Proves: the agent identity is inside the signature base - swapping
   // the Signature-Agent member for an attacker's URL after signing
   // breaks verification instead of rebinding the identity.
   const { req } = buildRequest();
@@ -283,7 +283,7 @@ test('I2 INVALID: tampered covered component value (signature-agent member swapp
   assert.equal(verdict.reason, 'invalid_signature');
 });
 
-test('I3 INVALID: expired signature (window entirely in the past, beyond clock skew) — expired', async () => {
+test('I3 INVALID: expired signature (window entirely in the past, beyond clock skew) - expired', async () => {
   // Proves: a cryptographically sound signature whose expires is past
   // is rejected on timing, not crypto.
   const { req, base, signature } = buildRequest({
@@ -295,7 +295,7 @@ test('I3 INVALID: expired signature (window entirely in the past, beyond clock s
   assert.equal(verdict.reason, 'expired');
 });
 
-test('I4a INVALID: expires == created (empty validity window) — invalid_validity_window', async () => {
+test('I4a INVALID: expires == created (empty validity window) - invalid_validity_window', async () => {
   const { req, base, signature } = buildRequest({
     params: stdParams({ created: String(NOW), expires: String(NOW) }),
   });
@@ -305,7 +305,7 @@ test('I4a INVALID: expires == created (empty validity window) — invalid_validi
   assert.equal(verdict.reason, 'invalid_validity_window');
 });
 
-test('I4b INVALID: expires < created (negative validity window) — invalid_validity_window', async () => {
+test('I4b INVALID: expires < created (negative validity window) - invalid_validity_window', async () => {
   const { req, base, signature } = buildRequest({
     params: stdParams({ created: String(NOW + 600), expires: String(NOW + 300) }),
   });
@@ -315,7 +315,7 @@ test('I4b INVALID: expires < created (negative validity window) — invalid_vali
   assert.equal(verdict.reason, 'invalid_validity_window');
 });
 
-test('I5 INVALID (exact TAP shape): 60-minute validity window against a tightly configured 300s maximum — validity_window_too_long', async () => {
+test('I5 INVALID (exact TAP shape): 60-minute validity window against a tightly configured 300s maximum - validity_window_too_long', async () => {
   // Provenance: Visa TAP / Mastercard ship 60-minute windows against
   // their own 8-minute rule. Here the host configures maxValiditySeconds
   // = 300; an otherwise valid, unexpired, correctly signed request with
@@ -329,7 +329,7 @@ test('I5 INVALID (exact TAP shape): 60-minute validity window against a tightly 
   assert.equal(verdict.reason, 'validity_window_too_long');
 });
 
-test('I6 INVALID: duplicate covered components (signature itself valid over the duplicated base) — duplicate_covered_components', async () => {
+test('I6 INVALID: duplicate covered components (signature itself valid over the duplicated base) - duplicate_covered_components', async () => {
   // Proves: RFC 9421 §2.5's duplicate ban is enforced as a conformance
   // gate, not waived when the crypto happens to verify.
   const { req, base, signature } = buildRequest({
@@ -341,7 +341,7 @@ test('I6 INVALID: duplicate covered components (signature itself valid over the 
   assert.equal(verdict.reason, 'duplicate_covered_components');
 });
 
-test('I7 INVALID: nonce replay — same valid request presented twice, second presentation — replay_detected', async () => {
+test('I7 INVALID: nonce replay - same valid request presented twice, second presentation - replay_detected', async () => {
   // Proves: the nonce store records on first successful verification
   // and the identical replay is refused even though every other check
   // (crypto, window, coverage) still passes.
@@ -354,10 +354,10 @@ test('I7 INVALID: nonce replay — same valid request presented twice, second pr
   assert.equal(second.reason, 'replay_detected');
 });
 
-test('I8 INVALID: unknown keyid (signature sound, keyid names no resolved key) — unknown_key', async () => {
+test('I8 INVALID: unknown keyid (signature sound, keyid names no resolved key) - unknown_key', async () => {
   // The signature is genuinely valid over a base whose @signature-params
   // claim an all-zero thumbprint-style keyid; the verifier must not fall
-  // back to "any known key" — resolution is by the claimed keyid only.
+  // back to "any known key" - resolution is by the claimed keyid only.
   const bogusKeyid = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
   const { req, base, signature } = buildRequest({
     params: stdParams({ keyid: `"${bogusKeyid}"` }),
@@ -368,7 +368,7 @@ test('I8 INVALID: unknown keyid (signature sound, keyid names no resolved key) �
   assert.equal(verdict.reason, 'unknown_key');
 });
 
-test('I9a INVALID: wrong tag (signature made for another profile) — wrong_tag', async () => {
+test('I9a INVALID: wrong tag (signature made for another profile) - wrong_tag', async () => {
   const { req, base, signature } = buildRequest({
     params: stdParams({ tag: '"agent-pay"' }),
   });
@@ -378,7 +378,7 @@ test('I9a INVALID: wrong tag (signature made for another profile) — wrong_tag'
   assert.equal(verdict.reason, 'wrong_tag');
 });
 
-test('I9b INVALID: missing tag — missing_parameter', async () => {
+test('I9b INVALID: missing tag - missing_parameter', async () => {
   const { req, base, signature } = buildRequest({
     params: stdParams({ tag: undefined }),
   });

@@ -3,7 +3,7 @@
 Unlike ``test_stores.py`` (which runs the store against the in-memory
 ``FakeRedis`` stub), these tests talk to an actual Redis server, so the two
 Lua scripts in ``quota_guard/stores.py`` run under Redis's real scripting
-engine — real sorted sets, real ``ZREMRANGEBYSCORE`` pruning, real
+engine - real sorted sets, real ``ZREMRANGEBYSCORE`` pruning, real
 ``PEXPIRE`` TTLs.
 
 The whole module is opt-in: it is skipped unless ``REDIS_URL`` is set, e.g.

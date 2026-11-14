@@ -118,8 +118,11 @@
  * Pure computation: no I/O, no runtime dependencies. State is a
  * bounded list of sessions (open and closed); past `maxSessions`,
  * the oldest CLOSED sessions are evicted and the sustain history
- * before them is forgotten (counted in the snapshot) - size the
- * bound above a room's weekly session count.
+ * before them is forgotten (counted in the snapshot). If all retained
+ * sessions are open, new joins are refused as telemetry capacity
+ * exhaustion, never as an access-control decision. Only the three
+ * earliest post-join activities are retained per session. First-seen
+ * metadata is retained only while an identity has retained sessions.
  */
 
 const DAY_MS = 86_400_000;
@@ -180,15 +183,15 @@ export interface CreateOccupancyEarlyMinimalSignalOptions {
   earlyWindowMs?: number;
   /** An identity counts as new for a session when it was created less than this many ms before the join. Default 86,400,000 (24 h, lab law). */
   newnessWindowMs?: number;
-  /** Maximum sessions retained (open + closed). Oldest closed sessions are evicted past it. Defaults to 100,000. */
+  /** Maximum sessions retained (open + closed). Evict closed sessions first; refuse new telemetry if all are open. Default 100,000. */
   maxSessions?: number;
   /** Fired once per law when `evaluate` first observes that law's flag complete. Errors are swallowed. */
   onEvidence?: (event: OccupancyEarlyMinimalEvidenceEvent) => Promise<void> | void;
 }
 
 export interface OccupancyEarlyMinimalObservation {
-  /** `"recorded"`, or `"invalid_ts"` when the timestamp was refused before any state was touched. */
-  status: "recorded" | "invalid_ts";
+  /** Telemetry acceptance only; capacity exhaustion never blocks a host request. */
+  status: "recorded" | "invalid_ts" | "capacity_exceeded";
   counted: boolean;
 }
 
@@ -209,6 +212,8 @@ export interface OccupancyEarlyMinimalLawResult {
 
 export interface OccupancyEarlyMinimalResult {
   kind: "occupancy-early-minimal";
+  /** True after capacity loss; confirmations are suppressed until reset. */
+  saturated: boolean;
   /** True when any configured law has flagged. */
   flagged: boolean;
   /** Per-law outcomes, in configuration order. */
@@ -250,6 +255,10 @@ export interface OccupancyEarlyMinimalSnapshot {
   sessions: number;
   /** Sessions currently open. */
   openSessions: number;
+  saturated: boolean;
+  trackedIdentities: number;
+  /** Total stored activity timestamps, bounded by three per retained session. */
+  retainedActivityTimestamps: number;
   counters: {
     observed: number;
     invalidTs: number;
@@ -257,6 +266,8 @@ export interface OccupancyEarlyMinimalSnapshot {
     evictedSessions: number;
     /** leave/activity events with no open session to attach to. */
     orphanEvents: number;
+    /** Joins refused because the bounded telemetry store contained only open sessions. */
+    rejectedSessions: number;
   };
   notice: string;
 }
@@ -322,8 +333,8 @@ function requirePositiveMs(value: unknown, field: string): number {
 }
 
 function requireIdentity(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    fail(`${field} must be a non-empty string`);
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 1024) {
+    fail(`${field} must be a non-empty string of at most 1024 characters`);
   }
   return value as string;
 }
@@ -368,8 +379,8 @@ export function createOccupancyEarlyMinimalSignal(
       { name: "fast", threshold: 0.5, sustainMs: 600_000 },
       { name: "drip", threshold: 0.34, sustainMs: 3_600_000 },
     ] as const);
-  if (!Array.isArray(lawInputs) || lawInputs.length === 0) {
-    fail("laws must be a non-empty array when provided");
+  if (!Array.isArray(lawInputs) || lawInputs.length === 0 || lawInputs.length > 32) {
+    fail("laws must contain between 1 and 32 entries when provided");
   }
   const laws: Law[] = lawInputs.map((input, i) => {
     if (typeof input !== "object" || input === null) fail(`laws[${i}] must be an object`);
@@ -394,17 +405,29 @@ export function createOccupancyEarlyMinimalSignal(
   let sessions: Session[] = [];
   let openByIdentity = new Map<string, Session>();
   let firstSeen = new Map<string, number>();
-  let counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0 };
+  let retainedByIdentity = new Map<string, number>();
+  let counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0, rejectedSessions: 0 };
   let latestTs = -Infinity;
   const evidenceFired = new Set<string>();
 
-  function evictClosed(): void {
-    while (sessions.length > maxSessions) {
+  function bump(name: keyof typeof counters): void {
+    counters[name] = Math.min(Number.MAX_SAFE_INTEGER, counters[name] + 1);
+  }
+
+  function makeRoom(): boolean {
+    while (sessions.length >= maxSessions) {
       const idx = sessions.findIndex((s) => s.leaveTs !== null);
-      if (idx === -1) return; // everything open; nothing safe to evict
+      if (idx === -1) return false;
+      const removed = sessions[idx] as Session;
       sessions.splice(idx, 1);
-      counters.evictedSessions++;
+      const remaining = (retainedByIdentity.get(removed.identity) ?? 1) - 1;
+      if (remaining === 0) {
+        retainedByIdentity.delete(removed.identity);
+        firstSeen.delete(removed.identity);
+      } else retainedByIdentity.set(removed.identity, remaining);
+      bump("evictedSessions");
     }
+    return true;
   }
 
   function observe(event: OccupancyEarlyMinimalEvent): OccupancyEarlyMinimalObservation {
@@ -414,20 +437,25 @@ export function createOccupancyEarlyMinimalSignal(
     }
     const identity = requireIdentity(event.identity, "event.identity");
     if (!isValidTs(event.ts)) {
-      counters.invalidTs++;
+      bump("invalidTs");
       return { status: "invalid_ts", counted: false };
     }
     if (event.accountCreatedTs !== undefined && !isValidTs(event.accountCreatedTs)) {
       fail("event.accountCreatedTs must be a finite timestamp within the representable range");
     }
-    counters.observed++;
-    if (event.ts > latestTs) latestTs = event.ts;
-    if (!firstSeen.has(identity) || event.ts < (firstSeen.get(identity) as number)) {
-      firstSeen.set(identity, event.ts);
-    }
+    bump("observed");
     if (event.type === "join") {
       const prior = openByIdentity.get(identity);
+      if (prior && event.ts < prior.joinTs) {
+        bump("orphanEvents");
+        return { status: "recorded", counted: false };
+      }
       if (prior && prior.leaveTs === null) prior.leaveTs = event.ts; // a re-join closes the prior session
+      if (!makeRoom()) {
+        bump("rejectedSessions");
+        return { status: "capacity_exceeded", counted: false };
+      }
+      if (!firstSeen.has(identity) || event.ts < (firstSeen.get(identity) as number)) firstSeen.set(identity, event.ts);
       const session: Session = {
         identity,
         joinTs: event.ts,
@@ -437,28 +465,30 @@ export function createOccupancyEarlyMinimalSignal(
       };
       sessions.push(session);
       openByIdentity.set(identity, session);
-      evictClosed();
+      retainedByIdentity.set(identity, (retainedByIdentity.get(identity) ?? 0) + 1);
     } else if (event.type === "leave") {
       const open = openByIdentity.get(identity);
-      if (open && open.leaveTs === null) {
+      if (open && open.leaveTs === null && event.ts >= open.joinTs) {
         open.leaveTs = event.ts;
         openByIdentity.delete(identity);
       } else {
-        counters.orphanEvents++;
+        bump("orphanEvents");
       }
     } else {
       const open = openByIdentity.get(identity);
-      if (open && open.leaveTs === null) {
+      if (open && open.leaveTs === null && event.ts > open.joinTs) {
         // Keep the per-session list ascending even if the host feeds
         // slightly out of order; the interval scan assumes it.
         const list = open.activityTs;
         let i = list.length;
         while (i > 0 && (list[i - 1] as number) > event.ts) i--;
         list.splice(i, 0, event.ts);
+        if (list.length > 3) list.length = 3;
       } else {
-        counters.orphanEvents++;
+        bump("orphanEvents");
       }
     }
+    if (event.ts > latestTs) latestTs = event.ts;
     return { status: "recorded", counted: true };
   }
 
@@ -470,7 +500,7 @@ export function createOccupancyEarlyMinimalSignal(
    * activity later than join + earlyWindow).
    */
   function countingInterval(s: Session): { start: number; drop: number } | null {
-    if (s.joinTs - s.createdTs >= newnessWindowMs) return null;
+    if (s.createdTs > s.joinTs || s.joinTs - s.createdTs >= newnessWindowMs) return null;
     let first: number | null = null;
     let third: number | null = null;
     let firstLate: number | null = null;
@@ -508,7 +538,7 @@ export function createOccupancyEarlyMinimalSignal(
       const iv = intervals[i];
       if (iv !== null && iv !== undefined && t >= iv.start && t < iv.drop) earlyMinimal++;
     }
-    return { ratio: earlyMinimal / capacity, earlyMinimal, holders };
+    return { ratio: Math.min(1, earlyMinimal / capacity), earlyMinimal, holders };
   }
 
   function evaluate(
@@ -525,6 +555,7 @@ export function createOccupancyEarlyMinimalSignal(
       // not an exception.
       return {
         kind: "occupancy-early-minimal",
+        saturated: counters.rejectedSessions > 0,
         flagged: false,
         laws: laws.map((law) => ({
           name: law.name,
@@ -550,17 +581,18 @@ export function createOccupancyEarlyMinimalSignal(
     // activities, drops, leaves) - all of them activity or leave
     // timestamps - so walk the sorted change points up to asOfTs
     // and track each law's sustained run exactly.
-    const changePoints = new Set<number>();
-    for (const s of sessions) {
-      if (s.joinTs <= asOfTs) changePoints.add(s.joinTs);
-      if (s.leaveTs !== null && s.leaveTs <= asOfTs) changePoints.add(s.leaveTs);
-      for (const at of s.activityTs) if (at <= asOfTs) changePoints.add(at);
+    const deltas = new Map<number, number>();
+    for (const iv of intervals) {
+      if (!iv || iv.start > asOfTs) continue;
+      deltas.set(iv.start, (deltas.get(iv.start) ?? 0) + 1);
+      if (iv.drop <= asOfTs) deltas.set(iv.drop, (deltas.get(iv.drop) ?? 0) - 1);
     }
-    const points = [...changePoints].sort((a, b) => a - b);
+    const points = [...deltas.keys()].sort((a, b) => a - b);
 
     const lawResults: OccupancyEarlyMinimalLawResult[] = laws.map((law) => {
       let firstFlagTs: number | null = null;
       let runStart: number | null = null;
+      let counting = 0;
       for (let i = 0; i <= points.length; i++) {
         const segEnd: number = i < points.length ? (points[i] as number) : asOfTs;
         if (runStart !== null && firstFlagTs === null && segEnd - runStart >= law.sustainMs) {
@@ -568,7 +600,8 @@ export function createOccupancyEarlyMinimalSignal(
         }
         if (i === points.length) break;
         const point = points[i] as number;
-        const r = ratioAt(intervals, point).ratio;
+        counting += deltas.get(point) ?? 0;
+        const r = Math.min(1, counting / capacity);
         if (r >= law.threshold) {
           if (runStart === null) runStart = point;
         } else {
@@ -579,14 +612,15 @@ export function createOccupancyEarlyMinimalSignal(
         name: law.name,
         threshold: law.threshold,
         sustainMs: law.sustainMs,
-        flagged: firstFlagTs !== null,
-        firstFlagTs,
+        flagged: counters.rejectedSessions === 0 && firstFlagTs !== null,
+        firstFlagTs: counters.rejectedSessions > 0 ? null : firstFlagTs,
       };
     });
 
     const now = ratioAt(intervals, asOfTs);
     const result: OccupancyEarlyMinimalResult = {
       kind: "occupancy-early-minimal",
+      saturated: counters.rejectedSessions > 0,
       flagged: lawResults.some((l) => l.flagged),
       laws: lawResults,
       currentRatio: now.ratio,
@@ -604,7 +638,7 @@ export function createOccupancyEarlyMinimalSignal(
         if (evidenceFired.has(lawResult.name)) continue;
         evidenceFired.add(lawResult.name);
         try {
-          void onEvidence({
+          void Promise.resolve(onEvidence({
             law: lawResult.name,
             threshold: lawResult.threshold,
             sustainMs: lawResult.sustainMs,
@@ -613,7 +647,7 @@ export function createOccupancyEarlyMinimalSignal(
             earlyMinimalSeats: result.earlyMinimalSeats,
             capacity,
             timestamp: new Date(lawResult.firstFlagTs).toISOString(),
-          });
+          })).catch(() => undefined);
         } catch {
           /* operator logging must never break request handling */
         }
@@ -635,6 +669,9 @@ export function createOccupancyEarlyMinimalSignal(
       })),
       sessions: sessions.length,
       openSessions: openByIdentity.size,
+      saturated: counters.rejectedSessions > 0,
+      trackedIdentities: firstSeen.size,
+      retainedActivityTimestamps: sessions.reduce((n, s) => n + s.activityTs.length, 0),
       counters: { ...counters },
       notice: ADVISORY_NOTICE,
     };
@@ -644,7 +681,8 @@ export function createOccupancyEarlyMinimalSignal(
     sessions = [];
     openByIdentity = new Map<string, Session>();
     firstSeen = new Map<string, number>();
-    counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0 };
+    retainedByIdentity = new Map<string, number>();
+    counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0, rejectedSessions: 0 };
     latestTs = -Infinity;
     evidenceFired.clear();
   }

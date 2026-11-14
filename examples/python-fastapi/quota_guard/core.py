@@ -1,4 +1,4 @@
-"""Server-side quota and pagination guard (P0 control) — Python port.
+"""Server-side quota and pagination guard (P0 control) - Python port.
 
 A semantic port of ``src/tier2-active/quota-guard.ts``. It enforces
 per-account, per-API-key and per-IP sliding-window request quotas plus
@@ -154,7 +154,7 @@ class QuotaRequest:
 
     Build it from whatever your framework gives you: ``url`` (path or absolute
     URL, query string included), ``headers`` (a mapping, or any object with a
-    ``get(name)`` method — Starlette/FastAPI headers work either way), and
+    ``get(name)`` method - Starlette/FastAPI headers work either way), and
     whichever client-address fields you have. ``raw`` carries the original
     framework request when the FastAPI/Starlette integration builds this
     object, so ``resolve_identity`` callables can reach app-specific state

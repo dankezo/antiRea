@@ -1,7 +1,7 @@
 /**
  * Cross-implementation Web Bot Auth check: this repo's verifier
  * (`dist/tier2-active/web-bot-auth.js`) against the REFERENCE
- * implementation — Cloudflare's `web-bot-auth` npm package.
+ * implementation - Cloudflare's `web-bot-auth` npm package.
  *
  * Directions exercised:
  *   A. Reference signer (`signerFromJWK` + `sign`) signs a request;
@@ -76,7 +76,7 @@ const AGENT_HEADER = 'sig1="https://signature-agent.test"';
 
 let failures = 0;
 function report(direction, ok, detail) {
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${direction}${detail ? ` — ${detail}` : ''}`);
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${direction}${detail ? ` - ${detail}` : ''}`);
   if (!ok) failures++;
 }
 

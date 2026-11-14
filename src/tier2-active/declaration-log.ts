@@ -13,7 +13,10 @@
  * is that evidence: every declaration the host serves is appended
  * with its timestamp, and each entry's hash chains to the
  * previous entry's hash, so a later edit, deletion or insertion
- * anywhere in the history breaks verification at that index.
+ * in the retained history breaks verification at that index.
+ * A valid prefix remains a valid chain: detecting tail truncation
+ * or wholesale replacement requires an independently anchored
+ * entry count and head hash, outside this host-controlled log.
  *
  * THE PAIRING (why this module exists): the C39 value watermark
  * (`createValueWatermark`) proves a republished copy descends
@@ -68,6 +71,9 @@
  * node:crypto (a Node builtin - still zero runtime
  * dependencies). No I/O; persistence is the host's job (keep
  * the export, or re-import it and keep appending).
+ * Retention is bounded by entry, text and serialized-size limits.
+ * At capacity append refuses without evicting history; archive and
+ * anchor the existing chain before starting another log.
  */
 
 /* ------------------------------------------------------------------------ */
@@ -130,6 +136,18 @@ export interface DeclarationLogAppendInput {
   declaration: string;
   /** Host clock reading, milliseconds since the epoch. */
   timestamp: number;
+}
+
+/** Host-controlled retention bounds. A full log refuses append; it never drops history. */
+export interface DeclarationLogOptions {
+  /** Maximum retained entries. Default: 100000. */
+  maxEntries?: number;
+  /** Maximum UTF-16 code units per declaration. Default: 65536. */
+  maxDeclarationLength?: number;
+  /** Maximum UTF-16 code units per form. Default: 256. */
+  maxFormLength?: number;
+  /** Maximum serialized JSON code units, checked before import parsing. Default: 33554432. */
+  maxSerializedLength?: number;
 }
 
 export interface DeclarationLogEntry {
@@ -219,8 +237,38 @@ function frozenCopy(entry: DeclarationLogEntry): DeclarationLogEntry {
   return Object.freeze({ ...entry });
 }
 
-function buildLog(initial: readonly DeclarationLogEntry[]): DeclarationLog {
+interface LogLimits {
+  maxEntries: number;
+  maxDeclarationLength: number;
+  maxFormLength: number;
+  maxSerializedLength: number;
+}
+
+function limitsOf(options: DeclarationLogOptions): LogLimits {
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    throw new TypeError("declarationLog: options must be an object");
+  }
+  const defaults: LogLimits = {
+    maxEntries: 100000,
+    maxDeclarationLength: 65536,
+    maxFormLength: 256,
+    maxSerializedLength: 33554432,
+  };
+  for (const key of Object.keys(defaults) as (keyof LogLimits)[]) {
+    const value = options[key];
+    if (value !== undefined) {
+      if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError("declarationLog: " + key + " must be a positive safe integer");
+      defaults[key] = value;
+    }
+  }
+  return defaults;
+}
+
+function buildLog(initial: readonly DeclarationLogEntry[], limits: LogLimits): DeclarationLog {
   const list: DeclarationLogEntry[] = initial.map((e) => ({ ...e }));
+  const envelopeLength = JSON.stringify({ format: "antiRea-declaration-log", version: 1, entries: [] }).length;
+  let serializedLength = envelopeLength + list.reduce((sum, e, i) => sum + JSON.stringify(e).length + (i > 0 ? 1 : 0), 0);
+  if (serializedLength > limits.maxSerializedLength) throw new DeclarationLogError("declarationLog: serialized length limit is smaller than the log envelope");
   return {
     append(input: DeclarationLogAppendInput): DeclarationLogEntry {
       if (!input || typeof input !== "object") {
@@ -235,6 +283,9 @@ function buildLog(initial: readonly DeclarationLogEntry[]): DeclarationLog {
       if (typeof input.timestamp !== "number" || !Number.isFinite(input.timestamp)) {
         throw new TypeError("declarationLog.append: input.timestamp must be a finite number (ms since epoch)");
       }
+      if (list.length >= limits.maxEntries || input.form.length > limits.maxFormLength || input.declaration.length > limits.maxDeclarationLength) {
+        throw new DeclarationLogError("declarationLog.append: retention limit exceeded; archive the log before continuing");
+      }
       const prevHash = list.length > 0 ? (list[list.length - 1] as DeclarationLogEntry).hash : genesisPrevHash();
       const core: EntryCore = {
         index: list.length,
@@ -244,7 +295,12 @@ function buildLog(initial: readonly DeclarationLogEntry[]): DeclarationLog {
         prevHash,
       };
       const entry: DeclarationLogEntry = { ...core, hash: hashEntry(core) };
+      const addedLength = JSON.stringify(entry).length + (list.length > 0 ? 1 : 0);
+      if (serializedLength + addedLength > limits.maxSerializedLength) {
+        throw new DeclarationLogError("declarationLog.append: serialized length limit exceeded; archive the log before continuing");
+      }
       list.push(entry);
+      serializedLength += addedLength;
       return frozenCopy(entry);
     },
     entries(): readonly DeclarationLogEntry[] {
@@ -269,15 +325,15 @@ function buildLog(initial: readonly DeclarationLogEntry[]): DeclarationLog {
   };
 }
 
-export function createDeclarationLog(): DeclarationLog {
-  return buildLog([]);
+export function createDeclarationLog(options: DeclarationLogOptions = {}): DeclarationLog {
+  return buildLog([], limitsOf(options));
 }
 
 function isStoredEntry(value: unknown): value is DeclarationLogEntry {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const e = value as Record<string, unknown>;
   return (
-    typeof e.index === "number" && Number.isInteger(e.index) && e.index >= 0 &&
+    typeof e.index === "number" && Number.isSafeInteger(e.index) && e.index >= 0 &&
     typeof e.timestamp === "number" && Number.isFinite(e.timestamp) &&
     typeof e.form === "string" &&
     typeof e.declaration === "string" &&
@@ -293,10 +349,12 @@ function isStoredEntry(value: unknown): value is DeclarationLogEntry {
  * any break in the chain - a tampered export never imports
  * silently.
  */
-export function importDeclarationLog(json: string): DeclarationLog {
+export function importDeclarationLog(json: string, options: DeclarationLogOptions = {}): DeclarationLog {
   if (typeof json !== "string") {
     throw new TypeError("importDeclarationLog: a JSON string is required");
   }
+  const limits = limitsOf(options);
+  if (json.length > limits.maxSerializedLength) throw new DeclarationLogError("importDeclarationLog: serialized length limit exceeded");
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -306,14 +364,22 @@ export function importDeclarationLog(json: string): DeclarationLog {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new DeclarationLogError("importDeclarationLog: export must be a JSON object");
   }
+  const envelope = parsed as Record<string, unknown>;
+  if (envelope.format !== "antiRea-declaration-log" || envelope.version !== 1) {
+    throw new DeclarationLogError("importDeclarationLog: unsupported format or version");
+  }
   const rawEntries = (parsed as Record<string, unknown>).entries;
   if (!Array.isArray(rawEntries)) {
     throw new DeclarationLogError("importDeclarationLog: export has no entries array");
   }
+  if (rawEntries.length > limits.maxEntries) throw new DeclarationLogError("importDeclarationLog: entry limit exceeded");
   const entries: DeclarationLogEntry[] = [];
   for (const raw of rawEntries) {
     if (!isStoredEntry(raw)) {
       throw new DeclarationLogError("importDeclarationLog: an entry is malformed");
+    }
+    if (raw.form.length > limits.maxFormLength || raw.declaration.length > limits.maxDeclarationLength || !/^[0-9a-f]{64}$/.test(raw.prevHash) || !/^[0-9a-f]{64}$/.test(raw.hash)) {
+      throw new DeclarationLogError("importDeclarationLog: an entry exceeds limits or has an invalid hash");
     }
     entries.push({
       index: raw.index,
@@ -330,5 +396,5 @@ export function importDeclarationLog(json: string): DeclarationLog {
       "importDeclarationLog: hash chain is broken at entry index " + String(verification.firstBadIndex),
     );
   }
-  return buildLog(entries);
+  return buildLog(entries, limits);
 }

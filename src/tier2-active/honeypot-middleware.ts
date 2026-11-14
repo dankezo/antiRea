@@ -36,7 +36,7 @@ export interface CanaryOptions {
    * Ignore requests carrying `sec-fetch-site: cross-site`. Default false.
    * That header is supplied by the client: any non-browser client can send
    * it to opt itself out of detection, so enabling this is only a noise
-   * heuristic for genuine browser cross-site embeds — never a trust decision.
+   * heuristic for genuine browser cross-site embeds - never a trust decision.
    */
   ignoreCrossSite?: boolean;
 }
@@ -169,7 +169,7 @@ export interface CanaryMazeOptions {
    * Ignore requests carrying `sec-fetch-site: cross-site`. Default false.
    * That header is supplied by the client: any non-browser client can send
    * it to opt itself out of detection, so enabling this is only a noise
-   * heuristic for genuine browser cross-site embeds — never a trust decision.
+   * heuristic for genuine browser cross-site embeds - never a trust decision.
    */
   ignoreCrossSite?: boolean;
   /** Outgoing maze links per page. Default 8, clamped to 1-32. */

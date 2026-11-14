@@ -1,4 +1,4 @@
-# Candidate sample apps and ethical test boundaries — checked 2026-10-31
+# Candidate sample apps and ethical test boundaries - checked 2026-10-31
 
 **Do not run active, automated adversarial anti-REA testing against random third-party websites.** A public demo being reachable does not grant permission to scan it, flood endpoints, or install JavaScript protections. Fork and run locally, check each project's license and rules, and use synthetic data. These are optional *external reference targets*, not benchmark results.
 

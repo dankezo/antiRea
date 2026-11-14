@@ -62,8 +62,9 @@
  *
  * FEEDING. Call `observe(identity, { objectId, route, ts })` for every
  * object access, server-side, with `ts` in SECONDS. Touches for one
- * identity should arrive in nondecreasing `ts` order (normal request
- * order); out-of-order touches are counted but may be evicted early.
+ * identity normally arrive in nondecreasing `ts` order. Late touches
+ * are inserted in timestamp order and evaluated at the latest observed
+ * timestamp; backward reads never resurrect expired history.
  * `resolveOwner` runs on the server and may return null for objects
  * the host cannot attribute. `check(identity, nowTs?)` reads the
  * current verdicts without recording a touch.
@@ -108,6 +109,12 @@ export interface OwnershipProbeOptions {
    * Default 100,000.
    */
   ownerCacheLimit?: number;
+  /** Maximum retained identities. Default 10,000; new identities report truncated at capacity. */
+  maxIdentities?: number;
+  /** Maximum retained touches per identity. Default 100,000. */
+  maxEventsPerIdentity?: number;
+  /** Maximum retained touches across this instance. Default 1,000,000. */
+  maxTotalEvents?: number;
   /** Fired once per window when it TRANSITIONS into a flag. Errors are swallowed. */
   onEvidence?: (event: OwnershipEvidenceEvent) => Promise<void> | void;
 }
@@ -132,6 +139,8 @@ export interface OwnershipWindowResult {
 
 export interface OwnershipCheck {
   identity: string;
+  /** Incomplete history due to capacity. Flags and callbacks are suppressed until the missing window expires. */
+  truncated: boolean;
   /** True when any configured window flags. */
   flagged: boolean;
   windows: OwnershipWindowResult[];
@@ -180,6 +189,7 @@ interface IdentityState {
   events: StoredEvent[];
   windows: WindowState[];
   lastTs: number;
+  truncatedUntil: number;
 }
 
 const DEFAULT_WINDOW: WindowCfg = {
@@ -202,16 +212,43 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
     minDistinctOwners: w.minDistinctOwners ?? DEFAULT_WINDOW.minDistinctOwners,
     minRatio: w.minRatio ?? DEFAULT_WINDOW.minRatio,
   }));
+  function integer(value: number, name: string, min: number, max: number): number {
+    if (!Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`ownership-probe: invalid ${name}`);
+    return value;
+  }
+  if (cfgs.length > 16) throw new RangeError("ownership-probe: at most 16 windows");
+  for (const cfg of cfgs) {
+    if (!Number.isFinite(cfg.windowSeconds) || cfg.windowSeconds <= 0 || cfg.windowSeconds > 31_536_000) throw new RangeError("ownership-probe: invalid windowSeconds");
+    integer(cfg.minEvents, "minEvents", 1, 1_000_000);
+    integer(cfg.minDistinctOwners, "minDistinctOwners", 1, 1_000_000);
+    if (!Number.isFinite(cfg.minRatio) || cfg.minRatio < 0 || cfg.minRatio > 1) throw new RangeError("ownership-probe: invalid minRatio");
+  }
   const publicRoutes = new Set(options.publicRoutes ?? []);
-  const maxEvidenceOwners = options.maxEvidenceOwners ?? 10;
-  const ownerCacheLimit = options.ownerCacheLimit ?? 100_000;
+  const maxEvidenceOwners = integer(options.maxEvidenceOwners ?? 10, "maxEvidenceOwners", 0, 10_000);
+  const ownerCacheLimit = integer(options.ownerCacheLimit ?? 100_000, "ownerCacheLimit", 1, 1_000_000);
+  const maxIdentities = integer(options.maxIdentities ?? 10_000, "maxIdentities", 1, 100_000);
+  const maxEventsPerIdentity = integer(options.maxEventsPerIdentity ?? 100_000, "maxEventsPerIdentity", 1, 1_000_000);
+  const maxTotalEvents = integer(options.maxTotalEvents ?? 1_000_000, "maxTotalEvents", 1, 10_000_000);
+  const maxWindow = Math.max(...cfgs.map(cfg => cfg.windowSeconds));
+  let storedEvents = 0;
+  // A scalar tombstone bounds memory while keeping refused identities from
+  // reappearing as apparently complete histories when a slot is released.
+  let untrackedUntil = -Infinity;
   const ownerCache = new Map<string, string | null>();
   const identities = new Map<string, IdentityState>();
+
+  function key(value: string, name: string): void {
+    if (typeof value !== "string" || value.length === 0 || value.length > 1024) throw new TypeError(`ownership-probe: invalid ${name}`);
+  }
+  function timestamp(value: number): void {
+    if (!Number.isFinite(value) || value < 0 || value > 8_640_000_000_000) throw new RangeError("ownership-probe: invalid timestamp");
+  }
 
   function resolveCached(objectId: string): string | null {
     const hit = ownerCache.get(objectId);
     if (hit !== undefined) return hit;
     const owner = options.resolveOwner(objectId) ?? null;
+    if (owner !== null) key(owner, "owner");
     if (ownerCache.size >= ownerCacheLimit) ownerCache.clear();
     ownerCache.set(objectId, owner);
     return owner;
@@ -221,6 +258,7 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
     return {
       events: [],
       lastTs: 0,
+      truncatedUntil: untrackedUntil,
       windows: cfgs.map((cfg) => ({
         cfg,
         counts: new Map<string, number>(),
@@ -260,11 +298,12 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
     }
   }
 
-  function compact(state: IdentityState): void {
+  function compact(state: IdentityState, force = false): void {
     let minHead = Infinity;
     for (const w of state.windows) if (w.head < minHead) minHead = w.head;
-    if (minHead >= 1024) {
+    if (minHead >= 1024 || (force && minHead > 0)) {
       state.events.splice(0, minHead);
+      storedEvents -= minHead;
       for (const w of state.windows) w.head -= minHead;
     }
   }
@@ -292,11 +331,16 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
     // quadratic (measured: 100k touches in ~39 s before this fix).
     const owners: string[] = [];
     for (const key of w.counts.keys()) {
-      owners.push(key);
       if (owners.length >= maxEvidenceOwners) break;
+      owners.push(key);
     }
     const ownerTouchCounts: Record<string, number> = {};
-    for (const o of owners) ownerTouchCounts[o] = w.counts.get(o) ?? 0;
+    for (const o of owners) {
+      // Only this legacy setter key needs defineProperty. Ordinary own-key
+      // assignment avoids descriptor allocation on the common ingest path.
+      if (o === "__proto__") Object.defineProperty(ownerTouchCounts, o, { value: w.counts.get(o) ?? 0, enumerable: true, configurable: true, writable: true });
+      else ownerTouchCounts[o] = w.counts.get(o) ?? 0;
+    }
     return {
       ...base,
       verdict: "flag",
@@ -309,6 +353,7 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
     if (!state) {
       return {
         identity,
+        truncated: false,
         flagged: false,
         windows: cfgs.map((cfg) => ({
           windowSeconds: cfg.windowSeconds,
@@ -325,50 +370,80 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
     const results = state.windows.map((w) => {
       const r = windowResult(w);
       const isFlag = r.verdict === "flag";
-      if (isFlag && !w.wasFlagged && options.onEvidence) {
+      if (isFlag && now > state.truncatedUntil && !w.wasFlagged && options.onEvidence) {
         try {
-          void options.onEvidence({
+          void Promise.resolve(options.onEvidence({
             identity,
             result: r,
             timestamp: new Date(now * 1000).toISOString(),
-          });
+          })).catch(() => { /* asynchronous logging is advisory too */ });
         } catch {
           /* operator logging must never break request handling */
         }
       }
-      w.wasFlagged = isFlag;
+      w.wasFlagged = isFlag && now > state.truncatedUntil;
+      if (now <= state.truncatedUntil) return { ...r, verdict: "insufficient_history" as const, scored: 0 as const, evidence: null };
       return r;
     });
-    return { identity, flagged: results.some((r) => r.verdict === "flag"), windows: results };
+    return { identity, truncated: now <= state.truncatedUntil, flagged: results.some((r) => r.verdict === "flag"), windows: results };
   }
 
   function observe(identity: string, touch: OwnershipTouch): OwnershipCheck {
+    key(identity, "identity");
+    key(touch.objectId, "objectId");
+    timestamp(touch.ts);
+    if (touch.route !== undefined) key(touch.route, "route");
     let state = identities.get(identity);
+    if (!state && touch.route !== undefined && publicRoutes.has(touch.route)) return snapshot(identity, undefined, touch.ts);
     if (!state) {
+      if (identities.size >= maxIdentities) {
+        untrackedUntil = Math.max(untrackedUntil, touch.ts + maxWindow);
+        return { ...snapshot(identity, undefined, touch.ts), truncated: true };
+      }
       state = newIdentityState();
       identities.set(identity, state);
     }
     if (touch.ts > state.lastTs) state.lastTs = touch.ts;
+    const now = state.lastTs;
+    for (const w of state.windows) evictWindow(state, w, now);
+    compact(state);
     if (touch.route !== undefined && publicRoutes.has(touch.route)) {
       // Exempt: not stored, not counted - but time still advances eviction.
-      for (const w of state.windows) evictWindow(state, w, touch.ts);
-      compact(state);
-      return snapshot(identity, state, touch.ts);
+      return snapshot(identity, state, now);
+    }
+    if (touch.ts < now - maxWindow) return snapshot(identity, state, now);
+    if (state.events.length >= maxEventsPerIdentity || storedEvents >= maxTotalEvents) compact(state, true);
+    if (state.events.length >= maxEventsPerIdentity || storedEvents >= maxTotalEvents) {
+      state.truncatedUntil = now + maxWindow;
+      return snapshot(identity, state, now);
     }
     const ev: StoredEvent = { ts: touch.ts, owner: resolveCached(touch.objectId) };
+    const late = state.events.length > 0 && touch.ts < (state.events[state.events.length - 1] as StoredEvent).ts;
     state.events.push(ev);
+    storedEvents++;
+    if (late) {
+      state.events.sort((a, b) => a.ts - b.ts);
+      for (const w of state.windows) {
+        w.counts.clear(); w.counted = 0; w.unknown = 0; w.head = 0;
+        for (const event of state.events) addToWindow(w, event);
+        evictWindow(state, w, now);
+      }
+    } else {
     for (const w of state.windows) {
       addToWindow(w, ev);
-      evictWindow(state, w, touch.ts);
+      evictWindow(state, w, now);
+    }
     }
     compact(state);
-    return snapshot(identity, state, touch.ts);
+    return snapshot(identity, state, now);
   }
 
   function check(identity: string, nowTs?: number): OwnershipCheck {
+    key(identity, "identity");
+    if (nowTs !== undefined) timestamp(nowTs);
     const state = identities.get(identity);
     if (!state) return snapshot(identity, undefined, nowTs ?? 0);
-    const now = nowTs ?? state.lastTs;
+    const now = Math.max(nowTs ?? state.lastTs, state.lastTs);
     if (nowTs !== undefined && nowTs > state.lastTs) state.lastTs = nowTs;
     for (const w of state.windows) evictWindow(state, w, now);
     compact(state);
@@ -382,7 +457,11 @@ export function createOwnershipProbe(options: OwnershipProbeOptions): OwnershipP
       if (identity === undefined) {
         identities.clear();
         ownerCache.clear();
+        storedEvents = 0;
+        untrackedUntil = -Infinity;
       } else {
+        const state = identities.get(identity);
+        if (state) storedEvents -= state.events.length;
         identities.delete(identity);
       }
     },

@@ -1,18 +1,18 @@
 ---
 name: anti-rea
 description: >-
-  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Version 2.8.1 adds a span gate to the two phase signals: a member counts toward a confirmed cohort only when its observed event span covers at least one full grid period. Version 2.9.0 adds the surface guard - field-level control of what enters and leaves the server - and documents the declared-cohort union budget pattern. Version 2.9.1 adds the ownership probe (BOLA/IDOR sweeps across many owners), the early-minimal occupancy counter to the A1 squat, a machine-readable 402 step-up answer (no settlement), the preference declaration log that pairs with the value watermark, and three calibration utilities (volume rank, EMP-MIX threshold selection, hold-type session features). Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
+  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Version 2.8.1 adds a span gate to the two phase signals: a member counts toward a confirmed cohort only when its observed event span covers at least one full grid period. Version 2.9.0 adds the surface guard - field-level control of what enters and leaves the server - and documents the declared-cohort union budget pattern. Version 2.9.2 hardens Unicode token checks, retained state, late events and invalid-input handling without enabling enforcement. Version 2.9.1 adds the ownership probe (BOLA/IDOR sweeps across many owners), the early-minimal occupancy counter to the A1 squat, a machine-readable 402 step-up answer (no settlement), the preference declaration log that pairs with the value watermark, and three calibration utilities (volume rank, EMP-MIX threshold selection, hold-type session features). Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
-  version: "2.9.1"
+  version: "2.9.2"
   npm-package: "@dannyphan190/anti-rea"
   source-repository: "https://github.com/dankezo/antiRea"
 ---
 
 # antiRea integration skill
 
-You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.9.1.
+You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.9.2.
 
 Install:
 
@@ -342,7 +342,7 @@ The law of the module:
 
 **Declared-cohort union budget (pattern, 2.9.0).** When several accounts belong to one principal you know about, do not give each its own record budget and stop there: give the cohort ONE `createRecordBudget` keyed by the cohort id, checked and consumed beside the per-identity budget, so rotation inside a declared cohort stops diluting the cap (measured: a declared herd halts at exactly 150 of 500; undeclared, the same herd takes everything - declaration-gating is the law, never invent a cohort from inferred evidence). Runnable wiring and verification: `examples/declared-cohort-budget` in the repo. Single-process only; scaled hosts use the disclosure ledger's `reserveDisclosure`.
 
-## Section L - The 2.9.1 lab graduates (ownership, the A1 counter, the 402 answer, provenance, calibration utilities)
+## Section L - The 2.9.1 lab graduates (audited in 2.9.2) (ownership, the A1 counter, the 402 answer, provenance, calibration utilities)
 
 Seven modules that had each passed a pre-registered lab pin and were waiting on a build order. All advisory (`enforcement: "none"`), all additive.
 
@@ -360,7 +360,7 @@ const verdict = probe.touch({ identity, objectId, ownerId, route, publicRoute: f
 
 - A window flags when counted touches >= `minEvents` (20) AND distinct owners >= `minDistinctOwners` (10) AND owners / touches >= `minRatio` (0.5). Dual windows (1 h and 6 h) share one incremental state; public routes are excluded from numerator and denominator; unknown owners count in the denominator only; below the floor the answer is `insufficient_history`, never a flag.
 - It reads access patterns, not authorization: it cannot tell a sweep from a support agent with a legitimate queue. Advisory evidence for review and step-up decisions - never wire it as an authorization check.
-- Lab record: sweeps flagged 500/500 in both windows; 0 false positives on 2,000 legitimate sessions; 100,000 touches ingest in about 290 ms total.
+- Lab record: sweeps flagged 500/500 in both windows; 0 false positives on 2,000 legitimate sessions; the historical ingest timing is not a portable performance promise. See docs/audit-2.9.2.json for this audit machine and measured medians.
 
 ### `createOccupancyEarlyMinimalSignal` - the A1 counter (A1-COUNTER-D2)
 
@@ -369,7 +369,8 @@ Attack A1 beat the shipped occupancy laws with 1-2 early activities: any activit
 ```ts
 import { createOccupancyEarlyMinimalSignal } from "@dannyphan190/anti-rea";
 
-const early = createOccupancyEarlyMinimalSignal({ onEvidence: (e) => log.warn("early-minimal", e) });
+// Example host-declared room capacity; replace with your room capacity.
+const early = createOccupancyEarlyMinimalSignal({ capacity: 100, onEvidence: (e) => log.warn("early-minimal", e) });
 early.observe({ type: "join", identity, ts, accountCreatedTs });
 early.observe({ type: "activity", identity, ts });
 const state = early.evaluate({ asOfTs: ts }); // per-law results: fast 0.50/600 s, drip 0.34/3,600 s
@@ -415,9 +416,20 @@ const archive = decl.export(); // JSON; importDeclarationLog re-verifies and ref
 
 ### Calibration utilities (pure functions, no state)
 
-- `applyVolumeRankRule` (RECOMB-04) - rank cells by two-component EB05 score; flag an identity when >= 2 of its rare cells land in the top 5%, reported per volume stratum (frozen boundaries 63.2 / 632.5). Lab: MID-stratum walker detection 0.85-0.90, legit FP <= 0.007. Detection was measured in the MID stratum only - no production threshold is claimed.
+- `applyVolumeRankRule` (RECOMB-04) - rank cells by two-component EB05 score; flag an identity when >= 2 of its rare cells land in the top 5%, reported per volume stratum (frozen boundaries 63.2 / 632.5). Lab at gated kappa 100/300/1000: MID-stratum walker detection 0.85-0.90, legit FP <= 0.007. Kappa 30 is descriptive, not covered by that FP bound. Detection was measured in the MID stratum only - no production threshold is claimed.
 - `selectEmpMixThreshold` (RECOMB-05) - choose a clustering threshold from a 50/50 mixed calibration set (null permutations + flat empirical forests): the largest grid point whose mixed FMR stays <= target (default 1%). Lab (R14 branch-C frame): held h = 0.36 across 0-30% calibration contamination where the null-only set flipped at 10%.
 - `computeHoldTypeFeatures` + `createHoldTypeScorer` (RECOMB-02, Step 0) - five session-timing features and the frozen signed-z composite S_R2 against a host-supplied human reference. Step 0 measured feature separation ONLY: this ships computation, not a detection claim; thresholds are the host's (the lab used the outer-5% tail of the human distribution).
+
+## Section M - 2.9.2 audit and host handling
+
+- Ownership windows use a monotone event-time watermark. Late arrivals are counted in the correct live windows. Capacity loss is explicit `truncated` telemetry, suppressing incomplete flags; identity-cap gaps also suppress newly admitted histories until the missing window expires.
+- D2, seat occupancy and room guard bound open sessions and retained activity timestamps. Saturation suppresses flags and recommendations; investigate the feed and start a fresh observation epoch deliberately. D2 exposes reset; older room signals require a fresh instance.
+- Invalid hold-type sessions return finite neutral features and scores with `valid: false`; inspect `invalidReasons` rather than treating missing data as human evidence.
+- Assertions compare exact UTF-16 token units with bounded lengths. The declaration log checks export format/version and refuses capacity overflow; external count/head anchors are needed to detect tail truncation.
+- Volume-rank's historical FP bound belongs to generator-component lab strata. It does not transfer to the SDK's volume-derived regrouping. The audit reproduced 1/115 HIGH false flags at kappa 1000 in that regrouping.
+- E-value histories are never silently evicted or restarted. Capacity and invalid-input errors are telemetry failures to catch and report, not authorization decisions.
+- D2 defaults remain unchanged: a registered FAST-only candidate lost the minority attack cell and was not shipped. RECOMB-03 remains excluded after a fresh independent pair experiment showed heavy legitimate persona harm. These are synthetic measurements, not production calibration.
+- Historical quantitative claims in Section L retain their original scope. The release audit marks missing generator dependencies as NOT VERIFIED; it does not upgrade them into newly verified measurements.
 
 ## Safe defaults (do not retune silently)
 
@@ -480,3 +492,5 @@ Run through this before reporting the integration done:
 - [ ] `snapshot()` counters on each instance show no unexpected `invalidTs` growth (that means your timestamps are malformed somewhere upstream).
 - [ ] A synthetic squat (30 fresh silent joins into a 30-seat room) fed to `createRoomGuard` in a test flags via the occupancy path, `recommendStepUpForNewJoins` is true while they sit and false after they leave, and the same stream with the joiners chatting does not flag (hole A1, expected).
 - [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0; the surface guard exists since 2.9.0; the ownership probe, early-minimal occupancy, the 402 responder, the declaration log and the calibration utilities exist since 2.9.1).
+
+- [ ] The host targets audited package 2.9.2 and handles truncated, saturated and invalid telemetry without inventing enforcement.

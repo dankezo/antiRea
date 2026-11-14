@@ -144,13 +144,13 @@ export interface CreateRoomGuardOptions {
   tickMs?: number;
   /** An identity counts as new for a session when it was created less than this many ms before the join. Default 86,400,000 (24 h, lab law). */
   newnessWindowMs?: number;
-  /** Maximum sessions retained (open + closed). Oldest closed sessions are evicted past it. Defaults to 100,000. */
+  /** Maximum sessions retained (open + closed). Closed sessions are evicted first; new telemetry is refused if all are open. Default 100,000. */
   maxSessions?: number;
 }
 
 export interface RoomGuardObservation {
   /** `"recorded"`, or `"invalid_ts"` when the timestamp was refused before any state was touched. */
-  status: "recorded" | "invalid_ts";
+  status: "recorded" | "invalid_ts" | "capacity_exceeded";
   counted: boolean;
 }
 
@@ -187,6 +187,8 @@ export interface RoomGuardResult {
   kind: "room-guard";
   /** True when pressure has been high at any tick up to asOfTs. */
   flagged: boolean;
+  /** True after capacity loss; confirmations are suppressed for incomplete telemetry. */
+  saturated: boolean;
   /** When pressure first went high (ms), or null when never flagged. */
   firstFlagTs: number | null;
   /** True when pressure is high at the latest tick <= asOfTs. */
@@ -219,6 +221,12 @@ export interface RoomGuardSnapshot {
   sessions: number;
   /** Sessions currently open. */
   openSessions: number;
+  /** Telemetry loss disables confirmations until a fresh instance is created. */
+  saturated: boolean;
+  /** First-seen metadata is bounded by retained sessions. */
+  trackedIdentities: number;
+  /** At most one first activity per retained session. */
+  retainedActivityTimestamps: number;
   counters: {
     observed: number;
     invalidTs: number;
@@ -226,6 +234,7 @@ export interface RoomGuardSnapshot {
     evictedSessions: number;
     /** leave/activity events with no open session to attach to. */
     orphanEvents: number;
+    rejectedSessions: number;
   };
   notice: string;
 }
@@ -263,8 +272,8 @@ function requirePositiveMs(value: unknown, field: string): number {
 }
 
 function requireIdentity(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    fail(`${field} must be a non-empty string`);
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 1024) {
+    fail(`${field} must be a non-empty string of at most 1024 characters`);
   }
   return value as string;
 }
@@ -292,17 +301,28 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
   const sessions: Session[] = [];
   const openByIdentity = new Map<string, Session>();
   const firstSeen = new Map<string, number>();
-  const counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0 };
+  const retainedByIdentity = new Map<string, number>();
+  const counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0, rejectedSessions: 0 };
   let latestTs = -Infinity;
-  let earliestTs = Infinity;
 
-  function evictClosed(): void {
-    while (sessions.length > maxSessions) {
+  function bump(name: keyof typeof counters): void {
+    counters[name] = Math.min(Number.MAX_SAFE_INTEGER, counters[name] + 1);
+  }
+
+  function makeRoom(): boolean {
+    while (sessions.length >= maxSessions) {
       const idx = sessions.findIndex((s) => s.leaveTs !== null);
-      if (idx === -1) return;
+      if (idx === -1) return false;
+      const removed = sessions[idx] as Session;
       sessions.splice(idx, 1);
-      counters.evictedSessions++;
+      const remaining = (retainedByIdentity.get(removed.identity) ?? 1) - 1;
+      if (remaining === 0) {
+        retainedByIdentity.delete(removed.identity);
+        firstSeen.delete(removed.identity);
+      } else retainedByIdentity.set(removed.identity, remaining);
+      bump("evictedSessions");
     }
+    return true;
   }
 
   function observe(event: RoomGuardEvent): RoomGuardObservation {
@@ -312,21 +332,25 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
     }
     const identity = requireIdentity(event.identity, "event.identity");
     if (!isValidTs(event.ts)) {
-      counters.invalidTs++;
+      bump("invalidTs");
       return { status: "invalid_ts", counted: false };
     }
     if (event.accountCreatedTs !== undefined && !isValidTs(event.accountCreatedTs)) {
       fail("event.accountCreatedTs must be a finite timestamp within the representable range");
     }
-    counters.observed++;
-    if (event.ts > latestTs) latestTs = event.ts;
-    if (event.ts < earliestTs) earliestTs = event.ts;
-    if (!firstSeen.has(identity) || event.ts < (firstSeen.get(identity) as number)) {
-      firstSeen.set(identity, event.ts);
-    }
+    bump("observed");
     if (event.type === "join") {
       const prior = openByIdentity.get(identity);
-      if (prior && prior.leaveTs === null) prior.leaveTs = event.ts;
+      if (prior && event.ts < prior.joinTs) {
+        bump("orphanEvents");
+        return { status: "recorded", counted: false };
+      }
+      if (prior && prior.leaveTs === null) prior.leaveTs = event.ts; // a re-join closes the prior session
+      if (!makeRoom()) {
+        bump("rejectedSessions");
+        return { status: "capacity_exceeded", counted: false };
+      }
+      if (!firstSeen.has(identity) || event.ts < (firstSeen.get(identity) as number)) firstSeen.set(identity, event.ts);
       const session: Session = {
         identity,
         joinTs: event.ts,
@@ -336,20 +360,30 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
       };
       sessions.push(session);
       openByIdentity.set(identity, session);
-      evictClosed();
+      retainedByIdentity.set(identity, (retainedByIdentity.get(identity) ?? 0) + 1);
     } else if (event.type === "leave") {
       const open = openByIdentity.get(identity);
-      if (open && open.leaveTs === null) {
+      if (open && open.leaveTs === null && event.ts >= open.joinTs) {
         open.leaveTs = event.ts;
         openByIdentity.delete(identity);
       } else {
-        counters.orphanEvents++;
+        bump("orphanEvents");
       }
     } else {
       const open = openByIdentity.get(identity);
-      if (open && open.leaveTs === null) open.activityTs.push(event.ts);
-      else counters.orphanEvents++;
+      if (open && open.leaveTs === null && event.ts > open.joinTs) {
+        // Keep the per-session list ascending even if the host feeds
+        // slightly out of order; the interval scan assumes it.
+        const list = open.activityTs;
+        let i = list.length;
+        while (i > 0 && (list[i - 1] as number) > event.ts) i--;
+        list.splice(i, 0, event.ts);
+        if (list.length > 1) list.length = 1;
+      } else {
+        bump("orphanEvents");
+      }
     }
+    if (event.ts > latestTs) latestTs = event.ts;
     return { status: "recorded", counted: true };
   }
 
@@ -379,7 +413,7 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
     for (const s of sessions) {
       if (s.joinTs <= lo || s.joinTs > t) continue;
       n++;
-      if (s.joinTs - s.createdTs < newnessWindowMs) newCount++;
+      if (s.createdTs <= s.joinTs && s.joinTs - s.createdTs < newnessWindowMs) newCount++;
       if (t - s.joinTs >= MIN_MS) {
         elig++;
         if (!hasActivity(s, t)) inact++;
@@ -406,10 +440,10 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
       if (s.joinTs > t) continue;
       if (s.leaveTs !== null && t >= s.leaveTs) continue;
       holders++;
-      if (s.joinTs - s.createdTs >= newnessWindowMs) continue;
+      if (s.createdTs > s.joinTs || s.joinTs - s.createdTs >= newnessWindowMs) continue;
       if (!hasActivity(s, t)) newIdle++;
     }
-    return { ratio: newIdle / capacity, newIdle, holders };
+    return { ratio: Math.min(1, newIdle / capacity), newIdle, holders };
   }
 
   interface TickState {
@@ -447,6 +481,7 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
       return {
         kind: "room-guard",
         flagged: false,
+        saturated: counters.rejectedSessions > 0,
         firstFlagTs: null,
         pressureHighNow: false,
         recommendStepUpForNewJoins: false,
@@ -462,9 +497,9 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
     if (!isValidTs(asOfTs)) fail("asOfTs must be a finite timestamp within the representable range");
 
     const joinsSorted = [...sessions].sort((a, b) => a.joinTs - b.joinTs);
-    const firstTick = Math.floor(Math.min(earliestTs, asOfTs) / tickMs) * tickMs;
+    const firstTick = Math.floor(Math.min(joinsSorted[0]?.joinTs ?? asOfTs, asOfTs) / tickMs) * tickMs;
     const tickCount = Math.floor((asOfTs - firstTick) / tickMs) + 1;
-    if (tickCount > MAX_TICKS) {
+    if (!Number.isFinite(firstTick) || !Number.isFinite(tickCount) || tickCount > MAX_TICKS) {
       fail(`evaluation span covers ${tickCount} ticks (max ${MAX_TICKS}); evaluate a more recent asOfTs or use a larger tickMs`);
     }
 
@@ -483,7 +518,8 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
       if (firstFlagTs === null) firstFlagTs = t;
     };
 
-    for (let t = firstTick; t <= asOfTs; t += tickMs) {
+    for (let tickIndex = 0; tickIndex < tickCount; tickIndex++) {
+      const t = firstTick + tickIndex * tickMs;
       // Velocity: joins in (t-60s, t] against the per-minute
       // baseline over [t-24h, t-10min].
       let joins60 = 0;
@@ -548,15 +584,16 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
     }
 
     const pressureHighNow =
-      nowState.paths.burst || nowState.paths.sustained || nowState.paths.churn || nowState.paths.occupancy;
+      counters.rejectedSessions === 0 && (nowState.paths.burst || nowState.paths.sustained || nowState.paths.churn || nowState.paths.occupancy);
     return {
       kind: "room-guard",
-      flagged: firstFlagTs !== null,
-      firstFlagTs,
+      flagged: counters.rejectedSessions === 0 && firstFlagTs !== null,
+      saturated: counters.rejectedSessions > 0,
+      firstFlagTs: counters.rejectedSessions > 0 ? null : firstFlagTs,
       pressureHighNow,
       recommendStepUpForNewJoins: pressureHighNow,
-      paths,
-      firstPathTs,
+      paths: counters.rejectedSessions > 0 ? { burst: false, sustained: false, churn: false, occupancy: false } : paths,
+      firstPathTs: counters.rejectedSessions > 0 ? { burst: null, sustained: null, churn: null, occupancy: null } : firstPathTs,
       current: nowState.current,
       capacity,
       tickMs,
@@ -572,6 +609,9 @@ export function createRoomGuard(options: CreateRoomGuardOptions): RoomGuardInsta
       tickMs,
       sessions: sessions.length,
       openSessions: openByIdentity.size,
+      saturated: counters.rejectedSessions > 0,
+      trackedIdentities: firstSeen.size,
+      retainedActivityTimestamps: sessions.reduce((n, s) => n + s.activityTs.length, 0),
       counters: { ...counters },
       notice: ADVISORY_NOTICE,
     };

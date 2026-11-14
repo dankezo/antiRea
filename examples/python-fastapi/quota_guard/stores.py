@@ -7,10 +7,10 @@ return an awaitable; the guard awaits awaitable results.
 
 Two implementations are provided:
 
-- :class:`InMemoryQuotaStore` — bounded single-process store, a direct port of
+- :class:`InMemoryQuotaStore` - bounded single-process store, a direct port of
   the TS ``createInMemoryQuotaStore`` (same prune rule, same insertion-order
   eviction once the distinct-key cap is exceeded).
-- :class:`RedisQuotaStore` — shared store for multi-instance deployments,
+- :class:`RedisQuotaStore` - shared store for multi-instance deployments,
   written against a duck-typed async Redis client (anything exposing an
   ``eval(script, numkeys, *args)`` coroutine compatible with redis-py's
   ``eval``). Each operation runs as a single Lua script, so prune+count and
@@ -102,7 +102,7 @@ def create_in_memory_quota_store(max_entries: int = 10_000) -> InMemoryQuotaStor
 # Lua scripts for RedisQuotaStore. Each carries a ``quota-guard:<op>`` marker
 # comment so test doubles can dispatch on the operation. Pruning uses an
 # inclusive max score of ``now - window``: the TS prune keeps entries with
-# ``now - t < window_ms``, i.e. drops ``t <= now - window_ms`` — exactly what
+# ``now - t < window_ms``, i.e. drops ``t <= now - window_ms`` - exactly what
 # ZREMRANGEBYSCORE with an inclusive upper bound removes.
 _PEEK_SCRIPT = """
 -- quota-guard:peek
@@ -144,7 +144,7 @@ class RedisQuotaStore:
     ``"<now>:<uuid4hex>"`` member (the TS in-memory store simply appends the
     timestamp, duplicates included); keys are expired with ``PEXPIRE`` instead
     of being deleted when emptied by a prune; and there is no ``max_entries``
-    key cap — memory is the Redis server's concern.
+    key cap - memory is the Redis server's concern.
     """
 
     def __init__(self, client: Any) -> None:

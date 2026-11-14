@@ -226,6 +226,16 @@
  */
 
 export interface EvalueTripwireOptions {
+  /** Resource caps reject a telemetry operation atomically, never evict or restart a live e-process. */
+  maxCohorts?: number;
+  /** Maximum exact union per cohort. Default 100,000. */
+  maxRecordsPerCohort?: number;
+  /** Maximum sum of retained union sizes. Default 1,000,000. */
+  maxTotalRecords?: number;
+  /** Maximum members per cohort. Default 10,000. */
+  maxMembersPerCohort?: number;
+  /** Maximum records in one observation. Default 10,000. */
+  maxRecordsPerStep?: number;
   /**
    * The (A1) bound: an upper bound on the legitimate conditional
    * mean of the per-step score x_t, at the host's chosen step
@@ -518,6 +528,17 @@ function logAddExp(a: number, b: number): number {
 }
 
 export function createEvalueTripwire(options: EvalueTripwireOptions = {}): EvalueTripwire {
+  const cap = (value: number, name: string): number => {
+    if (!Number.isSafeInteger(value) || value < 1 || value > 10_000_000) throw new RangeError(`invalid ${name}`);
+    return value;
+  };
+  const maxCohorts = cap(options.maxCohorts ?? 10_000, "maxCohorts");
+  const maxRecordsPerCohort = cap(options.maxRecordsPerCohort ?? 100_000, "maxRecordsPerCohort");
+  const maxTotalRecords = cap(options.maxTotalRecords ?? 1_000_000, "maxTotalRecords");
+  const maxMembersPerCohort = cap(options.maxMembersPerCohort ?? 10_000, "maxMembersPerCohort");
+  const maxRecordsPerStep = cap(options.maxRecordsPerStep ?? 10_000, "maxRecordsPerStep");
+  const validKey = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 1024;
+  let totalRecords = 0;
   const mu0 = options.mu0 ?? 0.2;
   if (!Number.isFinite(mu0) || !(mu0 > 0 && mu0 < 1)) throw new RangeError(`mu0 must be in (0, 1), got ${mu0}`);
   const alpha = options.alpha ?? 0.05;
@@ -554,6 +575,7 @@ export function createEvalueTripwire(options: EvalueTripwireOptions = {}): Evalu
   const lambdaMax = 0.5 / mu0;
   const lambdaDesign = Math.min((designAlternative - mu0) / (mu0 * (1 - mu0)), lambdaMax);
   const lambdaFloor = Math.min(lambdaDesign / 2, lambdaMax);
+  if (!Number.isFinite(threshold) || !Number.isFinite(lambdaMax) || !Number.isFinite(lambdaDesign)) throw new RangeError("evalue parameters exceed finite numerical range");
 
   const cohorts = new Map<string, CohortState>();
 
@@ -611,16 +633,34 @@ export function createEvalueTripwire(options: EvalueTripwireOptions = {}): Evalu
   };
 
   function observe(input: EvalueObserveInput): EvalueDecision {
-    if (!input || typeof input.cohortId !== "string" || input.cohortId.length === 0) {
+    if (!input || !validKey(input.cohortId)) {
       throw new TypeError("observe requires a non-empty cohortId");
     }
-    const cohort = ensureCohort(input.cohortId);
     const identityId = input.identityId ?? input.identity ?? null;
-    if (identityId !== null) cohort.members.add(identityId);
+    if (identityId !== null && !validKey(identityId)) throw new TypeError("invalid identityId");
     const rawRecords = input.records ?? input.recordIds ?? [];
+    if (!Array.isArray(rawRecords) || rawRecords.length > maxRecordsPerStep) throw new RangeError("evalue step capacity exceeded");
+    const stepInput: number[] = [];
+    const recordCount = rawRecords.length;
+    for (let i = 0; i < recordCount; i++) {
+      const id = rawRecords[i];
+      if (!Number.isSafeInteger(id) || id === undefined || id < 0) throw new TypeError("records must be nonnegative safe integers");
+      stepInput.push(id);
+    }
     // De-duplicate within the step: a record served twice in one
     // step is one served record and can be novel at most once.
-    const stepRecords = [...new Set(rawRecords)];
+    const stepRecords = [...new Set(stepInput)];
+    const existing = cohorts.get(input.cohortId);
+    const prospectiveNovel = stepRecords.reduce((count, id) => count + (existing?.union.has(id) ? 0 : 1), 0);
+    if ((!existing && cohorts.size >= maxCohorts) ||
+      (existing?.union.size ?? 0) + prospectiveNovel > maxRecordsPerCohort ||
+      totalRecords + prospectiveNovel > maxTotalRecords ||
+      (identityId !== null && !existing?.members.has(identityId) && (existing?.members.size ?? 0) >= maxMembersPerCohort) ||
+      (existing?.steps ?? 0) >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError("evalue state capacity exceeded; telemetry was not recorded");
+    }
+    const cohort = ensureCohort(input.cohortId);
+    if (identityId !== null) cohort.members.add(identityId);
     let novelRecords = 0;
     for (const id of stepRecords) {
       if (!cohort.union.has(id)) {
@@ -628,6 +668,7 @@ export function createEvalueTripwire(options: EvalueTripwireOptions = {}): Evalu
         novelRecords++;
       }
     }
+    totalRecords += novelRecords;
     const score = Math.min(1, novelRecords / scaleRecords);
     // The stake is computed from history BEFORE this step's score
     // is folded into the running sum - predictability by order of
@@ -690,6 +731,10 @@ export function createEvalueTripwire(options: EvalueTripwireOptions = {}): Evalu
     if (!target) throw new RangeError(`unknown target cohort: ${targetCohortId}`);
     if (!source) throw new RangeError(`unknown source cohort: ${sourceCohortId}`);
     const totalSteps = target.steps + source.steps;
+    const mergedUnion = new Set([...target.union, ...source.union]);
+    const mergedMembers = new Set([...target.members, ...source.members]);
+    if (!Number.isSafeInteger(totalSteps) || mergedUnion.size > maxRecordsPerCohort || mergedMembers.size > maxMembersPerCohort) throw new RangeError("evalue merge capacity exceeded; state unchanged");
+    totalRecords += mergedUnion.size - target.union.size - source.union.size;
     if (totalSteps > 0) {
       // Weighted average in log space: log( (n_a e^{L_a} + n_b e^{L_b}) / (n_a + n_b) ).
       const wTarget = target.steps / totalSteps;
@@ -770,6 +815,8 @@ export function createEvalueTripwire(options: EvalueTripwireOptions = {}): Evalu
   }
 
   function clearCohort(cohortId: string): void {
+    const cohort = cohorts.get(cohortId);
+    if (cohort) totalRecords -= cohort.union.size;
     cohorts.delete(cohortId);
   }
 

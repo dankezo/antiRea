@@ -164,35 +164,47 @@ function scanPayload(
   const violations: SurfaceViolation[] = [];
   let nodes = 0;
   let truncated = false;
-  const stack: { value: unknown; path: string }[] = [{ value: payload, path: "" }];
-  while (stack.length > 0) {
-    const { value, path } = stack.pop() as { value: unknown; path: string };
+  const seen = new WeakSet<object>();
+  function* fields(value: Record<string, unknown> | unknown[]): Generator<string> {
     if (Array.isArray(value)) {
-      for (let i = value.length - 1; i >= 0; i--) {
-        stack.push({ value: value[i], path: `${path}[${i}]` });
-      }
-      continue;
+      for (let i = 0; i < value.length; i++) yield String(i);
+    } else {
+      for (const key in value) if (Object.prototype.hasOwnProperty.call(value, key)) yield key;
     }
-    if (!isPlainObject(value)) continue;
-    for (const key of Object.keys(value)) {
+  }
+  const stack: { value: Record<string, unknown> | unknown[]; path: string; keys: Generator<string> }[] = [];
+  const enter = (value: unknown, path: string): void => {
+    if (!Array.isArray(value) && !isPlainObject(value)) return;
+    if (seen.has(value)) { truncated = true; return; }
+    seen.add(value);
+    stack.push({ value, path, keys: fields(value) });
+  };
+  enter(payload, "");
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!;
+    const next = frame.keys.next();
+    if (next.done) { seen.delete(frame.value); stack.pop(); continue; }
+    const { value, path } = frame;
+    const key = next.value;
       nodes++;
       if (nodes > maxScanNodes) {
         truncated = true;
-        stack.length = 0;
         break;
       }
-      const childPath = path === "" ? key : `${path}.${key}`;
+      const childPath = Array.isArray(value) ? `${path}[${key}]` : path === "" ? key : `${path}.${key}`;
+      if (childPath.length > 8192) { truncated = true; continue; }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor && !("value" in descriptor)) { truncated = true; continue; }
       const normalized = normalizeField(key);
       const declared = allowlist !== null && allowlist.has(normalized);
-      if (!declared) {
+      if (!Array.isArray(value) && !declared) {
         if (matchers.some((m) => m(normalized))) {
           violations.push({ path: childPath, field: key, kind: denyKind });
         } else if (allowlist !== null) {
           violations.push({ path: childPath, field: key, kind: "undeclared" });
         }
       }
-      stack.push({ value: value[key], path: childPath });
-    }
+      enter(descriptor?.value, childPath);
   }
   void route;
   return { violations, truncated };
@@ -201,25 +213,29 @@ function scanPayload(
 function stripViolations(payload: unknown, violations: SurfaceViolation[]): unknown {
   if (violations.length === 0) return payload;
   const bad = new Set(violations.map((v) => v.path));
-  const clone = (value: unknown, path: string): unknown => {
-    if (Array.isArray(value)) return value.map((v, i) => clone(v, `${path}[${i}]`));
-    if (isPlainObject(value)) {
-      const out: Record<string, unknown> = {};
-      for (const key of Object.keys(value)) {
-        const childPath = path === "" ? key : `${path}.${key}`;
-        if (bad.has(childPath)) continue;
-        out[key] = clone(value[key], childPath);
-      }
-      return out;
+  if (!Array.isArray(payload) && !isPlainObject(payload)) return payload;
+  const root: Record<string, unknown> | unknown[] = Array.isArray(payload) ? new Array(payload.length) : {};
+  const stack = [{ source: payload, target: root, path: "" }];
+  while (stack.length) {
+    const { source, target, path } = stack.pop()!;
+    for (const key of Object.keys(source)) {
+      const childPath = Array.isArray(source) ? `${path}[${key}]` : path === "" ? key : `${path}.${key}`;
+      if (bad.has(childPath)) continue;
+      const value: unknown = Object.getOwnPropertyDescriptor(source, key)?.value;
+      const composite = Array.isArray(value) || isPlainObject(value);
+      const copy: unknown = composite ? (Array.isArray(value) ? new Array(value.length) : {}) : value;
+      Object.defineProperty(target, key, { value: copy, enumerable: true, writable: true, configurable: true });
+      if (composite) stack.push({ source: value, target: copy as Record<string, unknown> | unknown[], path: childPath });
     }
-    return value;
-  };
-  return clone(payload, "");
+  }
+  return root;
 }
 
 export function createSurfaceGuard(options: SurfaceGuardOptions = {}): SurfaceGuard {
   const mode: SurfaceGuardMode = options.mode ?? "advisory";
   const maxScanNodes = options.maxScanNodes ?? 10_000;
+  if (!["advisory", "strip", "block"].includes(mode)) throw new TypeError("surface-guard: invalid mode");
+  if (!Number.isSafeInteger(maxScanNodes) || maxScanNodes < 1 || maxScanNodes > 1_000_000) throw new RangeError("surface-guard: invalid maxScanNodes");
   const sensitiveMatchers = compilePatterns(options.sensitivePatterns, DEFAULT_SENSITIVE);
   const privilegedMatchers = compilePatterns(options.privilegedPatterns, DEFAULT_PRIVILEGED);
   const routes = new Map<string, { response: ReadonlySet<string> | null; request: ReadonlySet<string> | null }>();
@@ -238,23 +254,23 @@ export function createSurfaceGuard(options: SurfaceGuardOptions = {}): SurfaceGu
     const { violations, truncated } = scanPayload(payload, route, direction, allowlist, matchers, denyKind, maxScanNodes);
     if (violations.length > 0 && options.onViolation) {
       try {
-        void options.onViolation({
+        void Promise.resolve(options.onViolation({
           direction,
           route,
           violations,
           truncated,
           timestamp: new Date().toISOString(),
-        });
+        })).catch(() => { /* operator logging remains advisory */ });
       } catch {
         /* operator logging must never break request handling */
       }
     }
     const result: SurfaceInspection = {
-      ok: !(mode === "block" && violations.length > 0),
+      ok: !(mode === "block" && (violations.length > 0 || truncated)) && !(mode === "strip" && truncated),
       violations,
       truncated,
     };
-    if (mode === "strip") result.sanitized = stripViolations(payload, violations);
+    if (mode === "strip" && !truncated) result.sanitized = stripViolations(payload, violations);
     return result;
   }
 

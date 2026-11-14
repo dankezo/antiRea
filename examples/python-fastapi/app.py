@@ -13,7 +13,7 @@ Then, for example::
 
 DEMO-ONLY identity resolution: ``demo_resolve_identity`` reads the account,
 API key and tier from ``x-demo-*`` headers so the example is easy to poke at
-with curl. A production app must NEVER do this — identity has to come from
+with curl. A production app must NEVER do this - identity has to come from
 your own server-side session/auth middleware (that is the whole point of the
 ``resolve_identity`` contract, in both the TS and Python versions). Here the
 headers stand in for whatever your auth layer would put on the request.
@@ -38,7 +38,7 @@ def demo_resolve_identity(req: QuotaRequest) -> Optional[QuotaIdentity]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="antiRea quota-guard — FastAPI example")
+    app = FastAPI(title="antiRea quota-guard - FastAPI example")
     app.add_middleware(
         QuotaMiddleware,
         pagination_mode="clamp",

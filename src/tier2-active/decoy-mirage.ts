@@ -98,7 +98,7 @@ export interface DecoyMirageOptions {
    * (mirrors the canary handler). That header is supplied by the client: any
    * non-browser client can send it to opt itself out of detection, so
    * enabling this is only a noise heuristic for genuine browser cross-site
-   * embeds — never a trust decision.
+   * embeds - never a trust decision.
    */
   ignoreCrossSite?: boolean;
   /** Extra seed material mixed into document generation; changing it reshapes every document. */

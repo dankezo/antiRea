@@ -3,7 +3,7 @@
 ``mock_req`` mirrors the ``mockReq`` helper in ``tests/core.test.cjs``: it
 builds a request against ``https://example.test`` with plain-dict headers.
 (There, ``headers.get`` lowercases the lookup key; here, header access goes
-through ``quota_guard.get_header``, which scans mappings case-insensitively —
+through ``quota_guard.get_header``, which scans mappings case-insensitively -
 the same net behavior.)
 """
 

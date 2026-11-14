@@ -11,7 +11,7 @@ vendored **unmodified** for the interoperability tests in
   `packages/web-bot-auth/test/test_data/web_bot_auth_architecture_v1.json`)
 - **Retrieved:** 2026-11-01
 - **SHA-256 of the vendored copy:** `12ed35aaf50368d9cf6d3c704b8942e6603b1ef2bbd119c3040868b87e596ef4`
-- **Upstream license:** Apache License 2.0 (Copyright 2025 Cloudflare, Inc.) —
+- **Upstream license:** Apache License 2.0 (Copyright 2025 Cloudflare, Inc.) -
   see the `LICENSE` file at the root of the upstream repository. This fixture
   is redistributed under those terms; it is test data, not part of the
   antiRea runtime.
@@ -27,7 +27,7 @@ vendored **unmodified** for the interoperability tests in
 
 So: vectors 0-1 are **RSA-PSS**, vectors 2-3 are **Ed25519**. The Ed25519
 `keyid` used in the signatures is the RFC 7638 JWK thumbprint of the test
-key, `poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U` — not the JWK `kid`.
+key, `poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U` - not the JWK `kid`.
 
 All keys in this file (including the Ed25519 private component `d`) are
 **published specification test keys**. They are safe to commit and must

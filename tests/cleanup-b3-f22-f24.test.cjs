@@ -1,4 +1,4 @@
-// Cleanup B3 (audit 2.6.0 retest) — F-22 + F-24 regression tests.
+// Cleanup B3 (audit 2.6.0 retest) - F-22 + F-24 regression tests.
 //
 // F-22 (Web Bot Auth, RFC 8941): the Structured Fields parser used to
 // accept duplicate dictionary keys (last-wins) and duplicate parameters

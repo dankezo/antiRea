@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
 </p>
 
 <p align="center">
@@ -168,7 +168,20 @@ belongs in-process, in your own app.
 
 ## Latest release
 
+### v2.9.2 - Audit and hardening
+
+Exact token matching, bounded telemetry state, correct late-event ownership windows, finite invalid-session features, and cycle-safe surface inspection. The host still decides every consequence; runtime dependencies remain zero.
+
+The local Windows audit ran 963 tests: 960 passed, none failed, and 3 skipped (two RSA-PSS vectors and one symlink privilege case). Historical lab figures below retain their original scope; missing generators are explicitly NOT VERIFIED in the audit.
+
+[2.9.2 deep dive](docs/v2.9.2-deep-dive.md) | [Audit measurements](docs/audit-2.9.2.json)
+
 ### v2.9.1 - the 402 step-up answer, and five lab graduates
+
+[2.9.1 deep dive](docs/v2.9.1-deep-dive.md)
+
+> Volume-rank lab strata are generator components. The SDK groups by observed volume: the rerun found 1/115 HIGH false flags at kappa 1000, so the historical 0.007 bound is not a universal bound for SDK regrouping.
+
 
 - **Problem:** a step-up challenge tells a machine caller to
   stop but hands it nothing machine-readable to act on - and
@@ -204,7 +217,7 @@ belongs in-process, in your own app.
   score (top 10% reported descriptively). Measured in the
   lab (RECOMB-04, PASS-lab): walker detection in the MID
   stratum 0.90 / 0.85 / 0.85 at kappa 100 / 300 / 1000,
-  legitimate false positives at most 0.007 in every stratum
+  legitimate false positives at most 0.007 at gated kappa 100/300/1000 in every stratum
   with at least 20 legit identities; detection was measured
   in MID only, where every walker lived.
 - **New helper - `selectEmpMixThreshold`:** the
@@ -379,8 +392,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **890
-automated tests** (888 passing, 2 skipped RSA-PSS vectors) and
+Working on the repo itself: `npm run check` compiles, runs **963
+automated tests** (960 passing, 3 skipped on this Windows machine: two RSA-PSS vectors and one symlink privilege case) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.
@@ -408,6 +421,8 @@ Email **dannyphan190@gmail.com**.
 - [Evidence](docs/EVIDENCE.md) - full measured results and method
 - [Legal and privacy notes](docs/LEGAL_PRIVACY.md)
 - Deep dives: [v2.9.0](docs/v2.9.0-deep-dive.md) - [v2.8.1](docs/v2.8.1-deep-dive.md) - [v2.8.0](docs/v2.8.0-deep-dive.md)
+- [v2.9.1 deep dive](docs/v2.9.1-deep-dive.md)
+- [v2.9.2 deep dive](docs/v2.9.2-deep-dive.md)
 - [Changelog](CHANGELOG.md)
 
 ## Contributing and security

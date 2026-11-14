@@ -123,13 +123,13 @@ export interface CreateSeatOccupancySignalOptions {
   sustainMs?: number;
   /** An identity counts as new for a session when it was created less than this many ms before the join. Default 86,400,000 (24 h, lab law). */
   newnessWindowMs?: number;
-  /** Maximum sessions retained (open + closed). Oldest closed sessions are evicted past it. Defaults to 100,000. */
+  /** Maximum sessions retained (open + closed). Closed sessions are evicted first; new telemetry is refused if all are open. Default 100,000. */
   maxSessions?: number;
 }
 
 export interface SeatOccupancyObservation {
   /** `"recorded"`, or `"invalid_ts"` when the timestamp was refused before any state was touched. */
-  status: "recorded" | "invalid_ts";
+  status: "recorded" | "invalid_ts" | "capacity_exceeded";
   counted: boolean;
 }
 
@@ -142,6 +142,8 @@ export interface SeatOccupancyResult {
   kind: "seat-occupancy";
   /** True when the ratio has stayed >= threshold for sustainMs at some point up to asOfTs. */
   flagged: boolean;
+  /** True after capacity loss; confirmations are suppressed for incomplete telemetry. */
+  saturated: boolean;
   /** When the flag first completed its sustain run (ms), or null when never flagged. */
   firstFlagTs: number | null;
   /** The new-idle occupancy ratio at asOfTs. */
@@ -167,6 +169,12 @@ export interface SeatOccupancySnapshot {
   sessions: number;
   /** Sessions currently open. */
   openSessions: number;
+  /** Telemetry loss disables confirmations until a fresh instance is created. */
+  saturated: boolean;
+  /** First-seen metadata is bounded by retained sessions. */
+  trackedIdentities: number;
+  /** At most one first activity per retained session. */
+  retainedActivityTimestamps: number;
   counters: {
     observed: number;
     invalidTs: number;
@@ -174,6 +182,7 @@ export interface SeatOccupancySnapshot {
     evictedSessions: number;
     /** leave/activity events with no open session to attach to. */
     orphanEvents: number;
+    rejectedSessions: number;
   };
   notice: string;
 }
@@ -223,8 +232,8 @@ function requirePositiveMs(value: unknown, field: string): number {
 }
 
 function requireIdentity(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    fail(`${field} must be a non-empty string`);
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > 1024) {
+    fail(`${field} must be a non-empty string of at most 1024 characters`);
   }
   return value as string;
 }
@@ -255,16 +264,28 @@ export function createSeatOccupancySignal(
   const sessions: Session[] = [];
   const openByIdentity = new Map<string, Session>();
   const firstSeen = new Map<string, number>();
-  const counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0 };
+  const retainedByIdentity = new Map<string, number>();
+  const counters = { observed: 0, invalidTs: 0, evictedSessions: 0, orphanEvents: 0, rejectedSessions: 0 };
   let latestTs = -Infinity;
 
-  function evictClosed(): void {
-    while (sessions.length > maxSessions) {
+  function bump(name: keyof typeof counters): void {
+    counters[name] = Math.min(Number.MAX_SAFE_INTEGER, counters[name] + 1);
+  }
+
+  function makeRoom(): boolean {
+    while (sessions.length >= maxSessions) {
       const idx = sessions.findIndex((s) => s.leaveTs !== null);
-      if (idx === -1) return; // everything open; nothing safe to evict
+      if (idx === -1) return false;
+      const removed = sessions[idx] as Session;
       sessions.splice(idx, 1);
-      counters.evictedSessions++;
+      const remaining = (retainedByIdentity.get(removed.identity) ?? 1) - 1;
+      if (remaining === 0) {
+        retainedByIdentity.delete(removed.identity);
+        firstSeen.delete(removed.identity);
+      } else retainedByIdentity.set(removed.identity, remaining);
+      bump("evictedSessions");
     }
+    return true;
   }
 
   function observe(event: SeatOccupancyEvent): SeatOccupancyObservation {
@@ -274,20 +295,25 @@ export function createSeatOccupancySignal(
     }
     const identity = requireIdentity(event.identity, "event.identity");
     if (!isValidTs(event.ts)) {
-      counters.invalidTs++;
+      bump("invalidTs");
       return { status: "invalid_ts", counted: false };
     }
     if (event.accountCreatedTs !== undefined && !isValidTs(event.accountCreatedTs)) {
       fail("event.accountCreatedTs must be a finite timestamp within the representable range");
     }
-    counters.observed++;
-    if (event.ts > latestTs) latestTs = event.ts;
-    if (!firstSeen.has(identity) || event.ts < (firstSeen.get(identity) as number)) {
-      firstSeen.set(identity, event.ts);
-    }
+    bump("observed");
     if (event.type === "join") {
       const prior = openByIdentity.get(identity);
+      if (prior && event.ts < prior.joinTs) {
+        bump("orphanEvents");
+        return { status: "recorded", counted: false };
+      }
       if (prior && prior.leaveTs === null) prior.leaveTs = event.ts; // a re-join closes the prior session
+      if (!makeRoom()) {
+        bump("rejectedSessions");
+        return { status: "capacity_exceeded", counted: false };
+      }
+      if (!firstSeen.has(identity) || event.ts < (firstSeen.get(identity) as number)) firstSeen.set(identity, event.ts);
       const session: Session = {
         identity,
         joinTs: event.ts,
@@ -297,20 +323,30 @@ export function createSeatOccupancySignal(
       };
       sessions.push(session);
       openByIdentity.set(identity, session);
-      evictClosed();
+      retainedByIdentity.set(identity, (retainedByIdentity.get(identity) ?? 0) + 1);
     } else if (event.type === "leave") {
       const open = openByIdentity.get(identity);
-      if (open && open.leaveTs === null) {
+      if (open && open.leaveTs === null && event.ts >= open.joinTs) {
         open.leaveTs = event.ts;
         openByIdentity.delete(identity);
       } else {
-        counters.orphanEvents++;
+        bump("orphanEvents");
       }
     } else {
       const open = openByIdentity.get(identity);
-      if (open && open.leaveTs === null) open.activityTs.push(event.ts);
-      else counters.orphanEvents++;
+      if (open && open.leaveTs === null && event.ts > open.joinTs) {
+        // Keep the per-session list ascending even if the host feeds
+        // slightly out of order; the interval scan assumes it.
+        const list = open.activityTs;
+        let i = list.length;
+        while (i > 0 && (list[i - 1] as number) > event.ts) i--;
+        list.splice(i, 0, event.ts);
+        if (list.length > 1) list.length = 1;
+      } else {
+        bump("orphanEvents");
+      }
     }
+    if (event.ts > latestTs) latestTs = event.ts;
     return { status: "recorded", counted: true };
   }
 
@@ -322,14 +358,14 @@ export function createSeatOccupancySignal(
       if (s.joinTs > t) continue;
       if (s.leaveTs !== null && t >= s.leaveTs) continue;
       holders++;
-      if (s.joinTs - s.createdTs >= newnessWindowMs) continue;
+      if (s.createdTs > s.joinTs || s.joinTs - s.createdTs >= newnessWindowMs) continue;
       let active = false;
       for (const at of s.activityTs) {
         if (at > s.joinTs && at <= t) { active = true; break; }
       }
       if (!active) newIdle++;
     }
-    return { ratio: newIdle / capacity, newIdle, holders };
+    return { ratio: Math.min(1, newIdle / capacity), newIdle, holders };
   }
 
   function evaluate(evaluateOptions: SeatOccupancyEvaluateOptions = {}): SeatOccupancyResult {
@@ -346,6 +382,7 @@ export function createSeatOccupancySignal(
       return {
         kind: "seat-occupancy",
         flagged: false,
+        saturated: counters.rejectedSessions > 0,
         firstFlagTs: null,
         currentRatio: 0,
         newIdleSeats: 0,
@@ -389,8 +426,9 @@ export function createSeatOccupancySignal(
     const now = ratioAt(asOfTs);
     return {
       kind: "seat-occupancy",
-      flagged: firstFlagTs !== null,
-      firstFlagTs,
+      flagged: counters.rejectedSessions === 0 && firstFlagTs !== null,
+      saturated: counters.rejectedSessions > 0,
+      firstFlagTs: counters.rejectedSessions > 0 ? null : firstFlagTs,
       currentRatio: now.ratio,
       newIdleSeats: now.newIdle,
       holders: now.holders,
@@ -410,6 +448,9 @@ export function createSeatOccupancySignal(
       sustainMs,
       sessions: sessions.length,
       openSessions: openByIdentity.size,
+      saturated: counters.rejectedSessions > 0,
+      trackedIdentities: firstSeen.size,
+      retainedActivityTimestamps: sessions.reduce((n, s) => n + s.activityTs.length, 0),
       counters: { ...counters },
       notice: ADVISORY_NOTICE,
     };

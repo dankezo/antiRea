@@ -22,7 +22,7 @@ test('notice blocks non-http terms URL', () => {
 });
 
 test('zero-width Unicode roundtrip', () => {
-  const val = 'Quyền tác giả – Tiếng Việt 🎯';
+  const val = 'Quyền tác giả - Tiếng Việt 🎯';
   assert.equal(sdk.decodeZeroWidthSignature(sdk.encodeZeroWidthSignature(val)), val);
 });
 

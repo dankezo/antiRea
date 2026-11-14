@@ -22,7 +22,7 @@ there applies here unchanged.
   unclonable and does not stop a determined client.
 - An IP address or API key alone is **never proof of intent**. Identity
   (`account_id` / `api_key_id` / `tier`) must come from your authenticated
-  server session via `resolve_identity` — never from unverified client
+  server session via `resolve_identity` - never from unverified client
   headers. The demo app reads `x-demo-*` headers **only** as a stand-in so
   the example is easy to exercise; doing that in production would defeat the
   control.
@@ -37,10 +37,10 @@ there applies here unchanged.
 | `createQuotaGuard(options)` | `QuotaGuard(...)` / `create_quota_guard(...)` in `quota_guard/core.py` |
 | `createExpressQuotaMiddleware(options)` | `QuotaMiddleware` (Starlette `BaseHTTPMiddleware`) in `quota_guard/fastapi_integration.py` |
 | `req.quotaPagination` attached by the middleware | `request.state.quota_pagination`, read via `Depends(get_quota_pagination)` |
-| — (pagination as a route-level concern) | `PaginationParams` dependency: pagination bounds for routes not behind the middleware (consumes no request quota) |
+| - (pagination as a route-level concern) | `PaginationParams` dependency: pagination bounds for routes not behind the middleware (consumes no request quota) |
 | `QuotaWindowStore` (`peek`/`record`, sync or Promise) | `QuotaWindowStore` protocol in `quota_guard/stores.py` (sync or awaitable) |
 | `createInMemoryQuotaStore(maxEntries)` | `InMemoryQuotaStore(max_entries)` / `create_in_memory_quota_store(...)` |
-| Redis sorted-set store (described in the TS docstring) | `RedisQuotaStore` — duck-typed async client, one Lua script per operation |
+| Redis sorted-set store (described in the TS docstring) | `RedisQuotaStore` - duck-typed async client, one Lua script per operation |
 | `DEFAULT_QUOTA_TIERS` | `DEFAULT_QUOTA_TIERS` (identical values) |
 | `onQuotaExceeded` event | `on_quota_exceeded` callback (sync or async; its errors are swallowed) |
 | `resolveIdentity` | `resolve_identity` (sync or async) receiving a `QuotaRequest` |
@@ -125,7 +125,7 @@ async def records(pagination: QuotaPagination = Depends(get_quota_pagination)):
 
 Multi-instance deployments: share the window across processes with
 `RedisQuotaStore`, given any async redis client exposing redis-py's
-`eval(script, numkeys, *args)` shape — no redis package is imported by the
+`eval(script, numkeys, *args)` shape - no redis package is imported by the
 `quota_guard` package itself (redis-py appears only in the `[dev]` extra,
 for the real-Redis integration tests):
 
@@ -168,7 +168,7 @@ behavior-identical.
    each record uses a `"<now>:<uuid4hex>"` member (the in-memory stores
    append raw timestamps, duplicates included); keys are kept alive with
    `PEXPIRE` rather than deleted when a prune empties them; and there is no
-   `max_entries` key cap — Redis memory management is the operator's.
+   `max_entries` key cap - Redis memory management is the operator's.
 5. **Header containers**: mapping headers are scanned case-insensitively
    (the TS plain-object path); non-mapping header objects are queried via
    their own `get()` (the TS Fetch-`Headers` path).
@@ -195,20 +195,20 @@ behavior-identical.
 - The unit tests run the Redis store against an **in-memory fake** that
   emulates the sorted-set semantics of the two Lua scripts. A separate
   **real-Redis integration suite** (`tests/test_redis_integration.py`) does
-  run the store against an actual server — the real Lua scripting engine,
+  run the store against an actual server - the real Lua scripting engine,
   real pruning, real `PEXPIRE` TTLs, plus guard enforcement and
-  per-identity isolation backed by Redis — and runs in CI
+  per-identity isolation backed by Redis - and runs in CI
   (`.github/workflows/python.yml`) against a `redis:7` service container.
   It is opt-in locally: the module skips unless `REDIS_URL` is set (point
   it at a dedicated logical DB; the suite FLUSHDBs it). Still **not**
   covered: Redis failure modes (disconnects, timeouts, failover),
-  Cluster/Sentinel topologies, and persistence behavior — the guard lets
+  Cluster/Sentinel topologies, and persistence behavior - the guard lets
   store exceptions propagate, as does the TS version.
 - Tests do **not** cover: real concurrency/load behavior or race windows;
   multiple Uvicorn workers; a FastAPI/Starlette version matrix (developed
   against FastAPI 0.162 / Starlette 1.10); automated TS↔Python differential
   fuzzing (parity is pinned by the ported scenarios, not by random inputs);
-  or any browser/REA observation claim — this is a server-side control, and
+  or any browser/REA observation claim - this is a server-side control, and
   per the repo rules no Playwright result would be REA data anyway.
 - `uvicorn` is not a dependency of this example; the demo's import is
   tested, its live serving is not part of the test suite.

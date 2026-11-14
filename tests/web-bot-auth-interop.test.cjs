@@ -1,13 +1,13 @@
 /**
  * Interoperability tests for the Web Bot Auth verifier
  * (`src/tier2-active/web-bot-auth.ts`) against material produced by the
- * REFERENCE implementation — not by this repo's own test signer:
+ * REFERENCE implementation - not by this repo's own test signer:
  *
  *  1. The official test vectors of cloudflare/web-bot-auth, vendored
  *     unmodified at `tests/fixtures/web_bot_auth_architecture_v1.json`
  *     (provenance: `tests/fixtures/README.md`).
  *  2. The Ed25519 test vector printed in Appendix E.2.1 of
- *     draft-ietf-webbotauth-httpsig-protocol-00 — the exact profile this
+ *     draft-ietf-webbotauth-httpsig-protocol-00 - the exact profile this
  *     verifier implements.
  *
  * Runtime cross-signing against the reference implementation's signer and
@@ -16,7 +16,7 @@
  * workflow; this file is the offline, deterministic half.
  *
  * ------------------------------------------------------------------------
- * DIVERGENCE LEDGER — read before "fixing" anything here.
+ * DIVERGENCE LEDGER - read before "fixing" anything here.
  *
  * The vendored vectors were generated for the earlier
  * draft-meunier-web-bot-auth-architecture profile. This verifier implements
@@ -37,20 +37,20 @@
  *    (`Signature-Agent: "https://signature-agent.test"`) with whole-field
  *    coverage. -00 §5.2.1 makes the Dictionary form mandatory for signers
  *    and says a verifier MAY accept the legacy form. Decision (Danny,
- *    2026-11-01): accept BOTH forms — the draft mandates the dictionary
+ *    2026-11-01): accept BOTH forms - the draft mandates the dictionary
  *    form, but Cloudflare's production verifier still requires the bare
  *    string and production signers send it deliberately, so a
  *    dictionary-only verifier would reject the deployed ecosystem. The
  *    legacy form is accepted as deprecated compatibility under a
  *    fail-closed guardrail (exactly one signature may cover the field;
  *    whole-field component only, no `;key` binding) and the verdict
- *    reports `agentForm: "legacy"`. The tests below pin the acceptance —
- *    and its tamper / ambiguity / `;key` edges — so the behavior cannot
+ *    reports `agentForm: "legacy"`. The tests below pin the acceptance -
+ *    and its tamper / ambiguity / `;key` edges - so the behavior cannot
  *    drift silently. Revisit when the draft becomes an RFC or Cloudflare
  *    flips its production verifier to the dictionary form.
  *
  * The draft's own Appendix E.2.1 vector (dictionary form, member coverage)
- * verifies cleanly — see the last test.
+ * verifies cleanly - see the last test.
  * ------------------------------------------------------------------------
  */
 const { test } = require('node:test');
@@ -136,7 +136,7 @@ for (const vector of vectors.filter(v => v.key.kty === 'RSA')) {
 const ed25519Sig1 = vectors.find(v => v.key.kty === 'OKP' && v.label === 'sig1');
 const ed25519Sig2 = vectors.find(v => v.key.kty === 'OKP' && v.label === 'sig2');
 
-test('DIVERGENCE (profile): architecture-v1 Ed25519 sig1 — valid RFC 9421 signature, rejected for missing Signature-Agent', async () => {
+test('DIVERGENCE (profile): architecture-v1 Ed25519 sig1 - valid RFC 9421 signature, rejected for missing Signature-Agent', async () => {
   // The reference signature itself is sound: "@authority" is the only
   // covered component, and the base below is all there is to check.
   assert.equal(rawRfc9421Verify(ed25519Sig1, ['"@authority": example.com']), true);
@@ -149,7 +149,7 @@ test('DIVERGENCE (profile): architecture-v1 Ed25519 sig1 — valid RFC 9421 sign
   assert.equal(verdict.reason, 'no_signature_agent');
 });
 
-test('COMPAT (legacy form): architecture-v1 Ed25519 sig2 — valid RFC 9421 signature, verified via legacy bare-string Signature-Agent acceptance', async () => {
+test('COMPAT (legacy form): architecture-v1 Ed25519 sig2 - valid RFC 9421 signature, verified via legacy bare-string Signature-Agent acceptance', async () => {
   // Legacy whole-field form: the covered component value is the raw field
   // value (a bare sf-string), and over that base the signature is sound.
   assert.equal(
@@ -163,7 +163,7 @@ test('COMPAT (legacy form): architecture-v1 Ed25519 sig2 — valid RFC 9421 sign
   // Dual-form acceptance (decision: Danny, 2026-11-01): the draft
   // mandates the dictionary form for signers, but Cloudflare's production
   // verifier requires this bare-string form and production signers send
-  // it deliberately, so the verifier accepts it under the §5.2.1 MAY —
+  // it deliberately, so the verifier accepts it under the §5.2.1 MAY -
   // bound to the single covering signature via the whole-field component,
   // and reported on the verdict as agentForm "legacy" so operators can
   // watch remaining legacy usage.
@@ -177,7 +177,7 @@ test('COMPAT (legacy form): architecture-v1 Ed25519 sig2 — valid RFC 9421 sign
 
 test('COMPAT (legacy form): tampered legacy agent URL fails as invalid_signature', async () => {
   // The agent URL is inside the signature base, so swapping the header
-  // value for an attacker's URL must break Ed25519 verification — the
+  // value for an attacker's URL must break Ed25519 verification - the
   // legacy acceptance never detaches identity from the signature.
   const req = mockReq({
     url: ed25519Sig2.target_url,
@@ -215,7 +215,7 @@ test('COMPAT (legacy form): ambiguous multi-signature coverage is rejected as ma
 
 test('COMPAT (legacy form): dictionary-member coverage (`;key`) over a legacy header is rejected as malformed_headers', async () => {
   // A `;key` component selects a dictionary member; a bare-string header
-  // has no members, so there is nothing to bind — fail closed.
+  // has no members, so there is nothing to bind - fail closed.
   const params = ed25519Sig2.signature_input.slice(ed25519Sig2.label.length + 1); // strip "sig2="
   const keyedParams = params.replace('"signature-agent"', '"signature-agent";key="agent"');
   assert.notEqual(keyedParams, params); // the rewrite actually happened

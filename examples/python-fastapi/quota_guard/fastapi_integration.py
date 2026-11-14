@@ -2,15 +2,15 @@
 
 Counterpart of the TS ``createExpressQuotaMiddleware``:
 
-- :class:`QuotaMiddleware` — Starlette ``BaseHTTPMiddleware``. Runs the guard
+- :class:`QuotaMiddleware` - Starlette ``BaseHTTPMiddleware``. Runs the guard
   for every request; on success it stores the sanitized pagination on
   ``request.state.quota_pagination`` (and the full result on
   ``request.state.quota_result``), merges the rate-limit headers into the
   response and calls the next handler; on rejection it responds ``429`` with
   ``Retry-After`` and the guard's JSON error body.
-- :func:`get_quota_pagination` — FastAPI dependency returning the pagination
+- :func:`get_quota_pagination` - FastAPI dependency returning the pagination
   the middleware computed for this request.
-- :class:`PaginationParams` — FastAPI dependency for routes that are NOT
+- :class:`PaginationParams` - FastAPI dependency for routes that are NOT
   behind the middleware: it enforces pagination bounds only (no request quota
   is consumed). When the middleware did run, it simply reuses its result.
 
@@ -79,7 +79,7 @@ def get_quota_pagination(request: Request) -> QuotaPagination:
     """FastAPI dependency: the pagination sanitized by :class:`QuotaMiddleware`.
 
     Usage: ``pagination: QuotaPagination = Depends(get_quota_pagination)``.
-    Raises ``RuntimeError`` when the middleware did not run for this request —
+    Raises ``RuntimeError`` when the middleware did not run for this request -
     use :class:`PaginationParams` instead for routes outside the middleware.
     """
     pagination = getattr(request.state, "quota_pagination", None)

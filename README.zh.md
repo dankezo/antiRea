@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
 </p>
 
 <p align="center">
@@ -160,7 +160,20 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 
 ## 最新版本
 
+### v2.9.2 - 审计与加固
+
+精确比较 token、限制遥测状态、修正乱序事件的 ownership 窗口、为无效会话返回有限数值，并安全处理带环的字段结构。所有后果仍由主机决定，运行时依赖仍为零。
+
+本次 Windows 本地审计运行 963 项测试：960 项通过、0 项失败、3 项跳过（两个 RSA-PSS 向量和一个缺少符号链接权限的用例）。下方历史实验室数字保留原始适用范围；缺失生成器的项目明确标为 NOT VERIFIED。
+
+[2.9.2 deep dive](docs/v2.9.2-deep-dive.zh.md) | [Audit measurements](docs/audit-2.9.2.json)
+
 ### v2.9.1：402 形式的 step-up 答复，与五个实验室毕业模块
+
+[2.9.1 deep dive](docs/v2.9.1-deep-dive.zh.md)
+
+> volume-rank 实验室分层来自生成器成分，SDK 则按观测流量分组。重跑在 kappa 1000 时得到 HIGH 层 1/115 个误报，因此历史 0.007 并非 SDK 重新分组后的通用上限。
+
 
 - **问题：** step-up 挑战只是叫机器调用方停下，却没有给它任何可机器
   读取的行动依据；同时研究实验室还有五个毕业成果一直没有建成，其
@@ -188,7 +201,7 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
   双分量 EB05 分数排进全部单元格的前 5% 时，该身份被标记（前
   10% 仅描述性报告）。实验室实测（RECOMB-04，PASS-lab）：MID
   层 walker 检出在 kappa 100 / 300 / 1000 时为 0.90 / 0.85 /
-  0.85，每个至少含 20 个合法身份的分层中合法误报至多 0.007；
+  0.85；纳入门限的 kappa 100/300/1000 上，每个至少含 20 个合法身份的分层中合法误报至多 0.007；
   检出只在 MID 层测得，因为所有 walker 都活在那里。
 - **新工具 `selectEmpMixThreshold`：** 用于聚类阈值选择的经验混
   合校准规则：在 50/50 校准集（零假设置换加平坦经验森林）上读
@@ -219,14 +232,14 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 - **问题：** 预算限制的是一个身份能拿走多少，而不是一个响应能携带什么。
   现实中反复出现的泄露正是一个过宽的负载：个人资料或搜索响应顺带带出
   密码哈希、身份证号和银行账号（Spoutible 2024、eHUST 学生数据泄露、
-  Power Apps 2021）。入站方向的镜像问题是批量赋值——一次写入仅仅因为
+  Power Apps 2021）。入站方向的镜像问题是批量赋值--一次写入仅仅因为
   调用方提交了 `role` 或 `owner_id` 就把它们绑定了。
 - **新模块 `createSurfaceGuard`：** 按内置的敏感/特权字段 denylist 加上
   你按路由声明的 allowlist，双向检查 JSON 负载。默认仅咨询；只有你
   明确要求时才 strip 或 block。在带种子语料上测量：2,000 个合法响应
   与 2,000 个合法请求误报为 0；注入的敏感字段捕获 1,194 / 1,194，
   注入的特权字段捕获 918 / 918。
-- **新模式——已声明 cohort 的联合预算：** 15 秒内掏空测试靶场的那次
+- **新模式--已声明 cohort 的联合预算：** 15 秒内掏空测试靶场的那次
   herd 突发有了成文的答案：一个以主机声明的 cohort id 为键的记录
   预算，使已声明 cohort 内部的身份轮换不再稀释上限（可运行示例，
   附验证：[examples/declared-cohort-budget](examples/declared-cohort-budget)）。
@@ -332,8 +345,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-在本仓库本身上工作：`npm run check` 会编译代码、运行 **890 个自动化
-测试**（888 个通过，2 个 RSA-PSS 向量被跳过），并执行静态检查。在部署
+在本仓库本身上工作：`npm run check` 会编译代码、运行 **963 个自动化
+测试**（960 个通过，Windows 跳过两个 RSA-PSS 向量和一个符号链接权限用例），并执行静态检查。在部署
 前扫描公开构建：`node scripts/run-audit.cjs /path/to/dist` 或
 `python3 scripts/verify-build.py /path/to/dist`。
 
@@ -358,6 +371,8 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 - [证据](docs/EVIDENCE.zh.md)：完整的实测结果和方法
 - [法律与隐私说明](docs/LEGAL_PRIVACY.md)
 - 深入解析：[v2.9.0](docs/v2.9.0-deep-dive.zh.md) - [v2.8.1](docs/v2.8.1-deep-dive.zh.md) - [v2.8.0](docs/v2.8.0-deep-dive.zh.md)
+- [v2.9.1 deep dive](docs/v2.9.1-deep-dive.zh.md)
+- [v2.9.2 deep dive](docs/v2.9.2-deep-dive.zh.md)
 - [更新日志](CHANGELOG.md)
 
 ## 贡献与安全

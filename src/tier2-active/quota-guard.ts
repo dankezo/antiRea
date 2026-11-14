@@ -14,7 +14,7 @@
  * every instance enforces the same window.
  *
  * The default store fails closed: it evicts only EXPIRED windows, and when it
- * is still full it refuses to open a new window — the guard then rejects the
+ * is still full it refuses to open a new window - the guard then rejects the
  * request (429, kind `store_capacity_exceeded`) instead of silently dropping
  * an unexpired window and weakening the quota guarantee under load.
  *
@@ -35,7 +35,7 @@
  * returns, so the deployment can see which guarantee it actually has.
  *
  * A request whose identity cannot be resolved at all (no account, no API key
- * and no determinable IP — for example a misnamed `trustedIpHeader` behind a
+ * and no determinable IP - for example a misnamed `trustedIpHeader` behind a
  * proxy) is NOT exempt: by default it is counted against a single shared
  * `unknown` bucket with the tier's normal limits. Set
  * `allowUnresolvedIdentity: true` only to restore the legacy skip behavior.
@@ -45,7 +45,7 @@
  * middleware) instead of re-reading raw query parameters. Backends diverge on
  * duplicate parameters (first vs last value), array forms, `Number()` vs
  * `parseInt` semantics (`1e9`, `0x…`), `page` combined with `offset`, and
- * differently cased names — a handler that re-parses the raw query can serve
+ * differently cased names - a handler that re-parses the raw query can serve
  * a different page than the one the guard validated.
  */
 
@@ -203,7 +203,7 @@ export interface QuotaGuardOptions {
   trustedIpHeader?: string;
   /**
    * Resolve the authenticated identity for a request. Populate `accountId` /
-   * `apiKeyId` from your server auth middleware — never from unverified
+   * `apiKeyId` from your server auth middleware - never from unverified
    * client-supplied headers.
    */
   resolveIdentity?: (
@@ -248,7 +248,7 @@ export const DEFAULT_QUOTA_TIERS: Record<string, QuotaTierConfig> = {
 
 /**
  * Bounded in-memory sliding-window store: expired timestamps are pruned on
- * every access and the key set is capped. The cap fails closed — only expired
+ * every access and the key set is capped. The cap fails closed - only expired
  * windows are ever evicted; when the store is still full, `record` returns
  * `false` for a NEW window and the guard rejects the request instead of the
  * store silently dropping live accounting.

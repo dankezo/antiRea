@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const sdk = require('../dist/index.js');
 
 /* ------------------------------------------------------------------ */
-/* F-19 — evidence-attribution: `pairs` map must be bounded (LRU cap)  */
+/* F-19 - evidence-attribution: `pairs` map must be bounded (LRU cap)  */
 /* ------------------------------------------------------------------ */
 
 test('F-19: pairs state is bounded at the default cap (1024); oldest pairs are evicted, newest keep working', () => {
@@ -58,7 +58,7 @@ test('F-19: re-writing a pair refreshes its LRU position (active pairs are evict
 });
 
 /* ------------------------------------------------------------------ */
-/* F-20 (flow-scorer) — a throwing `isExempt` is treated as not exempt */
+/* F-20 (flow-scorer) - a throwing `isExempt` is treated as not exempt */
 /* ------------------------------------------------------------------ */
 
 test('F-20: isExempt throwing in observe() does not escape; the session is scored as not exempt', () => {

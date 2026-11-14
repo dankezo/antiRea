@@ -97,14 +97,16 @@ test("s_type: keydown-typed fields count 0, a programmatically filled field coun
   assert.equal(filled.sType, 1);
 });
 
-test("bad key pairing yields NaN keyHoldStd (runner semantics)", () => {
+test("bad key pairing is explicitly invalid and has finite keyHoldStd", () => {
   const ev = [
     { type: "keydown", t: 0, targetId: "f-name" },
     { type: "keydown", t: 100, targetId: "f-name" },
     { type: "keyup", t: 150, targetId: "f-name" },
   ];
   const f = computeHoldTypeFeatures(ev, CONFIG);
-  assert.ok(Number.isNaN(f.keyHoldStd));
+  assert.equal(f.keyHoldStd, 0);
+  assert.equal(f.valid, false);
+  assert.ok(f.invalidReasons.includes("key_pair"));
 });
 
 test("scorer signs: lower-than-reference clickDurationStd gives a positive z", () => {

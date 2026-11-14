@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
 </p>
 
 <p align="center">
@@ -174,7 +174,20 @@ in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
 
+### v2.9.2 - Kiểm định và gia cố
+
+So khớp token chính xác, giới hạn trạng thái telemetry, sửa cửa sổ ownership với sự kiện đến muộn, trả đặc trưng hữu hạn cho phiên không hợp lệ và quét payload có chu trình an toàn. Host vẫn quyết định hậu quả; không thêm dependency lúc chạy.
+
+Kiểm định trên Windows chạy 963 test: 960 đạt, không lỗi, 3 bỏ qua (hai vector RSA-PSS và một ca thiếu quyền tạo symlink). Số lab lịch sử dưới đây giữ phạm vi gốc; phần thiếu bộ sinh được ghi NOT VERIFIED trong báo cáo.
+
+[2.9.2 deep dive](docs/v2.9.2-deep-dive.vi.md) | [Audit measurements](docs/audit-2.9.2.json)
+
 ### v2.9.1 - đáp án step-up bằng 402, và năm module tốt nghiệp từ lab
+
+[2.9.1 deep dive](docs/v2.9.1-deep-dive.vi.md)
+
+> Phân tầng lab volume-rank là thành phần của bộ sinh. SDK phân tầng theo lượng truy cập: chạy lại ghi nhận 1/115 cờ sai ở HIGH, kappa 1000, nên mức 0,007 lịch sử không phải trần chung cho cách phân nhóm của SDK.
+
 
 - **Vấn đề:** một thử thách step-up bảo một caller máy dừng
   lại nhưng không trao cho nó thứ gì đọc được bằng máy để
@@ -213,7 +226,7 @@ in-process, trong chính ứng dụng của bạn.
   thành phần (top 10% được báo ở mức mô tả). Đo trong lab
   (RECOMB-04, PASS-lab): phát hiện walker ở tầng MID
   0,90 / 0,85 / 0,85 tại kappa 100 / 300 / 1000, FP hợp
-  lệ tối đa 0,007 ở mọi tầng có ít nhất 20 danh tính hợp
+  lệ tối đa 0,007 tại kappa có cổng 100/300/1000 ở mọi tầng có ít nhất 20 danh tính hợp
   lệ; phát hiện chỉ được đo ở tầng MID, nơi mọi walker
   sinh sống.
 - **Công cụ mới - `selectEmpMixThreshold`:** luật hiệu
@@ -391,8 +404,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **890
-test tự động** (888 đạt, 2 bị bỏ qua là vector RSA-PSS) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **963
+test tự động** (960 đạt, 3 bỏ qua trên Windows: hai vector RSA-PSS và một ca thiếu quyền symlink) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.
@@ -421,6 +434,8 @@ Email **dannyphan190@gmail.com**.
 - [Bằng chứng](docs/EVIDENCE.vi.md) - toàn bộ kết quả đã đo và phương pháp
 - [Ghi chú pháp lý và quyền riêng tư](docs/LEGAL_PRIVACY.md)
 - Tìm hiểu sâu: [v2.9.0](docs/v2.9.0-deep-dive.vi.md) - [v2.8.1](docs/v2.8.1-deep-dive.vi.md) - [v2.8.0](docs/v2.8.0-deep-dive.vi.md)
+- [v2.9.1 deep dive](docs/v2.9.1-deep-dive.vi.md)
+- [v2.9.2 deep dive](docs/v2.9.2-deep-dive.vi.md)
 - [Changelog](CHANGELOG.md)
 
 ## Đóng góp và bảo mật

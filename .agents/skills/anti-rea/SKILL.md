@@ -4,24 +4,24 @@ description: Audit and responsibly harden web apps against data scraping, unauth
 license: MIT
 ---
 
-# antiRea — evidence-led web hardening skill
+# antiRea - evidence-led web hardening skill
 
 Read `docs/LIMITATIONS.md`, `docs/THREAT_MODEL_REA.md` and `docs/SERVER_SIDE_CONTROLS.md` first. This skill does NOT make sites unclonable or block `morluto/rea`.
 
-## Stage 1 — scope and consent
+## Stage 1 - scope and consent
 
 1. Confirm target project is owned/authorized by user; inspect framework, built assets, API routes, authn/authz and threat surface.
 2. Classify sensitive assets: server secrets, customer data, private formulas, third-party data and content rights.
 3. List what an authenticated user can legitimately see; assume it can be copied or screenshotted.
 
-## Stage 2 — highest-value repairs (P0)
+## Stage 2 - highest-value repairs (P0)
 
 1. Move proprietary logic, prompts and secrets into server-only modules.
 2. Test object-level and field-level authorization server-side, not only hidden UI elements.
 3. Add rate limits/quotas (`createQuotaGuard`), export caps, pagination limits (`maxPageSize`, `maxPage`), minimal response fields and access logs.
 4. Protect source maps/production artifacts without interfering with developer or accessibility tools.
 
-## Stage 3 — optional instrumentation, informed by risk
+## Stage 3 - optional instrumentation, informed by risk
 
 - Tier 1: disable public production source maps in framework config; optional `injectAgentNotice`, `signSvgPath` fragile provenance markers. Explain weak evidence value.
 - Tier 2: `createQuotaGuard` for per-account/API-key/IP rate limits and pagination caps; `createRecordBudget` for the coverage dimension quotas cannot express - a per-identity ceiling on DISTINCT records received per window, with `createExportGuard` rejecting dataset-scale exports before the handler runs and charging allowed exports against the budget at a multiplier, and `mintCursor`/`verifyCursor` for session-chained pagination that rejects skip-ahead, cross-session and stale replay; `createWebBotAuthVerifier` for RFC 9421 Web Bot Auth signature verification (a verified signature identifies a key holder for the covered request; it is not authorization and never a reason to skip quota or authz checks); `handleCanaryTrapRequest` (with `normalizeCanaryPath`) on deliberately unused server routes with trusted-session resolver; alert for investigation, do not auto-ban. `createCanaryMaze` (opt-in, disabled by default) serves a deterministic link maze under a robots-Disallow prefix with hard per-IP and daily caps; hits alert for investigation only - it taxes and detects bulk link-followers and never stops a client that calls real endpoints directly. `createDecoyMirage` (opt-in) answers the same unused routes with deterministic synthetic documents instead of 404, under its strict safety subset (unused routes only, inert content, never mixed into real responses). `createFlowScorer` is log-only workflow-sequence telemetry (boundary probes, post-429 persistence, coverage streaks, export bursts, canary/decoy contact) with a verified-bot `isExempt` lane; it never blocks, and its opt-in `onTaint` callback is the only sanctioned bridge from scoring to enforcement - the host may tighten a tainted identity's record budget via `setOverride`. `createHerdDetector` correlates ACROSS identities (signup chaining per IP plus coverage-complement linking) to catch sybil herds that dilute per-identity budgets by rotation; since 2.5.0 the complement linking is leader-based (an identity's coverage group is compared against other groups' aggregate bitmaps/sets, no per-pair state) and a flagged group RE-ANNOUNCES itself with a supplementary flag when a late joiner or a pending partial contributor crosses the materiality floor (1/12 of the flag floor), so a flag snapshot is no longer limited to whoever was present and material at first crossing; it flags groups via `onFlag` with a response band, and `applyHerdLadder` lowers flagged members' budgets only for the high-tiling herd partition profile - low-tiling flags (the legitimate systematic-review profile) are refused in code and route to graduated response instead. Canary-echo ids (`mintEchoId` / `verifyEchoId` / `resolveEchoFrom`, plus the `mintEchoRecord` and `canaryEchoLink` embedding helpers) are signed synthetic reference ids minted FOR one identity: when a different identity presents one back, the host feeds `resolveEchoFrom`'s result into the CUSUM tripwire as `CusumEvent.echoFrom` and the two identities merge into one cohort - unforgeable without the server secret, unguessable in bulk (random nonce per mint), and inert for a client that only uses its own surface. Every record-serving surface, including server-rendered HTML, must feed it events and consume budget, or it is a silent bypass of both layers. `detectAutomationSignals` (legacy alias `initCdpGuard`) optional low-confidence telemetry only.
@@ -31,7 +31,7 @@ Read `docs/LIMITATIONS.md`, `docs/THREAT_MODEL_REA.md` and `docs/SERVER_SIDE_CON
 - Tier 3: `encryptPayload`/`decryptPayload` with `createInMemoryReplayGuard` (or Redis `SET NX PX`) require CryptoKey and atomic replay store; use for independent trust boundaries and never claim a browser-held key is secret. Do not replace HTTPS.
 - Tier 4: `mountForensicWatermark` with opaque server-issued rotating token; post privacy notice and define audit-ledger retention. `BehaviorShield` is opt-in telemetry, not license to degrade users.
 
-## Stage 4 — testing and reporting
+## Stage 4 - testing and reporting
 
 1. Run `npm run check` locally and relevant framework build tests.
 2. Inspect public bundles for source-map leakage (`scripts/verify-build.py` or `node scripts/run-audit.cjs <dir>`) and test backend APIs for BOLA/field exposure and quotas.

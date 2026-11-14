@@ -90,8 +90,8 @@ function checkSamples(name: string, samples: readonly number[]): void {
     throw new RangeError(name + " must contain at least one sample");
   }
   for (const v of samples) {
-    if (!Number.isFinite(v)) {
-      throw new RangeError(name + " contains a non-finite FMR value");
+    if (!Number.isFinite(v) || v < 0 || v > 1) {
+      throw new RangeError(name + " must contain finite FMR values in [0, 1]");
     }
   }
 }
@@ -106,13 +106,16 @@ export function mixedFmrAt(nullSamples: readonly number[], flatSamples: readonly
   if (nullSamples.length + flatSamples.length === 0) {
     throw new RangeError("mixedFmrAt needs at least one sample across both components");
   }
+  if (nullSamples.length + flatSamples.length > 100_000) {
+    throw new RangeError("mixedFmrAt accepts at most 100000 samples");
+  }
   let sum = 0;
   for (const v of nullSamples) {
-    if (!Number.isFinite(v)) throw new RangeError("nullSamples contains a non-finite FMR value");
+    if (!Number.isFinite(v) || v < 0 || v > 1) throw new RangeError("nullSamples FMR must be in [0, 1]");
     sum += v;
   }
   for (const v of flatSamples) {
-    if (!Number.isFinite(v)) throw new RangeError("flatSamples contains a non-finite FMR value");
+    if (!Number.isFinite(v) || v < 0 || v > 1) throw new RangeError("flatSamples FMR must be in [0, 1]");
     sum += v;
   }
   return sum / (nullSamples.length + flatSamples.length);
@@ -132,6 +135,7 @@ export function selectEmpMixThreshold(input: EmpMixInput): EmpMixResult {
   if (grid.length === 0) {
     throw new RangeError("grid must be non-empty");
   }
+  if (grid.length > 10_000) throw new RangeError("grid accepts at most 10000 points");
   if (input.nullFmr.length !== grid.length) {
     throw new RangeError(
       "nullFmr is misaligned with grid: " + input.nullFmr.length + " entries for " + grid.length + " grid points",
@@ -142,8 +146,14 @@ export function selectEmpMixThreshold(input: EmpMixInput): EmpMixResult {
       "flatFmr is misaligned with grid: " + input.flatFmr.length + " entries for " + grid.length + " grid points",
     );
   }
-  if (!Number.isFinite(target) || target < 0) {
-    throw new RangeError("targetFmr must be a finite number >= 0, got " + target);
+  if (!Number.isFinite(target) || target < 0 || target > 1) {
+    throw new RangeError("targetFmr must be a finite number in [0, 1], got " + target);
+  }
+
+  let sampleCount = 0;
+  for (let i = 0; i < grid.length; i++) {
+    sampleCount += input.nullFmr[i]!.length + input.flatFmr[i]!.length;
+    if (sampleCount > 100_000) throw new RangeError("calibration accepts at most 100000 samples");
   }
 
   const mixedFmr: number[] = [];

@@ -51,13 +51,13 @@
  *    NaN otherwise. The library pairs however many task-targeted
  *    downs/ups the host's own task set produces, keeping the runner's
  *    validity semantics: unequal down/up counts, or any negative
- *    paired duration, make clickDurationStd NaN (the runner's
- *    missingPair outcome). One valid pair gives SD 0, as in the
+ *    paired duration, make the session invalid. Invalid numeric
+ *    features are reported as finite zeros with valid=false. One valid pair gives SD 0, as in the
  *    runner's durations.length >= 2 ? popSD : 0 branch.
  * 3. Key-pair validity: on a bad pairing (unequal keydown/keyup
  *    counts or a negative hold) the runner still averaged the partial
  *    holds collected before the bad pair into keyHoldMean - a harness
- *    artifact. The library reports keyHoldStd NaN (as the runner) and
+ *    artifact. The library reports keyHoldStd 0 with valid=false and
  *    keyHoldMean 0 (no trustworthy holds).
  * 4. sType inputs: the runner read final field values off the page
  *    and counted keydown events per field id itself. The library
@@ -65,11 +65,10 @@
  *    the per-field rule itself is verbatim.
  * 5. Empty session: the runner assumed a non-empty recorded session.
  *    The library returns zeroed features with sessionSeconds 0 for an
- *    empty event list instead of throwing. A non-empty session whose
- *    span is 0 keeps the runner's arithmetic (rate = count / 0), so a
- *    non-finite mouseEventRate remains possible and means exactly
- *    what it meant in the lab: an invalid session, to be excluded
- *    from scoring, not scored.
+ *    empty event list instead of throwing. Zero-span or malformed
+ *    sessions are explicitly invalid, have finite numeric fields,
+ *    and are neutralized by the scorer. Valid lab sessions retain
+ *    the frozen arithmetic exactly.
  * 6. Names: camelCase here, snake_case in the runner; the five
  *    features, signs and composites are the same.
  *
@@ -143,7 +142,7 @@ export interface HoldTypeFeatureValues {
 export interface HoldTypeDescriptive {
   keyHoldMean: number;
   interKeyMean: number;
-  /** Mean task-click hold duration; NaN when there is no valid pair (runner semantics). */
+  /** Mean task-click hold duration; 0 when there is no valid pair. */
   clickHoldMean: number;
   nKeydown: number;
   nEvents: number;
@@ -151,6 +150,9 @@ export interface HoldTypeDescriptive {
 }
 
 export interface HoldTypeFeatures extends HoldTypeFeatureValues {
+  /** False for malformed or insufficient timing data; never use invalid sessions as evidence. */
+  valid: boolean;
+  invalidReasons: string[];
   descriptive: HoldTypeDescriptive;
 }
 
@@ -160,6 +162,8 @@ export interface HoldTypeReference {
 }
 
 export interface HoldTypeScore {
+  /** Invalid features or arithmetic overflow produce a neutral score with valid=false. */
+  valid: boolean;
   set2Score: number;
   typeScore: number;
   composite: number;
@@ -201,19 +205,42 @@ export function computeHoldTypeFeatures(
   events: readonly HoldTypeEvent[],
   config: HoldTypeConfig,
 ): HoldTypeFeatures {
+  if (!Array.isArray(events) || events.length > 100_000) {
+    throw new RangeError("computeHoldTypeFeatures: events must be an array of at most 100000 entries");
+  }
+  if (!config || !Array.isArray(config.taskClickIds) || !Array.isArray(config.fields) ||
+      config.taskClickIds.length > 10_000 || config.fields.length > 10_000) {
+    throw new RangeError("computeHoldTypeFeatures: taskClickIds and fields must be arrays of at most 10000 entries");
+  }
+  const invalidReasons: string[] = [];
+  const invalid = (reason: string): void => { if (!invalidReasons.includes(reason)) invalidReasons.push(reason); };
+  events = events.filter((e) => {
+    const accepted = e !== null && typeof e === "object" && typeof e.type === "string" &&
+      typeof e.t === "number" && Number.isFinite(e.t) && Math.abs(e.t) <= 8.64e15;
+    if (!accepted) invalid("invalid_event");
+    return accepted;
+  });
+  const fields = config.fields.filter((f) => {
+    const accepted = f !== null && typeof f === "object" && Number.isSafeInteger(f.finalLength) &&
+      f.finalLength >= 0 && Number.isSafeInteger(f.keydownCount) && f.keydownCount >= 0;
+    if (!accepted) invalid("invalid_field");
+    return accepted;
+  });
   const taskIds = new Set(config.taskClickIds);
 
   if (events.length === 0) {
     return {
+      valid: false,
+      invalidReasons: [...invalidReasons, "empty_session"],
       mouseEventRate: 0,
       clickDurationStd: 0,
       keyHoldStd: 0,
       interKeyStd: 0,
-      sType: sTypeOf(config.fields),
+      sType: sTypeOf(fields),
       descriptive: {
         keyHoldMean: 0,
         interKeyMean: 0,
-        clickHoldMean: NaN,
+        clickHoldMean: 0,
         nKeydown: 0,
         nEvents: 0,
         sessionSeconds: 0,
@@ -232,11 +259,13 @@ export function computeHoldTypeFeatures(
     if (e.type === "pointermove") nPointermove++;
   }
   const sessionSeconds = (maxT - minT) / 1000;
-  const mouseEventRate = nPointermove / sessionSeconds;
+  const rawMouseEventRate = nPointermove / sessionSeconds;
+  if (!(sessionSeconds > 0)) invalid("zero_span");
+  if (!Number.isFinite(rawMouseEventRate)) invalid("non_finite_rate");
+  const mouseEventRate = Number.isFinite(rawMouseEventRate) ? rawMouseEventRate : 0;
 
   // click_duration_std: task-targeted downs/ups only, zipped in event
-  // order. Unequal counts or a negative duration -> NaN (runner's
-  // missingPair outcome; see adaptation 2 in the header).
+  // order. Unequal counts or a negative duration invalidate the session.
   const downs = events.filter((e) => e.type === "mousedown" && e.targetId !== undefined && taskIds.has(e.targetId));
   const ups = events.filter((e) => e.type === "mouseup" && e.targetId !== undefined && taskIds.has(e.targetId));
   let clickBad = downs.length !== ups.length;
@@ -251,11 +280,12 @@ export function computeHoldTypeFeatures(
       durations.push(d);
     }
   }
-  const clickDurationStd = clickBad ? NaN : durations.length >= 2 ? popSD(durations) : 0;
-  const clickHoldMean = clickBad || durations.length === 0 ? NaN : meanOf(durations);
+  if (clickBad) invalid("click_pair");
+  const clickDurationStd = clickBad ? 0 : durations.length >= 2 ? popSD(durations) : 0;
+  const clickHoldMean = clickBad || durations.length === 0 ? 0 : meanOf(durations);
 
   // key_hold_std: keydown/keyup zipped in event order. Bad pairing ->
-  // NaN std and mean 0 (adaptation 3). Fewer than 2 keystrokes -> 0.
+  // invalid session with finite std and mean 0. Fewer than 2 keystrokes -> 0.
   const kdowns = events.filter((e) => e.type === "keydown");
   const kups = events.filter((e) => e.type === "keyup");
   let keyBad = kdowns.length !== kups.length;
@@ -270,7 +300,8 @@ export function computeHoldTypeFeatures(
       keyHolds.push(h);
     }
   }
-  const keyHoldStd = keyBad ? NaN : keyHolds.length >= 2 ? popSD(keyHolds) : 0;
+  if (keyBad) invalid("key_pair");
+  const keyHoldStd = keyBad ? 0 : keyHolds.length >= 2 ? popSD(keyHolds) : 0;
   const keyHoldMean = keyBad || keyHolds.length === 0 ? 0 : meanOf(keyHolds);
 
   // inter_key_std: intervals between CONSECUTIVE keydowns (in the
@@ -279,18 +310,22 @@ export function computeHoldTypeFeatures(
   const interKey: number[] = [];
   for (let i = 1; i < kdowns.length; i++) {
     if (kdowns[i]!.targetId === kdowns[i - 1]!.targetId) {
-      interKey.push(kdowns[i]!.t - kdowns[i - 1]!.t);
+      const interval = kdowns[i]!.t - kdowns[i - 1]!.t;
+      if (interval < 0) invalid("negative_inter_key");
+      interKey.push(interval);
     }
   }
   const interKeyStd = interKey.length >= 2 ? popSD(interKey) : 0;
   const interKeyMean = interKey.length ? meanOf(interKey) : 0;
 
   return {
+    valid: invalidReasons.length === 0,
+    invalidReasons,
     mouseEventRate,
     clickDurationStd,
     keyHoldStd,
     interKeyStd,
-    sType: sTypeOf(config.fields),
+    sType: sTypeOf(fields),
     descriptive: {
       keyHoldMean,
       interKeyMean,
@@ -323,20 +358,35 @@ function sTypeOf(fields: readonly HoldTypeFieldInput[]): number {
 export function createHoldTypeScorer(
   reference: HoldTypeReference,
 ): (features: HoldTypeFeatureValues) => HoldTypeScore {
+  if (!reference || typeof reference.mean !== "object" || reference.mean === null ||
+      typeof reference.sd !== "object" || reference.sd === null) {
+    throw new TypeError("createHoldTypeScorer: reference mean and sd are required");
+  }
+  const means = { ...reference.mean };
+  const scales = { ...reference.sd };
   return function score(features: HoldTypeFeatureValues): HoldTypeScore {
     const z = {} as Record<HoldTypeFeatureName, number>;
+    let valid = !!features && (features as Partial<HoldTypeFeatures>).valid !== false;
     for (const name of FEATURE_NAMES) {
-      const sd = reference.sd[name];
-      const mean = reference.mean[name];
+      const sd = scales[name];
+      const mean = means[name];
+      const value = features?.[name];
+      if (!Number.isFinite(value)) valid = false;
       // Runner guard: sd = 0 -> z = 0. Non-finite reference stats are
       // treated the same way (no trustworthy scale, no z).
-      z[name] = typeof sd === "number" && sd > 0 && Number.isFinite(mean)
-        ? SIGNS[name] * ((features[name] - mean) / sd)
+      z[name] = typeof sd === "number" && sd > 0 && Number.isFinite(sd) && Number.isFinite(mean) && Number.isFinite(value)
+        ? SIGNS[name] * ((value - mean) / sd)
         : 0;
+      if (!Number.isFinite(z[name])) valid = false;
     }
     const set2Score = (z.mouseEventRate + z.clickDurationStd) / 2;
     const typeScore = (z.sType + z.keyHoldStd + z.interKeyStd) / 3;
     const composite = FEATURE_NAMES.reduce((acc, name) => acc + z[name], 0) / FEATURE_NAMES.length;
-    return { set2Score, typeScore, composite, z };
+    valid = valid && Number.isFinite(set2Score) && Number.isFinite(typeScore) && Number.isFinite(composite);
+    if (!valid) {
+      for (const name of FEATURE_NAMES) z[name] = 0;
+      return { valid: false, set2Score: 0, typeScore: 0, composite: 0, z };
+    }
+    return { valid: true, set2Score, typeScore, composite, z };
   };
 }

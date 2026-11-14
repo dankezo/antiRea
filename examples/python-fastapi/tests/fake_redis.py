@@ -21,7 +21,7 @@ class FakeRedis:
         now = float(args[1])
         window = float(args[2])
         zset = self._zsets.setdefault(key, {})
-        # ZREMRANGEBYSCORE key -inf (now - window), inclusive — same prune
+        # ZREMRANGEBYSCORE key -inf (now - window), inclusive - same prune
         # rule as the Lua scripts and the TS store (keep now - t < window).
         for member in [m for m, score in zset.items() if score <= now - window]:
             del zset[member]

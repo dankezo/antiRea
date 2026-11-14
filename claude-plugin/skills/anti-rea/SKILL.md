@@ -1,18 +1,18 @@
 ---
 name: anti-rea
 description: >-
-  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
+  Integrate the antiRea npm library (@dannyphan190/anti-rea) into a host web application to meter dataset access per identity and detect automated abuse: per-identity record budgets that cap bulk extraction and cloning, slow per-identity harvesting, republication of derived data, enumeration walks, and coordinated bot cohorts such as scheduler-driven herds and reconnect storms - including, in shared rooms and communities, seat squatting and vote brigading. Version 2.8.0 adds the combined room guard and an evidence layer: config provenance hashes, verified-neutral identity facts, single-use step-up proofs and evidentiary roles. Version 2.8.1 adds a span gate to the two phase signals: a member counts toward a confirmed cohort only when its observed event span covers at least one full grid period. Version 2.9.0 adds the surface guard - field-level control of what enters and leaves the server - and documents the declared-cohort union budget pattern. Version 2.9.2 hardens Unicode token checks, retained state, late events and invalid-input handling without enabling enforcement. Version 2.9.1 adds the ownership probe (BOLA/IDOR sweeps across many owners), the early-minimal occupancy counter to the A1 squat, a machine-readable 402 step-up answer (no settlement), the preference declaration log that pairs with the value watermark, and three calibration utilities (volume rank, EMP-MIX threshold selection, hold-type session features). Use when a developer reports bulk scraping, one account quietly draining a dataset, coordinated account groups acting as one machine, or floods of fresh accounts. Every signal is advisory (enforcement: "none") - the host code decides the response, and step-up applies to new actions only.
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
-  version: "2.8.0"
+  version: "2.9.2"
   npm-package: "@dannyphan190/anti-rea"
   source-repository: "https://github.com/dankezo/antiRea"
 ---
 
 # antiRea integration skill
 
-You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.8.0.
+You are wiring antiRea into a host application on behalf of a developer. antiRea is a server-side TypeScript library (Node >= 20, zero runtime dependencies) that meters dataset access per identity and measures coordinated automated abuse; the host application decides what to do with its output. This skill covers antiRea 2.9.2.
 
 Install:
 
@@ -46,6 +46,12 @@ Read the ground rules first - they override any pattern you find elsewhere. Then
 | "Accounts cycle join -> leave -> join constantly" | Churn against presence/connection limits | `createHerdPhaseSignal` on the join stream (the cycle is a repeated event), plus host-side join-rate metering | A |
 | "The room as a whole is under attack - floods, slow drips, cycling, seats held" | Combined room pressure across all four shapes at once | `createRoomGuard` (one instance per room; step up **new** joins via Section B while `recommendStepUpForNewJoins`) | I, B |
 | "We need verdicts we can audit later" | Evidence hygiene: which config produced a verdict, what verification proves, who may ground a consequence | The evidence layer: `createConfigProvenance`, `classifyWebBotAuthVerdict`, `issueStepUpProof` / `createStepUpProofVerifier`, `auditEvidencePack` | J |
+| "Our API leaked fields we never meant to publish (password hash, national id, bank account)" | Excessive data exposure: the data layer returns the whole record and the route ships it | `createSurfaceGuard` on responses (sensitive denylist + per-route allowlists) | K |
+| "Attackers set fields we never offered - role, owner, admin flags" | Mass assignment on writes | `createSurfaceGuard` on requests (privileged denylist + per-route allowlists) | K |
+| "One account is reading everyone's records one by one, slowly" | BOLA/IDOR enumeration: every request looks authorized; the sweep is visible only across owners | `createOwnershipProbe` (advisory; wire beside your authorization logic, never instead of it) | L |
+| "Squats dodge the occupancy laws by chatting once or twice, right after joining" | The A1 shape: 1-2 early activities take a squat outside the zero-activity definition | `createOccupancyEarlyMinimalSignal` beside `createSeatOccupancySignal` (same room; step up new joins while it flags) | L, C |
+| "Agents hit our step-up and just retry blindly" | The step-up consequence is illegible to machines: no manifest, no off-ramp | `createStepUp402Responder` as the step-up consequence (402 + manifest; no settlement) | L |
+| "A competitor republished our data and disputes the preference we declared" | Provenance dispute: the declaration is stripped on republication, the watermark is not | `createDeclarationLog` (hash-chained, predates the copy) + `createValueWatermark` | L |
 | "One account has been quietly taking our data for weeks" | Slow per-identity harvesting | `createShrinkSlopeSignal`; accumulate with `createCusumTripwire` / `createEvalueTripwire` | - |
 | "Accounts poll the same pages like metronomes" | Machine-paced revisiting | `createWatchlistSignal` | - |
 | "Something is enumerating our ids / endpoints" | Enumeration walk | `createDecoyTripwire` (plant decoys outside every menu/sitemap/listing) | - |
@@ -303,6 +309,128 @@ Four small exact modules that pin down what verdicts mean. Wire them around the 
 - **Step-up proofs (CAP-01).** When an identity passes a step-up, remember it with `issueStepUpProof` (Ed25519; binds the identity, the stepping-up signal's CS-02 hash, and your challenge config's hash; single-use nonce; lifetime at most 3,600 s) and check presentations with `createStepUpProofVerifier` - the consume hook is required at construction, because single-use is part of the shape. A config change invalidates outstanding proofs by construction (the `cfg` binding stops matching).
 - **Evidentiary roles (KT-01).** Before composing signals into any consequence, run the pack through `auditEvidencePack`: unknown channels and mis-claimed roles are invalid, and a pack whose fired items are all CORROBORATING is **ineligible** - corroboration supports, it never grounds. `decorateSignalResult(result, { configHash })` attaches role, config hash and fired state to a signal result in the pinned format. The tier rules ship as data (`ENFORCEMENT_TIER_EVIDENCE_RULES`): tier 3 is forbidden for inferred evidence at any composition.
 
+## Section K - `createSurfaceGuard` (new in 2.9.0)
+
+Field-level control of the payload boundary, in both directions. Budgets cap how MUCH an identity takes; the surface guard caps WHAT a single response carries and what a single request may set - the failure behind the Spoutible and eHUST leaks (profile/search responses shipping password hashes, national ids and bank accounts) and behind mass assignment (GitHub 2012, Rocket.Chat, Langflow).
+
+```ts
+import { createSurfaceGuard } from "@dannyphan190/anti-rea";
+
+const surface = createSurfaceGuard({
+  mode: "advisory", // default - report only, never touches the payload
+  routes: {
+    "GET /api/users/:id": { responseFields: ["id", "name", "email", "avatarUrl"] },
+    "PATCH /api/users/:id": { requestFields: ["name", "email", "bio"] },
+  },
+  onViolation: (e) => log.warn("surface", e),
+});
+
+// before sending a response / after building the payload object:
+const out = surface.inspectResponse("GET /api/users/:id", payload);
+// before binding a write body to your model:
+const inc = surface.inspectRequest("PATCH /api/users/:id", req.body);
+```
+
+The law of the module:
+
+- Two layers. A built-in DENYLIST of field-name patterns (sensitive outbound, privileged inbound) needs no configuration and catches over-broad payloads on undeclared routes. A per-route SCHEMA allowlist flags anything undeclared; a field the host declared is exempt from the denylist (a login response legitimately returns a token).
+- Field names are normalized before matching (case and `_`/`-` removed), so renaming games do not slip past.
+- Consequences are the host's choice and never escalate themselves: `advisory` reports, `strip` returns a sanitized copy, `block` marks the inspection not-ok. Start in advisory, read your own traffic's violations, declare schemas for the noisy routes, and only then consider strip.
+- Traversal is capped (`maxScanNodes`, default 10,000) and reports `truncated` rather than scanning hostile payloads forever.
+- It reads field NAMES, not values or ownership: a declared field holding another user's data still passes. BOLA/ownership stays your authorization logic - wire the guard beside it, never instead of it.
+- Lab record (pre-registered, seeded synthetic corpora): 0 false positives on 2,000 legitimate responses and 2,000 requests; 1,194/1,194 injected sensitive fields and 918/918 injected privileged fields caught.
+
+**Declared-cohort union budget (pattern, 2.9.0).** When several accounts belong to one principal you know about, do not give each its own record budget and stop there: give the cohort ONE `createRecordBudget` keyed by the cohort id, checked and consumed beside the per-identity budget, so rotation inside a declared cohort stops diluting the cap (measured: a declared herd halts at exactly 150 of 500; undeclared, the same herd takes everything - declaration-gating is the law, never invent a cohort from inferred evidence). Runnable wiring and verification: `examples/declared-cohort-budget` in the repo. Single-process only; scaled hosts use the disclosure ledger's `reserveDisclosure`.
+
+## Section L - The 2.9.1 lab graduates (audited in 2.9.2) (ownership, the A1 counter, the 402 answer, provenance, calibration utilities)
+
+Seven modules that had each passed a pre-registered lab pin and were waiting on a build order. All advisory (`enforcement: "none"`), all additive.
+
+### `createOwnershipProbe` - the sweep across owners (WALL-03)
+
+Budgets cap how much one identity takes; the surface guard caps what a payload carries; the ownership probe watches WHOSE objects an identity touches. One account reading 200 records of 180 different owners is enumeration even when every request is authorized-looking and the volume is small.
+
+```ts
+import { createOwnershipProbe } from "@dannyphan190/anti-rea";
+
+const probe = createOwnershipProbe({ onEvidence: (e) => log.warn("ownership", e) });
+// on each object read, after your authorization check:
+const verdict = probe.touch({ identity, objectId, ownerId, route, publicRoute: false, ts });
+```
+
+- A window flags when counted touches >= `minEvents` (20) AND distinct owners >= `minDistinctOwners` (10) AND owners / touches >= `minRatio` (0.5). Dual windows (1 h and 6 h) share one incremental state; public routes are excluded from numerator and denominator; unknown owners count in the denominator only; below the floor the answer is `insufficient_history`, never a flag.
+- It reads access patterns, not authorization: it cannot tell a sweep from a support agent with a legitimate queue. Advisory evidence for review and step-up decisions - never wire it as an authorization check.
+- Lab record: sweeps flagged 500/500 in both windows; 0 false positives on 2,000 legitimate sessions; the historical ingest timing is not a portable performance promise. See docs/audit-2.9.2.json for this audit machine and measured medians.
+
+### `createOccupancyEarlyMinimalSignal` - the A1 counter (A1-COUNTER-D2)
+
+Attack A1 beat the shipped occupancy laws with 1-2 early activities: any activity took the squat outside the zero-activity estimand. This sibling signal counts a session only while its identity is new (created < 24 h before join), it holds 1-2 activities so far, and EVERY activity sits within 300 s of join - the exact shape of the dodge, and of almost no legitimate newcomer.
+
+```ts
+import { createOccupancyEarlyMinimalSignal } from "@dannyphan190/anti-rea";
+
+// Example host-declared room capacity; replace with your room capacity.
+const early = createOccupancyEarlyMinimalSignal({ capacity: 100, onEvidence: (e) => log.warn("early-minimal", e) });
+early.observe({ type: "join", identity, ts, accountCreatedTs });
+early.observe({ type: "activity", identity, ts });
+const state = early.evaluate({ asOfTs: ts }); // per-law results: fast 0.50/600 s, drip 0.34/3,600 s
+```
+
+- Wire it BESIDE `createSeatOccupancySignal`, not instead of it: the shipped laws own the zero-activity case, this one owns the 1-2-early-activity case. Step up NEW joins while either flags (Section B).
+- Read the stated limits before acting on it: the lab lurker gate passed with exactly ONE session of headroom (peak 0.3333 vs the 0.34 drip bar), so treat a drip-only flag as weak evidence; first activities delayed into the (300 s, ~630 s) band evade both laws by design; 3 quick activities evade by construction.
+- Lab record (PASS-lab, two byte-identical runs): fast squats flagged +690 s, 300 s-delay +960 s, drip +1,440 s; legitimate twins and the new-lurker cell unflagged.
+
+### `createStepUp402Responder` - a step-up machines can read (RECOMB-09)
+
+When step-up fires, answer with a manifest instead of a wall: HTTP 402 in x402 style, `X-Payment-Required` header, and a body carrying the price (a signal price - there is NO settlement and no payment processing), the session token, and pay / appeal / continue-free next steps.
+
+```ts
+import { createStepUp402Responder, checkAssertion } from "@dannyphan190/anti-rea";
+
+const answer = createStepUp402Responder({ priceUsd: 0.001, manifestUrl, facilitator, payUrl, appealUrl, continueFreeUrl });
+// only AFTER a step-up trigger fires for this session:
+const res = answer.respond(sessionId, issuedToken); // { status: 402, headers, body }
+// on the next request:
+const ok = checkAssertion(req.headers["x-step-up-assertion"], issuedToken);
+```
+
+- Never call `respond()` for an identity that has not triggered step-up - the lab control arm (no trigger, no 402) is the FP gate.
+- Lab record: cooperative agents retreated in 94.5% of sessions and presented a valid assertion in 94.0%; 0 legitimate dead-ends across 200 browser and 200 API sessions. Agents that ignore the manifest are unaffected - the shape informs, it does not block.
+
+### `createDeclarationLog` - provenance for declared preferences (RECOMB-10)
+
+Robots `Content-Signal`, RSL and aipref declarations live on the host and are stripped the moment data is republished; the C39 value watermark survives republication but says nothing about what you declared, or when. The declaration log is the missing half: an append-only, hash-chained, host-side record that a declaration existed BEFORE a given copy appeared.
+
+```ts
+import { createDeclarationLog, importDeclarationLog } from "@dannyphan190/anti-rea";
+
+const decl = createDeclarationLog();
+decl.append({ form: "robots-content-signal", declaration: "search=yes, ai-input=no, ai-train=no", timestamp: Date.now() });
+decl.verify();        // { ok, checked, firstBadIndex }
+decl.predates(copyTs); // was a declaration in force before this copy?
+const archive = decl.export(); // JSON; importDeclarationLog re-verifies and refuses a broken chain
+```
+
+- The log proves ordering and integrity only - not that any crawler complied, and not legal recognition of the claim. Pair it with `createValueWatermark`: watermark for the copy, log for the declaration.
+- Lab record: the declaration arm matched watermark-only at 18/18 gated transform cells with 0 mis-attributions; chain verified 200/200.
+
+### Calibration utilities (pure functions, no state)
+
+- `applyVolumeRankRule` (RECOMB-04) - rank cells by two-component EB05 score; flag an identity when >= 2 of its rare cells land in the top 5%, reported per volume stratum (frozen boundaries 63.2 / 632.5). Lab at gated kappa 100/300/1000: MID-stratum walker detection 0.85-0.90, legit FP <= 0.007. Kappa 30 is descriptive, not covered by that FP bound. Detection was measured in the MID stratum only - no production threshold is claimed.
+- `selectEmpMixThreshold` (RECOMB-05) - choose a clustering threshold from a 50/50 mixed calibration set (null permutations + flat empirical forests): the largest grid point whose mixed FMR stays <= target (default 1%). Lab (R14 branch-C frame): held h = 0.36 across 0-30% calibration contamination where the null-only set flipped at 10%.
+- `computeHoldTypeFeatures` + `createHoldTypeScorer` (RECOMB-02, Step 0) - five session-timing features and the frozen signed-z composite S_R2 against a host-supplied human reference. Step 0 measured feature separation ONLY: this ships computation, not a detection claim; thresholds are the host's (the lab used the outer-5% tail of the human distribution).
+
+## Section M - 2.9.2 audit and host handling
+
+- Ownership windows use a monotone event-time watermark. Late arrivals are counted in the correct live windows. Capacity loss is explicit `truncated` telemetry, suppressing incomplete flags; identity-cap gaps also suppress newly admitted histories until the missing window expires.
+- D2, seat occupancy and room guard bound open sessions and retained activity timestamps. Saturation suppresses flags and recommendations; investigate the feed and start a fresh observation epoch deliberately. D2 exposes reset; older room signals require a fresh instance.
+- Invalid hold-type sessions return finite neutral features and scores with `valid: false`; inspect `invalidReasons` rather than treating missing data as human evidence.
+- Assertions compare exact UTF-16 token units with bounded lengths. The declaration log checks export format/version and refuses capacity overflow; external count/head anchors are needed to detect tail truncation.
+- Volume-rank's historical FP bound belongs to generator-component lab strata. It does not transfer to the SDK's volume-derived regrouping. The audit reproduced 1/115 HIGH false flags at kappa 1000 in that regrouping.
+- E-value histories are never silently evicted or restarted. Capacity and invalid-input errors are telemetry failures to catch and report, not authorization decisions.
+- D2 defaults remain unchanged: a registered FAST-only candidate lost the minority attack cell and was not shipped. RECOMB-03 remains excluded after a fresh independent pair experiment showed heavy legitimate persona harm. These are synthetic measurements, not production calibration.
+- Historical quantitative claims in Section L retain their original scope. The release audit marks missing generator dependencies as NOT VERIFIED; it does not upgrade them into newly verified measurements.
+
 ## Safe defaults (do not retune silently)
 
 | Module | Option | Default | Why |
@@ -324,6 +452,14 @@ Four small exact modules that pin down what verdicts mean. Wire them around the 
 | | `tightnessBar` | 0.805436 | Frozen C148 calibration midpoint (herd bootstrap max 0.645, legit bootstrap min 0.965); recalibrate only against your own reference population, with the recalibration recorded |
 | | `minEvents` / `minIdentities` | 8 / 8 | Lab scoring floor / lab cloud floor (below 8 scored identities the lab voided the reading) |
 | `createRoomGuard` | (path constants) | `ROOM_GUARD_LAW` | Frozen in the RECOMB-06 pin; the paths are not options - only `capacity` (required), `tickMs` (30,000), `newnessWindowMs` (24 h) and `maxSessions` (100,000) are options |
+| `createSurfaceGuard` | `mode` | `advisory` | The tiering law: observe first; strip/block only by the host's explicit choice after reading advisory output on real traffic |
+| `createOwnershipProbe` | `minEvents` / `minDistinctOwners` / `minRatio` | 20 / 10 / 0.5 (per window) | Frozen in the WALL-03 pin (FP 0/2,000 legit); the floor is what keeps small readers at `insufficient_history` |
+| `createOccupancyEarlyMinimalSignal` | FAST / DRIP profiles | 0.50 / 600,000 ms; 0.34 / 3,600,000 ms | Frozen in the A1-COUNTER-D2 pin, mirroring the shipped occupancy geometry; the drip bar's lurker headroom measured exactly one session - do not lower it |
+| | `earlyWindowMs` / newness | 300,000 / 86,400,000 (24 h) | The 300 s edge is the largest known delay that evades the shipped laws; widening it re-opens the lurker FP the pin closed |
+| `createStepUp402Responder` | `priceUsd` | host-set (lab 0.001) | A signal price only - no settlement exists in the module; never present it as a real charge |
+| `selectEmpMixThreshold` | `targetFmr` | 0.01 | Frozen in the RECOMB-05 registration (branch-C selection law) |
+| `applyVolumeRankRule` | `topFrac` | 0.05 | Frozen R2-rank5 construction; the 10% variant is descriptive only |
+| | `maxScanNodes` | 10,000 | Cost bound against hostile payloads; past the cap the result is `truncated`, never silently complete |
 
 ## Never do this
 
@@ -355,4 +491,6 @@ Run through this before reporting the integration done:
 - [ ] Room-hop / reconnect-storm wiring keys on identity/session keys (never IPs), and your code checks `disarmed` before reading `flagged`.
 - [ ] `snapshot()` counters on each instance show no unexpected `invalidTs` growth (that means your timestamps are malformed somewhere upstream).
 - [ ] A synthetic squat (30 fresh silent joins into a 30-seat room) fed to `createRoomGuard` in a test flags via the occupancy path, `recommendStepUpForNewJoins` is true while they sit and false after they leave, and the same stream with the joiners chatting does not flag (hole A1, expected).
-- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0).
+- [ ] Your summary to the developer states plainly: which signals are wired, that all are advisory (`enforcement: "none"`), what enforcement the *host code* performs, and which package version the wiring targets (`createRoomGuard` and the evidence layer exist since 2.8.0; the surface guard exists since 2.9.0; the ownership probe, early-minimal occupancy, the 402 responder, the declaration log and the calibration utilities exist since 2.9.1).
+
+- [ ] The host targets audited package 2.9.2 and handles truncated, saturated and invalid telemetry without inventing enforcement.

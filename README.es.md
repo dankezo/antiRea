@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-888%20passing-informational" alt="tests: 888 passing"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
 </p>
 
 <p align="center">
@@ -178,7 +178,20 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
 
+### v2.9.2 - Auditoría y endurecimiento
+
+Comparación exacta de tokens, estado de telemetría acotado, ventanas de propiedad correctas con eventos tardíos, características finitas para sesiones inválidas e inspección segura ante ciclos. El host sigue decidiendo las consecuencias; no hay dependencias de ejecución nuevas.
+
+La auditoría local en Windows ejecutó 963 pruebas: 960 superadas, ningún fallo y 3 omitidas (dos vectores RSA-PSS y un caso sin privilegio para enlaces simbólicos). Las cifras históricas conservan su alcance original; los generadores ausentes figuran como NOT VERIFIED.
+
+[2.9.2 deep dive](docs/v2.9.2-deep-dive.es.md) | [Audit measurements](docs/audit-2.9.2.json)
+
 ### v2.9.1 - la respuesta step-up con 402 y cinco graduados del laboratorio
+
+[2.9.1 deep dive](docs/v2.9.1-deep-dive.es.md)
+
+> Los estratos del laboratorio de volume-rank son componentes del generador. El SDK agrupa por volumen observado: la repetición encontró 1/115 falsos avisos HIGH con kappa 1000; el límite histórico 0,007 no es universal para esta agrupación.
+
 
 - **Problema:** un desafío step-up le dice a un llamante
   automático que se detenga, pero no le entrega nada
@@ -224,7 +237,7 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
   laboratorio (RECOMB-04, PASS-lab): detección de
   walkers en el estrato MID 0,90 / 0,85 / 0,85 con kappa
   100 / 300 / 1000, falsos positivos legítimos de como
-  máximo 0,007 en cada estrato con al menos 20
+  máximo 0,007 en kappa con puerta 100/300/1000, en cada estrato con al menos 20
   identidades legítimas; la detección se midió solo en
   MID, donde vivían todos los walkers.
 - **Ayudante nuevo - `selectEmpMixThreshold`:** la ley
@@ -412,8 +425,8 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**890 pruebas automatizadas** (888 superadas, 2 omitidas de vectores
-RSA-PSS) y realiza comprobaciones estáticas. Escanea una compilación
+**963 pruebas automatizadas** (960 superadas, 3 omitidas en Windows: dos vectores
+RSA-PSS y un caso sin privilegio para enlaces simbólicos) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.
 
@@ -441,6 +454,8 @@ Escribe a **dannyphan190@gmail.com**.
 - [Evidencia](docs/EVIDENCE.es.md): resultados medidos completos y método
 - [Notas legales y de privacidad](docs/LEGAL_PRIVACY.md)
 - Análisis detallados: [v2.9.0](docs/v2.9.0-deep-dive.es.md) - [v2.8.1](docs/v2.8.1-deep-dive.es.md) - [v2.8.0](docs/v2.8.0-deep-dive.es.md)
+- [v2.9.1 deep dive](docs/v2.9.1-deep-dive.es.md)
+- [v2.9.2 deep dive](docs/v2.9.2-deep-dive.es.md)
 - [Changelog](CHANGELOG.md)
 
 ## Contribuciones y seguridad
