@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
 </p>
 
 <p align="center">
@@ -159,6 +159,12 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 应用。
 
 ## 最新版本
+
+### v2.9.3 - 影子诱饵图与 token 签发时间检查
+
+新模块 - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`：诱饵记录集合，其作者、系列与记录之间以完整的引用一致性相互引用，而非可被离线重构过滤掉的孤立 canary。在实验室中（BLA-02，冻结注册，12 个种子实例），一个不动点引用完整性过滤器移除了 100% 的孤立诱饵（720/720）和 0% 的影子诱饵（0/720），而无诱饵对照组在 24,000 条真实记录中损失 0 条。本项目不声称抗统计指纹识别：被测量的是引用一致性，而非总体分布模仿。token 验证函数（`verifyCursor`、`verifyCursorV2`、`verifyEchoId`）现在会以 `not_yet_valid` 拒绝超出 60 秒时钟偏差的未来 `iat`，并将非数字 `iat` 视为 malformed。`createDecoyMirage` 现在接受主机提供的 `fieldNames` / `featureNames` 词汇表，使诱饵文档使用主机自身的领域用语，而非内置词汇。
+
+974 项测试：972 项通过、0 项失败、2 项跳过（在 Linux x64、Node 24.22.1 上测量）。
 
 ### v2.9.2 - 审计与加固
 
@@ -345,8 +351,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-在本仓库本身上工作：`npm run check` 会编译代码、运行 **963 个自动化
-测试**（960 个通过，Windows 跳过两个 RSA-PSS 向量和一个符号链接权限用例），并执行静态检查。在部署
+在本仓库本身上工作：`npm run check` 会编译代码、运行 **974 个自动化
+测试**（972 个通过、0 个失败、2 个跳过，在 Linux x64 与 Node 24.22.1 上测量），并执行静态检查。在部署
 前扫描公开构建：`node scripts/run-audit.cjs /path/to/dist` 或
 `python3 scripts/verify-build.py /path/to/dist`。
 

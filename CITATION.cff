@@ -5,7 +5,7 @@ abstract: "Server-side TypeScript toolkit that meters dataset access per identit
 authors:
   - name: "Danny Phan"
     alias: "dankezo"
-version: "2.9.2"
+version: "2.9.3"
 date-released: "2026-11-14"
 license: MIT
 url: "https://antirea.dannyphan.me"

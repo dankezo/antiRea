@@ -1390,6 +1390,11 @@ export function createWebBotAuthVerifier(options: WebBotAuthVerifierOptions = {}
 
   const verify = async (req: WebBotAuthRequestLike): Promise<WebBotAuthVerdict> => {
     const nowMs = clock();
+    // SLC-05: a null or non-object request is a host bug, but the
+    // verifier must still answer with a structured verdict, never throw.
+    if (req === null || req === undefined || typeof req !== "object") {
+      return emit({ verified: false, reason: "no_signature_headers", detail: "request is missing or not an object" });
+    }
     const inputHeader = getHeader(req, "signature-input");
     const signatureHeader = getHeader(req, "signature");
     if (!inputHeader || !signatureHeader) {

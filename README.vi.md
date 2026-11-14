@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
 </p>
 
 <p align="center">
@@ -173,6 +173,12 @@ hiệu, nạp sự kiện vào và đọc phán quyết.
 in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
+
+### v2.9.3 - Đồ thị decoy bóng và kiểm tra thời điểm phát hành token
+
+Module mới - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: các tập bản ghi decoy mà tác giả, series và bản ghi tham chiếu chéo lẫn nhau với tính nhất quán tham chiếu đầy đủ, thay vì canary đứng rời mà một quá trình tái dựng ngoại tuyến có thể lọc bỏ. Trong lab (BLA-02, đăng ký đông cứng, 12 instance theo seed), một bộ lọc toàn vẹn tham chiếu dạng fixpoint loại 100% decoy rời (720/720) và 0% decoy bóng (0/720), trong khi nhóm control không có decoy mất 0 trên 24.000 bản ghi thật. Không có tuyên bố nào về kháng fingerprint thống kê: tính nhất quán là thuộc tính được đo, việc bắt chước phân phối quần thể thì không. Các hàm kiểm chứng token (`verifyCursor`, `verifyCursorV2`, `verifyEchoId`) nay bác `iat` ở tương lai quá 60 giây lệch đồng hồ với reason `not_yet_valid` và coi `iat` không phải số là malformed. `createDecoyMirage` nay nhận bộ từ vựng `fieldNames` / `featureNames` của host, để tài liệu decoy nói đúng phương ngữ của host thay vì bộ từ vựng dựng sẵn.
+
+974 test: 972 đạt, không lỗi, 2 bỏ qua (đo trên Linux x64, Node 24.22.1).
 
 ### v2.9.2 - Kiểm định và gia cố
 
@@ -404,8 +410,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **963
-test tự động** (960 đạt, 3 bỏ qua trên Windows: hai vector RSA-PSS và một ca thiếu quyền symlink) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **974
+test tự động** (972 đạt, không lỗi, 2 bỏ qua, đo trên Linux x64 với Node 24.22.1) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.

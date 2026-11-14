@@ -68,6 +68,7 @@ export type CursorVerifyFailure =
   | "malformed"
   | "bad_signature"
   | "expired"
+  | "not_yet_valid"
   | "session_mismatch"
   | "position_mismatch";
 
@@ -109,6 +110,15 @@ interface CursorPayload {
 }
 
 export const DEFAULT_CURSOR_TTL_MS = 300_000;
+
+/**
+ * Clock skew tolerated on the issued-at edge (LPG-07): a cursor whose
+ * `iat` is more than this far in the future fails as `not_yet_valid`.
+ * Only the server can mint cursors, so a future `iat` means a host
+ * clock or minting error; the check matches the 60 s skew the step-up
+ * proof and the Web Bot Auth verifier already allow on their edges.
+ */
+export const CURSOR_IAT_SKEW_MS = 60_000;
 
 /**
  * Maximum accepted cursor token length, in characters (NV-2).
@@ -197,7 +207,7 @@ export function mintCursor(secret: CursorSecret, options: MintCursorOptions): st
 
 /**
  * Verify a presented cursor. Checks run in a fixed order - structure,
- * signature, expiry, session binding, position binding - and the first
+ * signature, expiry, issued-at, session binding, position binding - and the first
  * failure is reported. Signature comparison uses `timingSafeEqual`. An
  * `expired` result (and only that result) carries the decoded payload
  * fields, because its signature verified - see the module header for the
@@ -232,6 +242,8 @@ export function verifyCursor(
       !Number.isFinite(candidate.pos) ||
       typeof candidate.exp !== "number" ||
       !Number.isFinite(candidate.exp) ||
+      typeof candidate.iat !== "number" ||
+      !Number.isFinite(candidate.iat) ||
       (candidate.fh !== undefined && typeof candidate.fh !== "string")
     ) {
       return { ok: false, reason: "malformed" };
@@ -261,6 +273,7 @@ export function verifyCursor(
       expiresAt: payload.exp,
     };
   }
+  if (payload.iat > now + CURSOR_IAT_SKEW_MS) return { ok: false, reason: "not_yet_valid" };
   if (payload.sid !== options.sessionId) return { ok: false, reason: "session_mismatch" };
   if (options.expectedPosition !== undefined && payload.pos !== options.expectedPosition) {
     return { ok: false, reason: "position_mismatch" };

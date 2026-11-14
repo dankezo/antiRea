@@ -103,6 +103,23 @@ export interface DecoyMirageOptions {
   ignoreCrossSite?: boolean;
   /** Extra seed material mixed into document generation; changing it reshapes every document. */
   seed?: string;
+  /**
+   * Host vocabulary override (RSH-01): field names used by the schema
+   * and scoring archetypes. The built-in list speaks a credit-scoring
+   * dialect that is a constant of this public source - anyone who has
+   * read it can fingerprint a default mirage document with certainty,
+   * and the dialect may clash with the host's real domain. Supply the
+   * host's own field names so decoys speak the host's dialect. Needs
+   * at least 4 distinct names to take effect; otherwise the built-in
+   * list is used.
+   */
+  fieldNames?: readonly string[];
+  /**
+   * Host vocabulary override (RSH-01): feature names used by the
+   * service-config archetype. Same rationale as `fieldNames`; needs
+   * at least 4 distinct names to take effect.
+   */
+  featureNames?: readonly string[];
   /** Per-path document overrides (keys are normalized before matching). Served verbatim. */
   documents?: Record<string, Record<string, unknown>>;
   /** Custom generator replacing the built-in one. Must be deterministic per path to preserve the mirage's internal consistency. */
@@ -205,7 +222,20 @@ const round = (value: number, places: number): number => {
  * across calls, instances and restarts - an agent comparing responses
  * across sessions finds them consistent, because they are.
  */
-function buildDecoyDocument(normalizedPath: string, seedMaterial: string): Record<string, unknown> {
+interface DecoyVocabulary {
+  fieldNames: readonly string[];
+  featureNames: readonly string[];
+}
+
+const DEFAULT_VOCABULARY: DecoyVocabulary = { fieldNames: FIELD_NAMES, featureNames: FEATURE_NAMES };
+
+const usableVocabulary = (list: readonly string[] | undefined): readonly string[] | undefined => {
+  if (!list) return undefined;
+  const distinct = [...new Set(list.filter((x) => typeof x === "string" && x.length > 0))];
+  return distinct.length >= 4 ? distinct : undefined;
+};
+
+function buildDecoyDocument(normalizedPath: string, seedMaterial: string, vocabulary: DecoyVocabulary = DEFAULT_VOCABULARY): Record<string, unknown> {
   const rand = mulberry32(hashSeed(`${seedMaterial}:${normalizedPath}`));
   const pick = <T,>(list: readonly T[]): T => list[Math.floor(rand() * list.length)] as T;
   const segments = normalizedPath.split("/").filter(Boolean);
@@ -220,7 +250,7 @@ function buildDecoyDocument(normalizedPath: string, seedMaterial: string): Recor
 
   if (archetype === 0) {
     const features: Record<string, boolean> = {};
-    for (const name of FEATURE_NAMES) {
+    for (const name of vocabulary.featureNames) {
       if (rand() > 0.35) features[name] = rand() > 0.3;
     }
     return {
@@ -244,7 +274,7 @@ function buildDecoyDocument(normalizedPath: string, seedMaterial: string): Recor
     const fields: Array<Record<string, unknown>> = [];
     const used = new Set<string>();
     for (let i = 0; i < fieldCount; i++) {
-      const name = pick(FIELD_NAMES);
+      const name = pick(vocabulary.fieldNames);
       if (used.has(name)) continue;
       used.add(name);
       fields.push({
@@ -268,7 +298,7 @@ function buildDecoyDocument(normalizedPath: string, seedMaterial: string): Recor
   const factors: Array<Record<string, unknown>> = [];
   const usedFactors = new Set<string>();
   for (let i = 0; i < factorCount; i++) {
-    const name = pick(FIELD_NAMES);
+    const name = pick(vocabulary.fieldNames);
     if (usedFactors.has(name)) continue;
     usedFactors.add(name);
     factors.push({
@@ -351,7 +381,14 @@ export function createDecoyMirage(options: DecoyMirageOptions = {}): DecoyMirage
     if (cached) return cached;
     const built = options.generate
       ? options.generate(normalizedPath, scope)
-      : buildDecoyDocument(normalizedPath, scope !== undefined ? `${seedMaterial}|scope:${scope}` : seedMaterial);
+      : buildDecoyDocument(
+          normalizedPath,
+          scope !== undefined ? `${seedMaterial}|scope:${scope}` : seedMaterial,
+          {
+            fieldNames: usableVocabulary(options.fieldNames) ?? FIELD_NAMES,
+            featureNames: usableVocabulary(options.featureNames) ?? FEATURE_NAMES,
+          },
+        );
     if (cache.size >= MAX_CACHED) {
       const oldestKey = cache.keys().next().value;
       if (oldestKey !== undefined) cache.delete(oldestKey);

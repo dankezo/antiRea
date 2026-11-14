@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
 </p>
 
 <p align="center">
@@ -177,6 +177,12 @@ Es un canal de evaluación y demostración. La protección en producción
 sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
+
+### v2.9.3 - Grafos señuelo sombra y comprobación de emisión de tokens
+
+Nuevo módulo - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: conjuntos de registros señuelo cuyos autores, series y registros se referencian entre sí con consistencia referencial completa, en lugar de canarios aislados que una reconstrucción fuera de línea puede filtrar. En el laboratorio (BLA-02, registro congelado, 12 instancias con semilla), un filtro de integridad referencial de punto fijo eliminó el 100% de los señuelos aislados (720/720) y el 0% de los señuelos sombra (0/720), mientras el control sin señuelos perdió 0 de 24.000 registros reales. No se afirma resistencia a la huella estadística: la consistencia es la propiedad medida, no la imitación de la población. Los verificadores de tokens (`verifyCursor`, `verifyCursorV2`, `verifyEchoId`) ahora rechazan un `iat` futuro más allá de 60 s de desviación de reloj como `not_yet_valid` y tratan un `iat` no numérico como malformed. `createDecoyMirage` ahora acepta vocabularios `fieldNames` / `featureNames` del host, para que los documentos señuelo hablen el dialecto del host en lugar del integrado.
+
+974 pruebas: 972 superadas, ningún fallo, 2 omitidas (medido en Linux x64, Node 24.22.1).
 
 ### v2.9.2 - Auditoría y endurecimiento
 
@@ -425,8 +431,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**963 pruebas automatizadas** (960 superadas, 3 omitidas en Windows: dos vectores
-RSA-PSS y un caso sin privilegio para enlaces simbólicos) y realiza comprobaciones estáticas. Escanea una compilación
+**974 pruebas automatizadas** (972 superadas, ningún fallo, 2 omitidas, medido en Linux x64 con Node 24.22.1) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.
 

@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-963%20total-informational" alt="tests: 963 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
 </p>
 
 <p align="center">
@@ -167,6 +167,12 @@ It is an evaluation and demo channel. Production protection still
 belongs in-process, in your own app.
 
 ## Latest release
+
+### v2.9.3 - Shadow decoy graphs and token issued-at checks
+
+New module - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: decoy record sets whose authors, series and records cross-reference each other with full referential consistency, instead of standalone canaries an offline reconstruction can filter out. In the lab (BLA-02, frozen registration, 12 seeded instances), a fixpoint referential-integrity filter removed 100% of standalone decoys (720/720) and 0% of shadow decoys (0/720), while the decoy-free control lost 0 of 24,000 real records. No statistical-fingerprinting claim is made: consistency is the measured property, population mimicry is not. The token verifiers (`verifyCursor`, `verifyCursorV2`, `verifyEchoId`) now reject a future `iat` beyond 60 s of clock skew as `not_yet_valid` and treat a non-numeric `iat` as malformed. `createDecoyMirage` now accepts host `fieldNames` / `featureNames` vocabularies, so decoy documents speak the host's own dialect instead of the built-in one.
+
+974 tests: 972 passed, none failed, 2 skipped (measured on Linux x64, Node 24.22.1).
 
 ### v2.9.2 - Audit and hardening
 
@@ -392,8 +398,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **963
-automated tests** (960 passing, 3 skipped on this Windows machine: two RSA-PSS vectors and one symlink privilege case) and
+Working on the repo itself: `npm run check` compiles, runs **974
+automated tests** (972 passing, none failing, 2 skipped, measured on Linux x64 with Node 24.22.1) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.

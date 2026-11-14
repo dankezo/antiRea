@@ -99,7 +99,7 @@ export interface VerifyEchoIdOptions {
   previousSecrets?: readonly EchoSecret[];
 }
 
-export type EchoVerifyFailure = "malformed" | "bad_signature" | "expired" | "scope_mismatch";
+export type EchoVerifyFailure = "malformed" | "bad_signature" | "expired" | "not_yet_valid" | "scope_mismatch";
 
 /** Which secret generation verified an echo id. Carries no secret material. */
 export type EchoSecretGeneration = "current" | "previous";
@@ -138,6 +138,15 @@ interface EchoPayload {
 }
 
 export const DEFAULT_ECHO_TTL_MS = 86_400_000;
+
+/**
+ * Clock skew tolerated on the issued-at edge (LPG-07): an id whose
+ * `iat` is more than this far in the future fails as `not_yet_valid`.
+ * Only the server can mint echo ids, so a future `iat` means a host
+ * clock or minting error; 60 s matches the skew the step-up proof
+ * and the Web Bot Auth verifier already allow.
+ */
+export const ECHO_IAT_SKEW_MS = 60_000;
 
 /**
  * Maximum accepted echo id length, in characters, including the
@@ -244,7 +253,7 @@ export function mintEchoId(secret: EchoSecret, options: MintEchoIdOptions): stri
 
 /**
  * Verify a presented echo id. Checks run in a fixed order - structure,
- * signature, expiry, scope - and the first failure is reported.
+ * signature, expiry, issued-at, scope - and the first failure is reported.
  * Signature verification tries the current secret first, then each
  * secret in `options.previousSecrets` in order; the successful result
  * reports the verifying generation via `secretGeneration` (and
@@ -283,6 +292,8 @@ export function verifyEchoId(
       candidate.n.length === 0 ||
       typeof candidate.exp !== "number" ||
       !Number.isFinite(candidate.exp) ||
+      typeof candidate.iat !== "number" ||
+      !Number.isFinite(candidate.iat) ||
       (candidate.s !== undefined && typeof candidate.s !== "string")
     ) {
       return { ok: false, reason: "malformed" };
@@ -315,6 +326,7 @@ export function verifyEchoId(
 
   const now = options.now ?? Date.now();
   if (now >= payload.exp) return { ok: false, reason: "expired" };
+  if (payload.iat > now + ECHO_IAT_SKEW_MS) return { ok: false, reason: "not_yet_valid" };
   if (options.expectedScope !== undefined && payload.s !== options.expectedScope) {
     return { ok: false, reason: "scope_mismatch" };
   }

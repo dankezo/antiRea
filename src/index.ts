@@ -42,6 +42,7 @@ export * from "./tier2-active/value-watermark";
 export * from "./tier2-active/flow-scorer";
 export * from "./tier2-active/herd-detector";
 export * from "./tier2-active/decoy-mirage";
+export * from "./tier2-active/shadow-decoy-graph";
 export * from "./tier2-active/web-bot-auth";
 export * from "./tier2-active/disclosure-ledger";
 export * from "./tier2-active/calibration-manifest";

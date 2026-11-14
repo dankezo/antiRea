@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.9.3 - 2026-11-14
+
+Lab-graduation and hygiene release: one new module from the lab (BLA-02), three token-verification fixes from the LarpGuard dissection's negative controls, a decoy-vocabulary seam, and release tooling. No existing threshold is retuned, and advisory signals do not acquire enforcement.
+
+- **Shadow decoy graph (`generateShadowDecoyGraph`, `verifyShadowGraphClosure`, NEW):** a decoy SET built as a small closed graph (authors, series, chained records) whose cross-references resolve, counts match and timestamps never run backwards - the invariants an offline reconstruction uses to filter standalone decoys out. Lab record (BLA-02, pre-registered frozen gates, seed family 20301xxx, two runs byte-identical): a fixpoint referential-integrity filter removed 100% of standalone decoys (720/720 pooled over 12 instances) and 0% of shadow-graph decoys (0/720); the decoy-free control lost 0 of 24,000 real records; generation cost ~1x the standalone arm. The generator takes NO real-data input, and resistance to statistical fingerprinting is NOT claimed (shadow distributions are deliberately unfitted - fitting them would leak the real ones). Placement discipline is the host's contract: enumeration surfaces only, never linked from a real record.
+- **Issued-at checks (LPG-07):** `verifyCursor`, `verifyCursorV2` and `verifyEchoId` now reject tokens whose `iat` is more than 60 s in the future with the new reason `not_yet_valid`, and treat a non-numeric `iat` as `malformed`. Before this release only `exp` was checked, so a server-signed token with a future `iat` verified; the step-up proof and the Web Bot Auth verifier already rejected future issuance with the same 60 s skew. Only a host clock or minting error produces a future `iat` - the bound is the same one recorded for the negative control that found the gap.
+- **Web Bot Auth null-request guard (SLC-05):** `createWebBotAuthVerifier().verify` returns the structured `no_signature_headers` verdict for a null or non-object request instead of throwing a TypeError. A probe over 18 garbage inputs across 6 verify surfaces found this was the only throw; every token verifier already answered structurally.
+- **Decoy mirage vocabularies (RSH-01):** `createDecoyMirage` accepts host `fieldNames` / `featureNames` (at least 4 distinct names each to take effect). The built-in lists are constants of this public source - a credit-scoring dialect that fingerprints a default mirage document with certainty and can clash with the host's domain.
+- **Release tooling:** `scripts/version-audit.cjs` audits every pinned version surface against package.json (SRC-06 - born from this project's own 2.9.1/2.9.2 tree drift), and the range release gate gains Gate 2.5, a golden-equivalence diff of legitimate range responses with a seeded-mutation self-proof (BLA-05). The full gate passes 11/11 on this tree.
+- **Measured and NOT shipped:** IA-02 PARAM-JITTER (per-deployment budget jitter in [130, 170] from a host seed) passed its detection gates - an attacker tuned to the public default was stopped at 41.67% of seeded deployments with zero false stops - but was KILLED at its frozen false-positive gate: legitimate power users were newly blocked at 1.38-5.14% per deployment draw against a 1% ceiling. That is the same population that killed IA-01; a different band is a new registration, not a retune. RECOMB-03 remains unbuilt pending the farm calibration gate.
+
+Suite: 974 tests / 972 pass / 0 fail / 2 skipped, measured on Linux x64 with Node 24.22.1 (this release was prepared on the maintainer's Linux VM; the 2.9.2 Windows-native baseline does not carry over, and no Windows number is claimed). Runtime dependencies remain zero.
+
+Compatibility: tokens with an `iat` more than 60 s in the future now fail as `not_yet_valid` instead of verifying; `verify()` on a null request returns a verdict instead of throwing. No other behavior changes.
+
 ## 2.9.2 - 2026-11-14
 
 Audit-and-hardening release. The new source is verified on native Windows with Node 20.20.2 and LTS 26.13.1. Runtime dependencies remain zero and advisory signals do not acquire enforcement.

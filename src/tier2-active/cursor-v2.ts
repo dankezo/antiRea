@@ -69,6 +69,7 @@ export type CursorV2VerifyFailure =
   | "unexpected_fields"
   | "bad_signature"
   | "expired"
+  | "not_yet_valid"
   | "binding_mismatch"
   | "position_mismatch"
   | "stale_version"
@@ -94,6 +95,15 @@ interface CursorV2Payload {
 const PAYLOAD_KEYS = new Set(["v", "sub", "coh", "scope", "pos", "seq", "lv", "iat", "exp"]);
 
 export const DEFAULT_CURSOR_V2_TTL_MS = 300_000;
+
+/**
+ * Clock skew tolerated on the issued-at edge (LPG-07): a token whose
+ * `iat` is more than this far in the future fails as `not_yet_valid`.
+ * Only the server can mint these tokens, so a future `iat` means a
+ * host clock or minting error; 60 s matches the skew the step-up
+ * proof and the Web Bot Auth verifier already allow.
+ */
+export const CURSOR_V2_IAT_SKEW_MS = 60_000;
 
 /**
  * Maximum accepted V2 token length, in characters (NV-2). Same
@@ -178,7 +188,7 @@ export function mintCursorV2(secret: CursorV2Secret, options: MintCursorV2Option
 
 /**
  * Verify a V2 token against the store's current authority. Check order:
- * structure, payload allowlist, signature, expiry, binding, position,
+ * structure, payload allowlist, signature, expiry, issued-at, binding, position,
  * then the store-wins checks (ledger version, sequence). A failure
  * result never carries payload fields - the host's recovery path is to
  * consult its store, not the rejected token.
@@ -216,6 +226,7 @@ export function verifyCursorV2(
       typeof candidate.pos !== "number" || !Number.isFinite(candidate.pos) ||
       typeof candidate.seq !== "number" || !Number.isFinite(candidate.seq) ||
       typeof candidate.lv !== "number" || !Number.isFinite(candidate.lv) ||
+      typeof candidate.iat !== "number" || !Number.isFinite(candidate.iat) ||
       typeof candidate.exp !== "number" || !Number.isFinite(candidate.exp)
     ) {
       return { ok: false, reason: "malformed" };
@@ -234,6 +245,7 @@ export function verifyCursorV2(
 
   const now = options.now ?? Date.now();
   if (now >= payload.exp) return { ok: false, reason: "expired" };
+  if (payload.iat > now + CURSOR_V2_IAT_SKEW_MS) return { ok: false, reason: "not_yet_valid" };
   if (
     payload.sub !== options.subject ||
     payload.scope !== options.scope ||
