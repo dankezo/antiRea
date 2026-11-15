@@ -152,6 +152,8 @@ It exposes the library's eight advisory signal kinds as six tools -
 `evaluate`, `close_signal` - so an agent can open a signal session,
 feed it events and read the verdict.
 
+[![Anti Rea MCP server](https://mcprush.com/badge/anti-rea-mcp/card.svg)](https://mcprush.com/to/anti-rea-mcp?ref=badge)
+
 ```json
 {
   "mcpServers": {
