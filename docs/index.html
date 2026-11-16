@@ -57,12 +57,16 @@ nav.main a.ext{color:var(--paper);border:1px solid var(--line);padding:8px 14px}
 nav.main a.ext:hover{border-color:var(--acid);color:var(--acid)}
 
 /* hero */
-.hero{padding:80px 0 0}
+.hero{padding:44px 0 0}
 .hero-top{display:grid;grid-template-columns:7fr 5fr;gap:56px;align-items:start}
 .hero-top>*,.sec-head>*,.rel-grid>*,.mcp-grid>*,.steps>*{min-width:0}
-h1{font-size:clamp(3.1rem,7.4vw,6.8rem);line-height:.99;letter-spacing:-.032em;font-weight:500;margin:22px 0 28px}
+h1{font-size:clamp(2.5rem,6.2vw,5.4rem);line-height:.99;letter-spacing:-.032em;font-weight:500;margin:16px 0 20px}
 h1 .m{color:var(--acid)}
-.lede{font-size:1.22rem;line-height:1.58;color:var(--body);max-width:34em;margin:0}
+.lede{font-size:1.13rem;line-height:1.58;color:var(--body);max-width:34em;margin:0}
+.cta-row{margin:28px 0 0}
+.cta-btn{display:inline-block;background:var(--acid);color:var(--ink);font-weight:600;font-size:1.05rem;padding:15px 26px;text-decoration:none;letter-spacing:-.01em}
+.cta-btn i{font-style:normal}
+.cta-btn:hover{background:var(--paper)}
 .rail{border:1px solid var(--line);background:var(--ink2)}
 .rail-hd{font-family:var(--mono);font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);padding:14px 20px;border-bottom:1px solid var(--line2);display:flex;justify-content:space-between}
 .rail-hd .a{color:var(--acid)}
@@ -82,7 +86,7 @@ h1 .m{color:var(--acid)}
 .rail-links a:hover{color:var(--acid)}
 
 /* console */
-.console{margin-top:64px;border:1px solid var(--line);background:var(--panel)}
+.console{margin-top:36px;border:1px solid var(--line);background:var(--panel)}
 .console-hd{display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--acid);flex:none;animation:pulse 1.8s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
@@ -90,7 +94,7 @@ h1 .m{color:var(--acid)}
 .console-hd .right{margin-left:auto;display:flex;gap:34px;color:var(--faint)}
 .console-hd .right b{color:var(--paper);font-weight:500}
 .console-hd .right .sync b{color:var(--acid)}
-canvas#stream{display:block;width:100%;height:360px}
+canvas#stream{display:block;width:100%;height:300px}
 .verdict{display:flex;justify-content:space-between;gap:20px;padding:13px 18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:.85rem;color:var(--body);transition:background .3s,color .3s}
 .verdict .st{letter-spacing:.1em}
 .verdict.flag{background:var(--acid);color:var(--ink);font-weight:500}
@@ -159,11 +163,15 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
 
 @media (max-width:900px){
   .wrap{padding:0 20px}
-  .hero{padding:52px 0 0}
+  .hero{padding:32px 0 0}
+  .facts{display:none}
+  .rail-links{display:none}
+  .hero-top{gap:24px}
+  .cta-row{margin-top:20px}
   .hero-top,.sec-head,.rel-grid,.mcp-grid{grid-template-columns:1fr;gap:36px}
   nav.main a.anch{display:none}
   nav.main{gap:18px}
-  canvas#stream{height:300px}
+  canvas#stream{height:260px}
   .console-hd{flex-wrap:wrap;row-gap:9px;font-size:.72rem}
   .console-hd .right{margin-left:0;width:100%;justify-content:space-between;gap:12px}
   .console-hd .right .hid{display:none}
@@ -261,7 +269,8 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       <div>
         <p class="kicker"><span class="a">Fig 00</span> - A meter for your dataset</p>
         <h1>Every identity<br>gets a <span class="m">meter.</span></h1>
-        <p class="lede">Server-side TypeScript library that meters dataset access per identity and flags coordinated bot abuse - bulk extraction crews, scheduler-driven herds, seat squatting. Advisory only.</p>
+        <p class="lede">Server-side TypeScript library that meters dataset access per identity and flags coordinated bot abuse. Advisory only.</p>
+        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.0.0</span> <i>&rarr;</i></a></p>
       </div>
       <div class="rail">
         <div class="rail-hd"><span>Install</span><span class="a">Node 20+</span></div>
