@@ -95,6 +95,31 @@ h1 .m{color:var(--acid)}
 .console-hd .right b{color:var(--paper);font-weight:500}
 .console-hd .right .sync b{color:var(--acid)}
 canvas#stream{display:block;width:100%;height:300px}
+@media (min-width:901px) and (max-height:1050px){
+  .hero{padding-top:30px}
+  h1{font-size:clamp(2.5rem,5.8vw,4.8rem);margin:12px 0 14px}
+  .lede{line-height:1.52}
+  .cta-row{margin-top:20px}
+  .cta-btn{padding:13px 26px}
+  .console{margin-top:24px}
+  .console-hd{padding:11px 18px}
+  .verdict{padding:11px 18px}
+  canvas#stream{height:240px}
+}
+@media (min-width:901px) and (max-height:920px){
+  .hero{padding-top:26px}
+  h1{font-size:clamp(2.5rem,5.6vw,4.5rem);margin:12px 0 14px}
+  .console{margin-top:22px}
+  canvas#stream{height:216px}
+}
+@media (min-width:901px) and (max-height:830px){
+  .hero{padding-top:24px}
+  h1{font-size:clamp(2.3rem,5vw,4.15rem);margin:10px 0 14px}
+  .console{margin-top:20px}
+  .console-hd{padding:10px 18px}
+  .verdict{padding:10px 18px}
+  canvas#stream{height:176px}
+}
 .verdict{display:flex;justify-content:space-between;gap:20px;padding:13px 18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:.85rem;color:var(--body);transition:background .3s,color .3s}
 .verdict .st{letter-spacing:.1em}
 .verdict.flag{background:var(--acid);color:var(--ink);font-weight:500}
