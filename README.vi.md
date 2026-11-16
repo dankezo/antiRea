@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
 </p>
 
 <p align="center">
@@ -174,6 +174,17 @@ in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
 
+### v3.0.0 - Chuyển hóa tier-2, khoá năng lực bulk và thống kê pin hiệu chuẩn farm
+
+Ba hệ thống đã đo tốt nghiệp từ lab và farm. Tất cả đều opt-in; không mặc định nào thay đổi.
+
+- **Chuyển hóa tier-2 (`createTier2Conversion`, MỚI):** lớp thực thi C27+C35, dựng theo các quyết định đã khóa ngày 2026-11-04. Một cờ C27 bền vững (có mặt trong >= 2 epoch bằng chứng khác nhau) kèm corroboration độc lập từ một họ detector khác sẽ hạ ngân sách bản ghi của identity về phía sàn 500 bản ghi/identity/24h - không bao giờ dưới sàn, không bao giờ chặn cứng. Lần chạm decoy C35 đầu tiên áp taint + step-up ngay lập tức, với cơ chế tự giải trừ V-C và void hồi tố tích hợp sẵn, không phải tùy chọn. Một ngân sách FP toàn fleet kiểu alpha-wealth đi kèm lớp này: khi cạn, nó tự động rơi về observe-only. Strata chỉ vào bằng khai báo của host. Cơ sở bằng chứng: FC-03R PREMISE-CONFIRMED trên thống kê farm căn theo tuổi (tuổi 1-12) cộng pin lab; chân C35 là bằng chứng lab-only và không có tuyên bố farm nào cho nó.
+- **Khoá năng lực bulk (`createBulkAccessKeyAuthority`, MỚI):** truy cập bulk - bản ghi mới vượt vùng miễn phí 150 bản ghi, mọi bản ghi thuộc phần đuôi, mọi export mới - đều cần một khoá do server cấp, và việc CẤP khoá là sự kiện bị đo: kênh ẩn danh bị bound bởi pool toàn fleet (6 khoá/24h theo giá trị lab), mỗi khoá mở một lát 150 bản ghi không liên tục của một hoán vị epoch có seed, và bản ghi được phục vụ dưới một khoá mang biến thể watermark của khoá đó. Trong probe lab đông cứng (GATEKEY-01 Step-0), độc giả thường và độc giả nặng được phục vụ đủ với 0 lần bị từ chối và 0 lần bị đòi step-up, trong khi farm xoay 200 identity bị giữ ở nhịp pool và cần 12 ngày cho phần đuôi. Các số kinh tế đó chỉ phủ phần đuôi, export và phần phục vụ vượt vùng miễn phí; phần đầu vẫn không khoá theo thiết kế.
+- **Thống kê pin FC-07 (`fitPinNovelStatistic` / `scorePinNovelStatistic`, MỚI, opt-in):** đếm phơi nhiễm bản ghi mới theo identity, ngưỡng fit theo stratum do host khai báo theo C-LAW, luật cờ strict (novel > tau). Trên cửa sổ hiệu chuẩn farm, nó gắn cờ 0% cả hai stratum hợp lệ trong khi phát hiện attacker chậm 2/2 và các shape bulk 4/4; cái giá của nó được in kèm (traffic dạng review-team crossing 100%), và kiểm chứng holdout trên trace 16-22/11 vẫn đang chờ. Các dạng (novel, total) đã ship và mặc định không đổi.
+- Mới nữa: trục stuffing hàng chờ của luật vote-brigading (`createQueueStuffingSignal`; PASS-LAB trong mô phỏng có seed), ba module advisory ở dạng hạn chế đã đo (`analyzeHeaderCoherence` V1, `classifyUserAgent` catalogue tên riêng, `createFakeEndpoints` gói decoy opt-in), lưu referer chỉ theo origin kèm bản vá WART-1, và một test conformance rác vĩnh viễn ghim cả 7 bề mặt verify (146 lời gọi: 0 throw, 0 verdict thành công).
+
+1056 test: 1054 đạt, không lỗi, 2 bỏ qua (đo trên Linux x64, Node 24.22.1).
+
 ### v2.9.3 - Đồ thị decoy bóng và kiểm tra thời điểm phát hành token
 
 Module mới - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: các tập bản ghi decoy mà tác giả, series và bản ghi tham chiếu chéo lẫn nhau với tính nhất quán tham chiếu đầy đủ, thay vì canary đứng rời mà một quá trình tái dựng ngoại tuyến có thể lọc bỏ. Trong lab (BLA-02, đăng ký đông cứng, 12 instance theo seed), một bộ lọc toàn vẹn tham chiếu dạng fixpoint loại 100% decoy rời (720/720) và 0% decoy bóng (0/720), trong khi nhóm control không có decoy mất 0 trên 24.000 bản ghi thật. Không có tuyên bố nào về kháng fingerprint thống kê: tính nhất quán là thuộc tính được đo, việc bắt chước phân phối quần thể thì không. Các hàm kiểm chứng token (`verifyCursor`, `verifyCursorV2`, `verifyEchoId`) nay bác `iat` ở tương lai quá 60 giây lệch đồng hồ với reason `not_yet_valid` và coi `iat` không phải số là malformed. `createDecoyMirage` nay nhận bộ từ vựng `fieldNames` / `featureNames` của host, để tài liệu decoy nói đúng phương ngữ của host thay vì bộ từ vựng dựng sẵn.
@@ -184,7 +195,7 @@ Module mới - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: các t�
 
 So khớp token chính xác, giới hạn trạng thái telemetry, sửa cửa sổ ownership với sự kiện đến muộn, trả đặc trưng hữu hạn cho phiên không hợp lệ và quét payload có chu trình an toàn. Host vẫn quyết định hậu quả; không thêm dependency lúc chạy.
 
-Kiểm định trên Windows chạy 963 test: 960 đạt, không lỗi, 3 bỏ qua (hai vector RSA-PSS và một ca thiếu quyền tạo symlink). Số lab lịch sử dưới đây giữ phạm vi gốc; phần thiếu bộ sinh được ghi NOT VERIFIED trong báo cáo.
+Kiểm định trên Windows chạy 963 test: 960 đạt, không lỗi, 3 bỏ qua (hai vector RSA-PSS và một ca thiếu quyền tạo symlink). Số lab lịch sử dưới đây giữ phạm vi gốc; các bộ sinh thiếu trong gói sau đó đã được tìm thấy trong cây nghiên cứu và các số bị ảnh hưởng (dòng seed D2, quần thể EMP, thí nghiệm declaration/watermark, dòng dõi RECOMB-03) đã được tái lập chính xác trong các lượt chạy lại Phase 1 ngày 2026-11-16; phần chưa xác minh còn lại là các biên nhận chỉ có trong kho lưu trữ, liệt kê trong bản tóm tắt kiểm định.
 
 [2.9.2 deep dive](docs/v2.9.2-deep-dive.vi.md) | [Audit measurements](docs/audit-2.9.2.json)
 
@@ -410,8 +421,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **974
-test tự động** (972 đạt, không lỗi, 2 bỏ qua, đo trên Linux x64 với Node 24.22.1) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **1056
+test tự động** (1054 đạt, không lỗi, 2 bỏ qua, đo trên Linux x64 với Node 24.22.1) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.

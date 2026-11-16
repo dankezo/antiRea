@@ -111,6 +111,20 @@
  * without it. Do not read the lab result as a real-world
  * false-positive guarantee.
  *
+ * REFERER STORAGE HYGIENE (UAS-04, PASS-LAB as hygiene only - this
+ * is not a detection signal and no claim changes): when a page
+ * carries a raw `referrer`, only its ORIGIN is stored or used -
+ * `new URL(raw).origin`, sliced to 200 chars, computed by
+ * `refererOrigin` at storage time. Unparseable or absent referrers
+ * store actual null, and so do opaque-origin URLs (data:, file:),
+ * whose `URL.origin` is the literal string "null" (the WART-1
+ * fix). The raw referrer - path, query, credentials - is never
+ * retained. The empty-referrer share this module consumes is
+ * invariant under the minimization (UAS-04 lab population, seed
+ * 20308104: stored-null 647 = absent 599 + unparseable 48 of
+ * 1,000 draws; all 353 parseable referrers stored exactly as
+ * their origin).
+ *
  * Pure computation: no I/O, no runtime dependencies. State is
  * bounded in-memory maps (fixed-horizon sums per identity, a capped
  * page buffer per cohort).
@@ -128,14 +142,44 @@ const ADVISORY_NOTICE =
   "the sole evidence for any consequence. Levels: a first violating window is a watch; " +
   "only a second consecutive violating window is a flag.";
 
+/**
+ * UAS-04 referer minimization, applied at storage time: reduce a
+ * raw referrer to the value this module stores for it - its
+ * origin (`new URL(raw).origin`, sliced to 200 chars), or actual
+ * null when the referrer is absent, empty, not a string, or
+ * unparseable. Opaque-origin URLs (data:, file:) yield
+ * `URL.origin === "null"` (the string); they store actual null
+ * instead (WART-1 fix). Never throws, for any input.
+ */
+export function refererOrigin(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  try {
+    const o = new URL(raw).origin;
+    return o === "null" ? null : o.slice(0, 200) || null;
+  } catch {
+    return null;
+  }
+}
+
 /** One page observation, as fed to calibration fitting. Mirrors the per-page fields of {@link AssetReferrerProfileEvent}. */
 export interface AssetReferrerPageSample {
   /** Images loaded by this page view. */
   images: number;
   /** Total asset (subresource) requests for this page view, images included. */
   assets: number;
-  /** Whether the page view arrived with an empty referrer. */
-  referrerEmpty: boolean;
+  /**
+   * Whether the page view arrived with an empty referrer. Required
+   * unless `referrer` is present, in which case this is derived
+   * from the stored origin (empty exactly when the stored origin
+   * is null) and any supplied value is ignored.
+   */
+  referrerEmpty?: boolean;
+  /**
+   * The page view's raw referrer, when the host has it. Only its
+   * origin is stored or used (see `refererOrigin` and the module
+   * header's UAS-04 hygiene note); the raw value is never retained.
+   */
+  referrer?: string | null;
   /** Millisecond timestamp; used only to pool cohort pages chronologically. */
   ts?: number;
 }
@@ -236,6 +280,13 @@ export interface AssetProfileObservation {
   counted: boolean;
   /** Total pages recorded for the identity after this event (across all windows). */
   pages: number;
+  /**
+   * The referer origin stored for this page (UAS-04 hygiene),
+   * present exactly when the event carried a `referrer` field:
+   * the origin string, or null for absent/unparseable/opaque-origin
+   * referrers. The raw referrer is never retained or returned.
+   */
+  storedRefererOrigin?: string | null;
   /**
    * The identity signal, present exactly when this event closed a
    * window on a calibrated instance.
@@ -559,9 +610,13 @@ function validatePageSample(page: unknown, field: string): AssetReferrerPageSamp
   const p = page as AssetReferrerPageSample;
   requireFiniteAtLeast(p.images, `${field}.images`, 0);
   requireFiniteAtLeast(p.assets, `${field}.assets`, 0);
-  if (typeof p.referrerEmpty !== "boolean") fail(`${field}.referrerEmpty must be a boolean`);
+  // UAS-04 storage hygiene: a raw referrer, when present, is
+  // reduced to its stored origin here and never retained; the
+  // empty-referrer boolean is derived from the stored value.
+  const referrerEmpty = "referrer" in p ? refererOrigin(p.referrer) === null : p.referrerEmpty;
+  if (typeof referrerEmpty !== "boolean") fail(`${field}.referrerEmpty must be a boolean`);
   if (p.ts !== undefined) requireFiniteAtLeast(p.ts, `${field}.ts`, 0);
-  return p;
+  return { images: p.images, assets: p.assets, referrerEmpty, ts: p.ts };
 }
 
 /* ---------------- runtime state ---------------- */
@@ -598,6 +653,8 @@ interface CohortPage {
   images: number;
   assets: number;
   referrerEmpty: boolean;
+  /** The stored referer origin for this page (UAS-04 hygiene), or null. The raw referrer is never stored. */
+  refererOrigin: string | null;
 }
 
 interface CohortState {
@@ -862,7 +919,18 @@ export function createAssetReferrerProfile(
     }
     requireFiniteAtLeast(event.images, "event.images", 0);
     requireFiniteAtLeast(event.assets, "event.assets", 0);
-    if (typeof event.referrerEmpty !== "boolean") fail("event.referrerEmpty must be a boolean");
+    // UAS-04 storage hygiene: when the event carries a raw
+    // referrer, only its origin is stored (see `storedRefererOrigin`
+    // on the recorded observation and `refererOrigin` on cohort
+    // pages); the empty-referrer boolean is derived from the
+    // stored value and the raw referrer is never retained.
+    const hasReferrer = "referrer" in event;
+    const storedRefererOrigin = hasReferrer ? refererOrigin(event.referrer) : null;
+    const referrerEmpty: boolean = hasReferrer
+      ? storedRefererOrigin === null
+      : typeof event.referrerEmpty === "boolean"
+        ? event.referrerEmpty
+        : fail("event.referrerEmpty must be a boolean");
     if (event.ts !== undefined) requireFiniteAtLeast(event.ts, "event.ts", 0);
     if (event.clientType !== undefined && typeof event.clientType !== "string") {
       fail("event.clientType must be a string when present");
@@ -893,7 +961,7 @@ export function createAssetReferrerProfile(
     idState.totalPages++;
     idState.imgSum += event.images;
     idState.astSum += event.assets;
-    if (event.referrerEmpty) idState.refCount++;
+    if (referrerEmpty) idState.refCount++;
     idState.openPages++;
     let windowClosed = false;
     if (idState.openPages === horizonPages) {
@@ -913,7 +981,8 @@ export function createAssetReferrerProfile(
         seq: seq++,
         images: event.images,
         assets: event.assets,
-        referrerEmpty: event.referrerEmpty,
+        referrerEmpty,
+        refererOrigin: storedRefererOrigin,
       });
       if (cohort.pages.length === cohortPages) {
         // Close the cohort window: fold its pages into window sums.
@@ -936,6 +1005,7 @@ export function createAssetReferrerProfile(
       counted: true,
       pages: idState.totalPages,
     };
+    if (hasReferrer) result.storedRefererOrigin = storedRefererOrigin;
     if (windowClosed && identityCal) {
       result.signal = evaluateIdentity(event.identity);
     }
@@ -960,8 +1030,8 @@ export function createAssetReferrerProfile(
     let skipped = 0;
     samples.forEach((stream, i) => {
       if (!Array.isArray(stream)) fail(`fitCalibration samples[${i}] must be an array of pages`);
-      stream.forEach((page, j) => validatePageSample(page, `fitCalibration samples[${i}][${j}]`));
-      const stats = prefixStats(stream, horizonPages);
+      const normalized = stream.map((page, j) => validatePageSample(page, `fitCalibration samples[${i}][${j}]`));
+      const stats = prefixStats(normalized, horizonPages);
       if (stats) statsList.push(stats);
       else skipped++;
     });
@@ -1002,11 +1072,11 @@ export function createAssetReferrerProfile(
     let skipped = 0;
     samples.forEach((members, i) => {
       if (!Array.isArray(members)) fail(`fitCohortCalibration samples[${i}] must be an array of member page arrays`);
-      members.forEach((stream, j) => {
+      const normalizedMembers = members.map((stream, j) => {
         if (!Array.isArray(stream)) fail(`fitCohortCalibration samples[${i}][${j}] must be an array of pages`);
-        stream.forEach((page, k) => validatePageSample(page, `fitCohortCalibration samples[${i}][${j}][${k}]`));
+        return stream.map((page, k) => validatePageSample(page, `fitCohortCalibration samples[${i}][${j}][${k}]`));
       });
-      const stats = cohortPrefixStats(members, cohortPages);
+      const stats = cohortPrefixStats(normalizedMembers, cohortPages);
       if (stats) statsList.push(stats);
       else skipped++;
     });

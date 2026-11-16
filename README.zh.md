@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
 </p>
 
 <p align="center">
@@ -160,6 +160,17 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 
 ## 最新版本
 
+### v3.0.0 - Tier-2 转化、批量能力密钥与 farm 校准的 pin 统计量
+
+三个已测量的系统从实验室和 farm 毕业。全部为 opt-in；不改变任何默认值。
+
+- **Tier-2 转化（`createTier2Conversion`，新增）：** C27+C35 执行层，按 2026-11-04 锁定的决定构建。持续的 C27 标记（出现在 >= 2 个不同证据 epoch）加上来自不同检测器家族的独立 corroboration，会将该 identity 的记录预算向 500 条记录/identity/24h 的下限下调——永不低于下限，永不硬阻断。首次 C35 诱饵触碰立即施加 taint + step-up，并内置 V-C 自解除与追溯 void（不是可选的）。alpha-wealth 全队 FP 预算随层一同发布：耗尽时自动回落到 observe-only。分层仅由 host 声明进入。证据基础：FC-03R 在 farm 年龄对齐统计量（年龄 1-12）上 PREMISE-CONFIRMED，加上实验室 pin；C35 一腿仅为实验室证据，不作任何 farm 主张。
+- **批量能力密钥（`createBulkAccessKeyAuthority`，新增）：** 批量访问——超出 150 条免费区的新记录、任何尾部记录、任何新导出——都需要服务器签发的密钥，而签发本身就是被计量的事件：匿名通道受全队 pool 约束（实验室默认值 6 把/24h），每把密钥解锁一个带种子 epoch 置换中的 150 条非连续切片，在密钥下服务的记录带有该密钥的水印变体。在冻结的实验室探针（GATEKEY-01 Step-0）中，普通与重度读者被完整服务，零拒绝、零 step-up 要求，而一个 200-identity 轮换 farm 被限制在 pool 速率下，需要 12 天才能取完尾部。这些经济学仅覆盖尾部、导出与免费区之外的服务；头部按设计保持无密钥。
+- **FC-07 pin 统计量（`fitPinNovelStatistic` / `scorePinNovelStatistic`，新增，opt-in）：** 按 identity 的纯新记录暴露计数，阈值按 host 声明的分层以 C-LAW 拟合，严格标记规则（novel > tau）。在 farm 校准窗口上，它对两个合法分层的标记率为 0%，同时检出慢速攻击者 2/2、批量形状 4/4；其代价随之印出（review-team 形状的流量 crossing 为 100%），且 16-22/11 轨迹的 holdout 验证仍待进行。已发布的 (novel, total) 形式与默认值不变。
+- 同样新增：投票 brigading 律的队列 stuffing 轴（`createQueueStuffingSignal`；种子模拟 PASS-LAB）、三个以受测受限形式发布的 advisory 模块（`analyzeHeaderCoherence` V1、`classifyUserAgent` 命名目录、`createFakeEndpoints` opt-in 诱饵包）、仅按 origin 存储 referer 并修复 WART-1，以及一个永久性的垃圾输入一致性测试，锁定全部 7 个验证面（146 次调用：0 抛错，0 成功 verdict）。
+
+1056 项测试：1054 项通过、0 项失败、2 项跳过（在 Linux x64、Node 24.22.1 上测量）。
+
 ### v2.9.3 - 影子诱饵图与 token 签发时间检查
 
 新模块 - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`：诱饵记录集合，其作者、系列与记录之间以完整的引用一致性相互引用，而非可被离线重构过滤掉的孤立 canary。在实验室中（BLA-02，冻结注册，12 个种子实例），一个不动点引用完整性过滤器移除了 100% 的孤立诱饵（720/720）和 0% 的影子诱饵（0/720），而无诱饵对照组在 24,000 条真实记录中损失 0 条。本项目不声称抗统计指纹识别：被测量的是引用一致性，而非总体分布模仿。token 验证函数（`verifyCursor`、`verifyCursorV2`、`verifyEchoId`）现在会以 `not_yet_valid` 拒绝超出 60 秒时钟偏差的未来 `iat`，并将非数字 `iat` 视为 malformed。`createDecoyMirage` 现在接受主机提供的 `fieldNames` / `featureNames` 词汇表，使诱饵文档使用主机自身的领域用语，而非内置词汇。
@@ -170,7 +181,7 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 
 精确比较 token、限制遥测状态、修正乱序事件的 ownership 窗口、为无效会话返回有限数值，并安全处理带环的字段结构。所有后果仍由主机决定，运行时依赖仍为零。
 
-本次 Windows 本地审计运行 963 项测试：960 项通过、0 项失败、3 项跳过（两个 RSA-PSS 向量和一个缺少符号链接权限的用例）。下方历史实验室数字保留原始适用范围；缺失生成器的项目明确标为 NOT VERIFIED。
+本次 Windows 本地审计运行 963 项测试：960 项通过、0 项失败、3 项跳过（两个 RSA-PSS 向量和一个缺少符号链接权限的用例）。下方历史实验室数字保留原始适用范围；包中缺失的生成器后来已在研究树中找到，受影响的数字（D2 种子流、EMP 群体、declaration/watermark 实验、RECOMB-03 谱系）已在 2026-11-16 的 Phase 1 重跑中精确复现；剩余未验证项为仅存在于归档中的收据，列于审计摘要。
 
 [2.9.2 deep dive](docs/v2.9.2-deep-dive.zh.md) | [Audit measurements](docs/audit-2.9.2.json)
 
@@ -351,8 +362,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-在本仓库本身上工作：`npm run check` 会编译代码、运行 **974 个自动化
-测试**（972 个通过、0 个失败、2 个跳过，在 Linux x64 与 Node 24.22.1 上测量），并执行静态检查。在部署
+在本仓库本身上工作：`npm run check` 会编译代码、运行 **1056 个自动化
+测试**（1054 个通过、0 个失败、2 个跳过，在 Linux x64 与 Node 24.22.1 上测量），并执行静态检查。在部署
 前扫描公开构建：`node scripts/run-audit.cjs /path/to/dist` 或
 `python3 scripts/verify-build.py /path/to/dist`。
 

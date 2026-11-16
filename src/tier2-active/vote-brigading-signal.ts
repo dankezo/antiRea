@@ -35,11 +35,18 @@
  * two wrecked songs (gate: before the third brigade song starts).
  *
  * This is a ROOM state in the population family: outputs name no
- * identity. The measured scope is the vote-skip axis; queue
- * stuffing was registered but NOT measured - do not read this
- * module as covering it. Brigades voting from AGED accounts are
- * also out of scope by construction: newness is the estimand's
- * main leg, stated as a limit, not hidden.
+ * identity. The measured scope of `createVoteBrigadingSignal` is
+ * the vote-skip axis; the queue-stuffing axis is covered by
+ * `createQueueStuffingSignal` below, which transplants the same
+ * law verbatim onto queue submissions. Queue stuffing was
+ * measured in seeded simulation (PASS-LAB, CAND-273-4 stuffing
+ * pin): its constants are harness-fitted and uncalibrated for
+ * real traffic, aged-account stuffing is invisible by
+ * construction, and stuffing whose new-identity share stays at
+ * or below half of a room's submission volume is structurally
+ * invisible. Brigades voting - and stuffers submitting - from
+ * AGED accounts are also out of scope by construction: newness
+ * is the estimand's main leg, stated as a limit, not hidden.
  *
  * SELF-DISARM, CONSIDERED AND NOT APPLIED (registered reasoning):
  * the C35-style suspension rule exists for signals whose output
@@ -54,7 +61,10 @@
  * millisecond ts, and `accountCreatedTs` when known - otherwise
  * first observation stands in for creation time. `evaluate`
  * folds the stored per-window aggregates in time order, so it
- * is a deterministic function of state.
+ * is a deterministic function of state. For the queue factory,
+ * feed every queue submission the same way, plus the optional
+ * `songRef`: the reference is carried on the event but never
+ * enters the statistic.
  *
  * HARD LIMITS.
  * - ADVISORY ONLY: `enforcement: "none"` on every output. The
@@ -86,9 +96,21 @@ const ADVISORY_NOTICE =
   "identities created within 24 h of voting, T = all votes, windows under 5 votes score 0), the " +
   "accumulator floors at 0, and the room flags only at A >= 12 with contributions from at least 2 " +
   "distinct windows. A single mass skip by first-time visitors cannot flag by construction (lab " +
-  "peak A = 9, one window). No output names an identity. Scope is vote-skip only: queue stuffing " +
-  "was NOT measured, and brigades voting from aged accounts are out of scope by construction. " +
+  "peak A = 9, one window). No output names an identity. Scope is vote-skip only (queue stuffing " +
+  "is the separate createQueueStuffingSignal in this module, measured in seeded simulation as " +
+  "PASS-LAB), and brigades voting from aged accounts are out of scope by construction. " +
   "All lab numbers are seeded simulation (CAND-273-4 pin), uncalibrated for real traffic.";
+
+const QUEUE_ADVISORY_NOTICE =
+  "Advisory telemetry only (enforcement: none): one-sided accumulated evidence that a room's queue " +
+  "submissions are being stuffed by new identities - each 60 s window scores N - 0.5*T (N = submissions " +
+  "from identities created within 24 h of submitting, T = all submissions, windows under 5 submissions " +
+  "score 0), the accumulator floors at 0, and the room flags only at A >= 12 with contributions from at " +
+  "least 2 distinct windows. No output names an identity. Queue stuffing was measured in seeded " +
+  "simulation only (PASS-LAB, CAND-273-4 stuffing pin): the constants are harness-fitted and " +
+  "uncalibrated for real traffic; stuffing from aged accounts is invisible by construction, and " +
+  "stuffing that keeps the new-identity share at or below half of a room's submission volume is " +
+  "structurally invisible. Submission content (songRef) never enters the statistic.";
 
 export interface VoteBrigadingEvent {
   /** The authenticated identity casting the vote. */
@@ -167,6 +189,55 @@ export interface VoteBrigadingSignalInstance {
   snapshot(): VoteBrigadingSnapshot;
 }
 
+/**
+ * One queue-submission event, as fed to {@link createQueueStuffingSignal}.
+ * The vote-axis law transplanted verbatim (CAND-273-4 stuffing
+ * registration): the event is a submission, not a vote.
+ */
+export interface QueueStuffingEvent {
+  /** The authenticated identity submitting to the queue. */
+  identity: string;
+  /** Millisecond timestamp of the submission. */
+  ts: number;
+  /** Account creation time (ms), when the host knows it; otherwise first observation stands in. */
+  accountCreatedTs?: number;
+  /**
+   * Reference to the submitted song/content. Carried on the event
+   * for the host's own bookkeeping; it NEVER enters the statistic.
+   */
+  songRef?: string;
+}
+
+/** Options for {@link createQueueStuffingSignal}: identical in shape, defaults and frozen constants to the vote factory's. */
+export interface CreateQueueStuffingSignalOptions extends CreateVoteBrigadingSignalOptions {}
+
+export type QueueStuffingObservation = VoteBrigadingObservation;
+
+export type QueueStuffingEvaluateOptions = VoteBrigadingEvaluateOptions;
+
+export interface QueueStuffingResult extends Omit<VoteBrigadingResult, "kind"> {
+  kind: "queue-stuffing";
+}
+
+export type QueueStuffingSnapshot = VoteBrigadingSnapshot;
+
+export interface QueueStuffingSignalInstance {
+  observe(event: QueueStuffingEvent): QueueStuffingObservation;
+  evaluate(options?: QueueStuffingEvaluateOptions): QueueStuffingResult;
+  snapshot(): QueueStuffingSnapshot;
+}
+
+/** The shared accumulator core's result: identical to the vote result except `kind` is the factory's own. */
+interface BrigadingCoreResult extends Omit<VoteBrigadingResult, "kind"> {
+  kind: string;
+}
+
+interface BrigadingCoreInstance {
+  observe(event: VoteBrigadingEvent): VoteBrigadingObservation;
+  evaluate(options?: VoteBrigadingEvaluateOptions): BrigadingCoreResult;
+  snapshot(): VoteBrigadingSnapshot;
+}
+
 /** Named error thrown for every invalid vote-brigading input. */
 export class VoteBrigadingError extends Error {
   constructor(message: string) {
@@ -175,25 +246,37 @@ export class VoteBrigadingError extends Error {
   }
 }
 
-const fail = (message: string): never => {
-  throw new VoteBrigadingError(`createVoteBrigadingSignal: ${message}`);
-};
+/** Named error thrown for every invalid queue-stuffing input. */
+export class QueueStuffingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QueueStuffingError";
+  }
+}
 
-function requireIntInRange(value: unknown, field: string, min: number, max: number): number {
+type FailFn = (message: string) => never;
+
+function makeFail(factoryName: string, ErrorClass: new (message: string) => Error): FailFn {
+  return (message: string): never => {
+    throw new ErrorClass(`${factoryName}: ${message}`);
+  };
+}
+
+function requireIntInRange(fail: FailFn, value: unknown, field: string, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
     fail(`${field} must be an integer between ${min} and ${max}`);
   }
   return value as number;
 }
 
-function requirePositive(value: unknown, field: string): number {
+function requirePositive(fail: FailFn, value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     fail(`${field} must be a positive finite number`);
   }
   return value as number;
 }
 
-function requireIdentity(value: unknown, field: string): string {
+function requireIdentity(fail: FailFn, value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     fail(`${field} must be a non-empty string`);
   }
@@ -204,17 +287,19 @@ function isValidTs(ts: unknown): ts is number {
   return typeof ts === "number" && Number.isFinite(ts) && Math.abs(ts) <= 8.64e15;
 }
 
-export function createVoteBrigadingSignal(
-  options: CreateVoteBrigadingSignalOptions = {},
-): VoteBrigadingSignalInstance {
+function createBrigadingSignalCore(
+  options: CreateVoteBrigadingSignalOptions,
+  config: { kind: string; notice: string; fail: FailFn },
+): BrigadingCoreInstance {
+  const fail = config.fail;
   if (typeof options !== "object" || options === null) fail("options must be an object");
-  const threshold = requirePositive(options.threshold ?? DEFAULT_THRESHOLD, "threshold");
-  const minWindows = requireIntInRange(options.minWindows ?? DEFAULT_MIN_WINDOWS, "minWindows", 1, 1_000_000);
-  const windowMs = requirePositive(options.windowMs ?? DEFAULT_WINDOW_MS, "windowMs");
-  const minWindowVotes = requireIntInRange(options.minWindowVotes ?? DEFAULT_MIN_WINDOW_VOTES, "minWindowVotes", 1, 1_000_000);
-  const newnessWindowMs = requirePositive(options.newnessWindowMs ?? DEFAULT_NEWNESS_WINDOW_MS, "newnessWindowMs");
-  const maxWindows = requireIntInRange(options.maxWindows ?? 100_000, "maxWindows", 1, 10_000_000);
-  const maxIdentities = requireIntInRange(options.maxIdentities ?? 100_000, "maxIdentities", 1, 10_000_000);
+  const threshold = requirePositive(fail, options.threshold ?? DEFAULT_THRESHOLD, "threshold");
+  const minWindows = requireIntInRange(fail, options.minWindows ?? DEFAULT_MIN_WINDOWS, "minWindows", 1, 1_000_000);
+  const windowMs = requirePositive(fail, options.windowMs ?? DEFAULT_WINDOW_MS, "windowMs");
+  const minWindowVotes = requireIntInRange(fail, options.minWindowVotes ?? DEFAULT_MIN_WINDOW_VOTES, "minWindowVotes", 1, 1_000_000);
+  const newnessWindowMs = requirePositive(fail, options.newnessWindowMs ?? DEFAULT_NEWNESS_WINDOW_MS, "newnessWindowMs");
+  const maxWindows = requireIntInRange(fail, options.maxWindows ?? 100_000, "maxWindows", 1, 10_000_000);
+  const maxIdentities = requireIntInRange(fail, options.maxIdentities ?? 100_000, "maxIdentities", 1, 10_000_000);
 
   const windows = new Map<number, { total: number; fresh: number }>();
   const created = new Map<string, number>();
@@ -222,7 +307,7 @@ export function createVoteBrigadingSignal(
 
   function observe(event: VoteBrigadingEvent): VoteBrigadingObservation {
     if (typeof event !== "object" || event === null) fail("event must be an object");
-    const identity = requireIdentity(event.identity, "event.identity");
+    const identity = requireIdentity(fail, event.identity, "event.identity");
     if (!isValidTs(event.ts)) {
       counters.invalidTs++;
       return { status: "invalid_ts", counted: false };
@@ -255,7 +340,7 @@ export function createVoteBrigadingSignal(
     return { status: "recorded", counted: true };
   }
 
-  function evaluate(evaluateOptions: VoteBrigadingEvaluateOptions = {}): VoteBrigadingResult {
+  function evaluate(evaluateOptions: VoteBrigadingEvaluateOptions = {}): BrigadingCoreResult {
     if (typeof evaluateOptions !== "object" || evaluateOptions === null) {
       fail("evaluate options must be an object");
     }
@@ -283,7 +368,7 @@ export function createVoteBrigadingSignal(
       }
     }
     return {
-      kind: "vote-brigading",
+      kind: config.kind,
       flagged: firstFlagTs !== null,
       firstFlagTs,
       accumulator: a,
@@ -292,7 +377,7 @@ export function createVoteBrigadingSignal(
       windows: sorted.length,
       threshold,
       enforcement: "none",
-      notice: ADVISORY_NOTICE,
+      notice: config.notice,
     };
   }
 
@@ -305,9 +390,59 @@ export function createVoteBrigadingSignal(
       windows: windows.size,
       identities: created.size,
       counters: { ...counters },
-      notice: ADVISORY_NOTICE,
+      notice: config.notice,
     };
   }
 
   return { observe, evaluate, snapshot };
+}
+
+export function createVoteBrigadingSignal(
+  options: CreateVoteBrigadingSignalOptions = {},
+): VoteBrigadingSignalInstance {
+  return createBrigadingSignalCore(options, {
+    kind: "vote-brigading",
+    notice: ADVISORY_NOTICE,
+    fail: makeFail("createVoteBrigadingSignal", VoteBrigadingError),
+  }) as unknown as VoteBrigadingSignalInstance;
+}
+
+/**
+ * Queue-stuffing signal: the vote-brigading accumulator law
+ * transplanted VERBATIM onto the queue-submission stream
+ * (CAND-273-4 stuffing axis, PASS-LAB in seeded simulation - see
+ * the module header for the measured scope and its limits).
+ * One instance per room; feed every queue submission. Output is
+ * a room state naming no identity, advisory, enforcement "none".
+ */
+export function createQueueStuffingSignal(
+  options: CreateQueueStuffingSignalOptions = {},
+): QueueStuffingSignalInstance {
+  const queueFail = makeFail("createQueueStuffingSignal", QueueStuffingError);
+  const core = createBrigadingSignalCore(options, {
+    kind: "queue-stuffing",
+    notice: QUEUE_ADVISORY_NOTICE,
+    fail: queueFail,
+  });
+  return {
+    observe(event: QueueStuffingEvent): QueueStuffingObservation {
+      if (
+        typeof event === "object" &&
+        event !== null &&
+        event.songRef !== undefined &&
+        typeof event.songRef !== "string"
+      ) {
+        queueFail("event.songRef must be a string when present");
+      }
+      // songRef is carried on the event; the core never reads it,
+      // so submission content cannot enter the statistic.
+      return core.observe(event);
+    },
+    evaluate(evaluateOptions?: QueueStuffingEvaluateOptions): QueueStuffingResult {
+      return core.evaluate(evaluateOptions) as unknown as QueueStuffingResult;
+    },
+    snapshot(): QueueStuffingSnapshot {
+      return core.snapshot();
+    },
+  };
 }

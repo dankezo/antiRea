@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
 </p>
 
 <p align="center">
@@ -178,6 +178,17 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
 
+### v3.0.0 - Conversión de nivel 2, claves de capacidad bulk y el estadístico pin calibrado en farm
+
+Tres sistemas medidos se gradúan del laboratorio y del farm. Todos son opt-in; ningún valor por defecto cambia.
+
+- **Conversión de nivel 2 (`createTier2Conversion`, NUEVO):** la capa de aplicación C27+C35, construida bajo las decisiones fijadas del 2026-11-04. Una marca C27 persistente (>= 2 épocas de evidencia distintas) con corroboración independiente de una familia de detectores distinta reduce el presupuesto de registros de la identidad hacia un suelo de 500 registros/identidad/24 h - nunca por debajo del suelo, nunca un bloqueo duro. Un primer toque C35 a un señuelo aplica taint + step-up de inmediato, con el auto-desarme V-C y la anulación retroactiva integrados, no opcionales. Un presupuesto de FP de flota con riqueza alfa (alpha-wealth) acompaña a la capa: al agotarse, vuelve automáticamente a solo observación. Los estratos entran solo por declaración del host. Base de evidencia: FC-03R PREMISE-CONFIRMED sobre el estadístico del farm alineado por edad (edades 1-12) más el pin de laboratorio; la pata C35 es evidencia solo de laboratorio y no se hace ninguna afirmación de farm sobre ella.
+- **Claves de capacidad bulk (`createBulkAccessKeyAuthority`, NUEVO):** el acceso bulk - registros nuevos más allá de una zona gratuita de 150, cualquier registro de la cola, cualquier exportación nueva - requiere una clave emitida por el servidor, y la emisión es el evento medido: el canal anónimo está limitado por un pool de toda la flota (6 claves/24 h con los valores de laboratorio), cada clave desbloquea una porción no contigua de 150 registros de una permutación de época con semilla, y los registros servidos bajo una clave llevan la variante de marca de agua de esa clave. En la sonda congelada de laboratorio (GATEKEY-01 Paso 0), los lectores ordinarios y pesados fueron servidos por completo con cero denegaciones y cero demandas de step-up, mientras un farm de rotación de 200 identidades quedó sujeto a la tasa del pool y necesitó 12 días para la cola. Esa economía cubre solo la cola, las exportaciones y el servicio más allá de la zona gratuita; la cabeza permanece sin clave por diseño.
+- **Estadístico pin FC-07 (`fitPinNovelStatistic` / `scorePinNovelStatistic`, NUEVO, opt-in):** conteos de exposición de registros nuevos por identidad, umbrales ajustados por estrato declarado por el host bajo C-LAW, regla de marca estricta (novel > tau). En la ventana de calibración del farm marca 0% de ambos estratos legítimos mientras detecta al atacante lento 2/2 y las formas bulk 4/4; su coste se imprime con él (el tráfico con forma de equipo de revisión cruza al 100%), y la validación holdout sobre las trazas del 16-22/11 sigue pendiente. Las formas (novel, total) publicadas y el valor por defecto no cambian.
+- También nuevo: el eje de stuffing de colas de la ley anti-brigading de votos (`createQueueStuffingSignal`; PASS-LAB en simulación con semilla), tres módulos advisory en sus formas restringidas medidas (`analyzeHeaderCoherence` V1, `classifyUserAgent` catálogo nominal, `createFakeEndpoints` paquete señuelo opt-in), almacenamiento de referer solo por origen con la corrección WART-1, y una prueba permanente de conformidad con basura que fija las 7 superficies de verificación (146 llamadas: 0 excepciones, 0 veredictos de éxito).
+
+1056 pruebas: 1054 superadas, ningún fallo, 2 omitidas (medido en Linux x64, Node 24.22.1).
+
 ### v2.9.3 - Grafos señuelo sombra y comprobación de emisión de tokens
 
 Nuevo módulo - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: conjuntos de registros señuelo cuyos autores, series y registros se referencian entre sí con consistencia referencial completa, en lugar de canarios aislados que una reconstrucción fuera de línea puede filtrar. En el laboratorio (BLA-02, registro congelado, 12 instancias con semilla), un filtro de integridad referencial de punto fijo eliminó el 100% de los señuelos aislados (720/720) y el 0% de los señuelos sombra (0/720), mientras el control sin señuelos perdió 0 de 24.000 registros reales. No se afirma resistencia a la huella estadística: la consistencia es la propiedad medida, no la imitación de la población. Los verificadores de tokens (`verifyCursor`, `verifyCursorV2`, `verifyEchoId`) ahora rechazan un `iat` futuro más allá de 60 s de desviación de reloj como `not_yet_valid` y tratan un `iat` no numérico como malformed. `createDecoyMirage` ahora acepta vocabularios `fieldNames` / `featureNames` del host, para que los documentos señuelo hablen el dialecto del host en lugar del integrado.
@@ -188,7 +199,7 @@ Nuevo módulo - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: conjunt
 
 Comparación exacta de tokens, estado de telemetría acotado, ventanas de propiedad correctas con eventos tardíos, características finitas para sesiones inválidas e inspección segura ante ciclos. El host sigue decidiendo las consecuencias; no hay dependencias de ejecución nuevas.
 
-La auditoría local en Windows ejecutó 963 pruebas: 960 superadas, ningún fallo y 3 omitidas (dos vectores RSA-PSS y un caso sin privilegio para enlaces simbólicos). Las cifras históricas conservan su alcance original; los generadores ausentes figuran como NOT VERIFIED.
+La auditoría local en Windows ejecutó 963 pruebas: 960 superadas, ningún fallo y 3 omitidas (dos vectores RSA-PSS y un caso sin privilegio para enlaces simbólicos). Las cifras históricas conservan su alcance original; los generadores ausentes del paquete se localizaron después en el árbol de estudio y las cifras afectadas (flujos de semillas D2, población EMP, experimento declaration/watermark, linaje RECOMB-03) se reprodujeron exactamente en las reejecuciones de la Fase 1 del 2026-11-16; los elementos no verificados restantes son los recibos que solo existen en el archivo, enumerados en el resumen de auditoría.
 
 [2.9.2 deep dive](docs/v2.9.2-deep-dive.es.md) | [Audit measurements](docs/audit-2.9.2.json)
 
@@ -431,7 +442,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**974 pruebas automatizadas** (972 superadas, ningún fallo, 2 omitidas, medido en Linux x64 con Node 24.22.1) y realiza comprobaciones estáticas. Escanea una compilación
+**1056 pruebas automatizadas** (1054 superadas, ningún fallo, 2 omitidas, medido en Linux x64 con Node 24.22.1) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.
 

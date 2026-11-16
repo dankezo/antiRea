@@ -25,9 +25,12 @@
  * population, not of the attack.
  *
  * SELF-DISARM (C35 pattern, registered for this module): if more
- * than `disarmShare` (default 25%) of tracked identities would be
- * flagged in one evaluation, the evaluation names NOBODY and
- * reports `disarmed: true`. That shape means the platform itself
+ * than `disarmShare` (default 25%) of ALL identities tracked so
+ * far (the cumulative tracked population - the frozen
+ * registration's denominator, NOT just the identities active in
+ * the trailing window) would be flagged in one evaluation, the
+ * evaluation names NOBODY and reports `disarmed: true`. That
+ * shape means the platform itself
  * changed (a room-discovery feature launched, a directory event)
  * or the signal is being poisoned at scale - either way the
  * output stops rather than mass-accuse the user base. Re-arming
@@ -85,7 +88,7 @@ export interface CreateRoomHopSignalOptions {
   threshold?: number;
   /** Trailing window length in ms. Default 3,600,000 (1 h, lab law). */
   windowMs?: number;
-  /** Flagged share of tracked identities above which the evaluation disarms and names nobody. Default 0.25. */
+  /** Flagged share of all tracked identities (cumulative tracked population) above which the evaluation disarms and names nobody. Default 0.25. */
   disarmShare?: number;
   /** Maximum identities retained (least recently seen evicted). Defaults to 100,000. */
   maxIdentities?: number;
@@ -111,7 +114,7 @@ export interface RoomHopResult {
   flagged: string[];
   /** How many identities the raw law flagged (before any disarm). */
   flaggedCount: number;
-  /** Identities with at least one join in the evaluated window. */
+  /** All identities tracked so far (cumulative) - the denominator of the disarm share. */
   trackedIdentities: number;
   /** Largest distinct-room count observed in any identity's window. */
   maxDistinctObserved: number;
@@ -278,14 +281,19 @@ export function createRoomHopSignal(
 
     const flaggedRaw: string[] = [];
     let maxDistinctObserved = 0;
-    let tracked = 0;
     for (const [identity, list] of joins) {
       if (!list.some((j) => j.ts > asOfTs - windowMs && j.ts <= asOfTs)) continue;
-      tracked++;
       const d = maxDistinctInWindow(list, asOfTs);
       if (d > maxDistinctObserved) maxDistinctObserved = d;
       if (d >= threshold) flaggedRaw.push(identity);
     }
+    // Disarm denominator (frozen registration): ALL identities
+    // tracked so far, not only those active in the trailing
+    // window. A concentrated attack dominates one window's active
+    // population by construction; counting the share over that
+    // window alone would read the attack itself as a platform
+    // change and disarm the signal mid-attack.
+    const tracked = joins.size;
     const disarmed = tracked > 0 && flaggedRaw.length / tracked > disarmShare;
     return {
       kind: "room-hop",

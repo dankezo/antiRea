@@ -46,9 +46,11 @@
  * the socket layer), stated here as a limit, not hidden.
  *
  * SELF-DISARM (C35 pattern): if more than `disarmShare` (default
- * 25%) of tracked sources would flag in one evaluation, the
- * evaluation names NOBODY and reports `disarmed: true` - that
- * shape means the platform itself is flapping (a bad deploy
+ * 25%) of ALL sources tracked so far (the cumulative tracked
+ * population - the frozen registration's denominator, NOT just
+ * the sources active in the trailing window) would flag in one
+ * evaluation, the evaluation names NOBODY and reports
+ * `disarmed: true` - that shape means the platform itself is flapping (a bad deploy
  * reconnecting every client IS a fleet-wide storm), and the
  * module's job flips from accusation to silence. The intended
  * host response to a flag is friction (backoff enforcement /
@@ -98,7 +100,7 @@ export interface CreateReconnectStormSignalOptions {
   windowMs?: number;
   /** The median session duration inside the window must be under this, in ms. Default 5,000 (lab-frozen). */
   maxMedianDurationMs?: number;
-  /** Flagged share of tracked sources above which the evaluation disarms and names nobody. Default 0.25. */
+  /** Flagged share of all tracked sources (cumulative tracked population) above which the evaluation disarms and names nobody. Default 0.25. */
   disarmShare?: number;
   /** Maximum sources retained (least recently seen evicted). Defaults to 100,000. */
   maxSources?: number;
@@ -124,7 +126,7 @@ export interface ReconnectStormResult {
   flagged: string[];
   /** How many sources the raw law flagged (before any disarm). */
   flaggedCount: number;
-  /** Sources with at least one connect in the evaluated window. */
+  /** All sources tracked so far (cumulative) - the denominator of the disarm share. */
   trackedSources: number;
   /** Largest connect count observed in any source's window. */
   maxConnectsObserved: number;
@@ -278,11 +280,15 @@ export function createReconnectStormSignal(
   function sourceFlagged(state: SourceState, asOfTs: number): { flagged: boolean; maxConnects: number } {
     const starts = state.sessions.filter((s) => s.start <= asOfTs);
     let maxConnects = 0;
+    let flagged = false;
+    // Scan ALL anchors before returning: maxConnects must be the
+    // true maximum over every anchored window (its documented
+    // meaning), not the count at the first flagging anchor.
     for (let i = 0; i < starts.length; i++) {
       const anchor = (starts[i] as { start: number }).start;
       const inWindow = starts.filter((s) => s.start > anchor - windowMs && s.start <= anchor);
       if (inWindow.length > maxConnects) maxConnects = inWindow.length;
-      if (inWindow.length < minConnects) continue;
+      if (flagged || inWindow.length < minConnects) continue;
       const durations = inWindow
         .filter((s) => s.end !== null)
         .map((s) => (s.end as number) - s.start)
@@ -292,9 +298,9 @@ export function createReconnectStormSignal(
       const median = durations.length % 2 === 1
         ? (durations[mid] as number)
         : ((durations[mid - 1] as number) + (durations[mid] as number)) / 2;
-      if (median < maxMedianDurationMs) return { flagged: true, maxConnects };
+      if (median < maxMedianDurationMs) flagged = true;
     }
-    return { flagged: false, maxConnects };
+    return { flagged, maxConnects };
   }
 
   function evaluate(evaluateOptions: ReconnectStormEvaluateOptions = {}): ReconnectStormResult {
@@ -320,14 +326,19 @@ export function createReconnectStormSignal(
 
     const flaggedRaw: string[] = [];
     let maxConnectsObserved = 0;
-    let tracked = 0;
     for (const [source, state] of sources) {
       if (!state.sessions.some((s) => s.start > asOfTs - windowMs && s.start <= asOfTs)) continue;
-      tracked++;
       const r = sourceFlagged(state, asOfTs);
       if (r.maxConnects > maxConnectsObserved) maxConnectsObserved = r.maxConnects;
       if (r.flagged) flaggedRaw.push(source);
     }
+    // Disarm denominator (frozen registration): ALL sources
+    // tracked so far, not only those active in the trailing
+    // window. A concentrated storm dominates one window's active
+    // population by construction; counting the share over that
+    // window alone would read the storm itself as platform
+    // flapping and disarm the signal for the storm's duration.
+    const tracked = sources.size;
     const disarmed = tracked > 0 && flaggedRaw.length / tracked > disarmShare;
     return {
       kind: "reconnect-storm",

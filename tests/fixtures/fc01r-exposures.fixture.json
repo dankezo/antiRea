@@ -1,0 +1,842 @@
+[
+ {
+  "identity": "account:heavy10@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 645,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 20182
+  }
+ },
+ {
+  "identity": "account:heavy11@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 636,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 19924
+  }
+ },
+ {
+  "identity": "account:heavy12@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 594,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 18616
+  }
+ },
+ {
+  "identity": "account:heavy13@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 382,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 14304
+  }
+ },
+ {
+  "identity": "account:heavy14@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 351,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 13596
+  }
+ },
+ {
+  "identity": "account:heavy15@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 376,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 13796
+  }
+ },
+ {
+  "identity": "account:heavy16@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 351,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 12746
+  }
+ },
+ {
+  "identity": "account:heavy17@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 350,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 13696
+  }
+ },
+ {
+  "identity": "account:heavy18@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 373,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 14396
+  }
+ },
+ {
+  "identity": "account:heavy1@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 1799,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 47640
+  }
+ },
+ {
+  "identity": "account:heavy2@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 1681,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 44492
+  }
+ },
+ {
+  "identity": "account:heavy3@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 1601,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 42210
+  }
+ },
+ {
+  "identity": "account:heavy4@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 1567,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 42712
+  }
+ },
+ {
+  "identity": "account:heavy5@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 756,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 21804
+  }
+ },
+ {
+  "identity": "account:heavy6@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 735,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 21396
+  }
+ },
+ {
+  "identity": "account:heavy7@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 733,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 22380
+  }
+ },
+ {
+  "identity": "account:heavy8@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 696,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 21214
+  }
+ },
+ {
+  "identity": "account:heavy9@farm.local",
+  "persona": "heavy_reader",
+  "nEventsFit": 647,
+  "fit": {
+   "novel": 500
+  },
+  "score": {
+   "novel": 500,
+   "total": 19690
+  }
+ },
+ {
+  "identity": "account:reader01@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1164,
+  "fit": {
+   "novel": 95
+  },
+  "score": {
+   "novel": 103,
+   "total": 7958
+  }
+ },
+ {
+  "identity": "account:reader02@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1155,
+  "fit": {
+   "novel": 99
+  },
+  "score": {
+   "novel": 111,
+   "total": 8333
+  }
+ },
+ {
+  "identity": "account:reader03@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1115,
+  "fit": {
+   "novel": 108
+  },
+  "score": {
+   "novel": 120,
+   "total": 7742
+  }
+ },
+ {
+  "identity": "account:reader04@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1084,
+  "fit": {
+   "novel": 95
+  },
+  "score": {
+   "novel": 106,
+   "total": 7590
+  }
+ },
+ {
+  "identity": "account:reader05@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1072,
+  "fit": {
+   "novel": 100
+  },
+  "score": {
+   "novel": 111,
+   "total": 7565
+  }
+ },
+ {
+  "identity": "account:reader06@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1062,
+  "fit": {
+   "novel": 97
+  },
+  "score": {
+   "novel": 109,
+   "total": 7086
+  }
+ },
+ {
+  "identity": "account:reader07@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1066,
+  "fit": {
+   "novel": 101
+  },
+  "score": {
+   "novel": 113,
+   "total": 7651
+  }
+ },
+ {
+  "identity": "account:reader08@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1046,
+  "fit": {
+   "novel": 103
+  },
+  "score": {
+   "novel": 118,
+   "total": 7395
+  }
+ },
+ {
+  "identity": "account:reader09@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1036,
+  "fit": {
+   "novel": 91
+  },
+  "score": {
+   "novel": 103,
+   "total": 7153
+  }
+ },
+ {
+  "identity": "account:reader10@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1014,
+  "fit": {
+   "novel": 103
+  },
+  "score": {
+   "novel": 116,
+   "total": 7244
+  }
+ },
+ {
+  "identity": "account:reader11@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1024,
+  "fit": {
+   "novel": 97
+  },
+  "score": {
+   "novel": 105,
+   "total": 6952
+  }
+ },
+ {
+  "identity": "account:reader12@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 1012,
+  "fit": {
+   "novel": 101
+  },
+  "score": {
+   "novel": 119,
+   "total": 6948
+  }
+ },
+ {
+  "identity": "account:reader13@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 659,
+  "fit": {
+   "novel": 82
+  },
+  "score": {
+   "novel": 92,
+   "total": 5106
+  }
+ },
+ {
+  "identity": "account:reader14@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 656,
+  "fit": {
+   "novel": 82
+  },
+  "score": {
+   "novel": 90,
+   "total": 4981
+  }
+ },
+ {
+  "identity": "account:reader15@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 634,
+  "fit": {
+   "novel": 89
+  },
+  "score": {
+   "novel": 97,
+   "total": 4973
+  }
+ },
+ {
+  "identity": "account:reader16@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 626,
+  "fit": {
+   "novel": 78
+  },
+  "score": {
+   "novel": 87,
+   "total": 5041
+  }
+ },
+ {
+  "identity": "account:reader17@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 624,
+  "fit": {
+   "novel": 79
+  },
+  "score": {
+   "novel": 90,
+   "total": 4597
+  }
+ },
+ {
+  "identity": "account:reader18@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 640,
+  "fit": {
+   "novel": 82
+  },
+  "score": {
+   "novel": 95,
+   "total": 5079
+  }
+ },
+ {
+  "identity": "account:reader19@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 633,
+  "fit": {
+   "novel": 96
+  },
+  "score": {
+   "novel": 106,
+   "total": 5048
+  }
+ },
+ {
+  "identity": "account:reader20@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 628,
+  "fit": {
+   "novel": 84
+  },
+  "score": {
+   "novel": 99,
+   "total": 4993
+  }
+ },
+ {
+  "identity": "account:reader21@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 620,
+  "fit": {
+   "novel": 79
+  },
+  "score": {
+   "novel": 90,
+   "total": 4964
+  }
+ },
+ {
+  "identity": "account:reader22@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 616,
+  "fit": {
+   "novel": 86
+  },
+  "score": {
+   "novel": 96,
+   "total": 4492
+  }
+ },
+ {
+  "identity": "account:reader23@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 600,
+  "fit": {
+   "novel": 78
+  },
+  "score": {
+   "novel": 84,
+   "total": 4618
+  }
+ },
+ {
+  "identity": "account:reader24@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 594,
+  "fit": {
+   "novel": 85
+  },
+  "score": {
+   "novel": 98,
+   "total": 4691
+  }
+ },
+ {
+  "identity": "account:reader25@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 421,
+  "fit": {
+   "novel": 76
+  },
+  "score": {
+   "novel": 88,
+   "total": 4036
+  }
+ },
+ {
+  "identity": "account:reader26@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 410,
+  "fit": {
+   "novel": 72
+  },
+  "score": {
+   "novel": 82,
+   "total": 3827
+  }
+ },
+ {
+  "identity": "account:reader27@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 399,
+  "fit": {
+   "novel": 75
+  },
+  "score": {
+   "novel": 92,
+   "total": 3820
+  }
+ },
+ {
+  "identity": "account:reader28@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 369,
+  "fit": {
+   "novel": 70
+  },
+  "score": {
+   "novel": 82,
+   "total": 3825
+  }
+ },
+ {
+  "identity": "account:reader29@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 356,
+  "fit": {
+   "novel": 69
+  },
+  "score": {
+   "novel": 77,
+   "total": 3409
+  }
+ },
+ {
+  "identity": "account:reader30@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 365,
+  "fit": {
+   "novel": 75
+  },
+  "score": {
+   "novel": 92,
+   "total": 3423
+  }
+ },
+ {
+  "identity": "account:reader31@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 352,
+  "fit": {
+   "novel": 74
+  },
+  "score": {
+   "novel": 86,
+   "total": 3272
+  }
+ },
+ {
+  "identity": "account:reader32@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 355,
+  "fit": {
+   "novel": 74
+  },
+  "score": {
+   "novel": 84,
+   "total": 3582
+  }
+ },
+ {
+  "identity": "account:reader33@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 337,
+  "fit": {
+   "novel": 69
+  },
+  "score": {
+   "novel": 78,
+   "total": 3614
+  }
+ },
+ {
+  "identity": "account:reader34@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 339,
+  "fit": {
+   "novel": 68
+  },
+  "score": {
+   "novel": 79,
+   "total": 3424
+  }
+ },
+ {
+  "identity": "account:reader35@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 330,
+  "fit": {
+   "novel": 77
+  },
+  "score": {
+   "novel": 88,
+   "total": 3255
+  }
+ },
+ {
+  "identity": "account:reader36@farm.local",
+  "persona": "ordinary_reader",
+  "nEventsFit": 330,
+  "fit": {
+   "novel": 71
+  },
+  "score": {
+   "novel": 76,
+   "total": 3332
+  }
+ },
+ {
+  "identity": "account:review-seat10@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 8410,
+  "fit": {
+   "novel": 863
+  },
+  "score": {
+   "novel": 883,
+   "total": 66454
+  }
+ },
+ {
+  "identity": "account:review-seat11@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 8372,
+  "fit": {
+   "novel": 883
+  },
+  "score": {
+   "novel": 883,
+   "total": 66278
+  }
+ },
+ {
+  "identity": "account:review-seat12@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 8393,
+  "fit": {
+   "novel": 883
+  },
+  "score": {
+   "novel": 883,
+   "total": 66291
+  }
+ },
+ {
+  "identity": "account:review-seat13@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 8427,
+  "fit": {
+   "novel": 883
+  },
+  "score": {
+   "novel": 883,
+   "total": 66516
+  }
+ },
+ {
+  "identity": "account:review-seat14@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 8416,
+  "fit": {
+   "novel": 883
+  },
+  "score": {
+   "novel": 883,
+   "total": 66399
+  }
+ },
+ {
+  "identity": "account:review-seat1@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 12548,
+  "fit": {
+   "novel": 3373
+  },
+  "score": {
+   "novel": 3373,
+   "total": 85665
+  }
+ },
+ {
+  "identity": "account:review-seat2@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 13775,
+  "fit": {
+   "novel": 3383
+  },
+  "score": {
+   "novel": 3383,
+   "total": 91686
+  }
+ },
+ {
+  "identity": "account:review-seat3@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 13833,
+  "fit": {
+   "novel": 3384
+  },
+  "score": {
+   "novel": 3384,
+   "total": 91906
+  }
+ },
+ {
+  "identity": "account:review-seat4@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 10106,
+  "fit": {
+   "novel": 1706
+  },
+  "score": {
+   "novel": 1716,
+   "total": 74253
+  }
+ },
+ {
+  "identity": "account:review-seat5@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 10110,
+  "fit": {
+   "novel": 1717
+  },
+  "score": {
+   "novel": 1717,
+   "total": 74497
+  }
+ },
+ {
+  "identity": "account:review-seat6@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 11177,
+  "fit": {
+   "novel": 1716
+  },
+  "score": {
+   "novel": 1716,
+   "total": 79619
+  }
+ },
+ {
+  "identity": "account:review-seat7@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 11261,
+  "fit": {
+   "novel": 1717
+  },
+  "score": {
+   "novel": 1717,
+   "total": 79980
+  }
+ },
+ {
+  "identity": "account:review-seat8@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 11234,
+  "fit": {
+   "novel": 1716
+  },
+  "score": {
+   "novel": 1716,
+   "total": 79663
+  }
+ },
+ {
+  "identity": "account:review-seat9@farm.local",
+  "persona": "review_team",
+  "nEventsFit": 11278,
+  "fit": {
+   "novel": 1718
+  },
+  "score": {
+   "novel": 1718,
+   "total": 80014
+  }
+ },
+ {
+  "identity": "account:slow-slice-a@farm.local",
+  "persona": "slow_attacker",
+  "nEventsFit": 2799,
+  "fit": {
+   "novel": 1675
+  },
+  "score": {
+   "novel": 1675,
+   "total": 5478
+  }
+ },
+ {
+  "identity": "account:slow-slice-b@farm.local",
+  "persona": "slow_attacker",
+  "nEventsFit": 2807,
+  "fit": {
+   "novel": 1675
+  },
+  "score": {
+   "novel": 1675,
+   "total": 5351
+  }
+ }
+]

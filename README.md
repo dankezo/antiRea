@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-974%20total-informational" alt="tests: 974 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
 </p>
 
 <p align="center">
@@ -152,8 +152,6 @@ It exposes the library's eight advisory signal kinds as six tools -
 `evaluate`, `close_signal` - so an agent can open a signal session,
 feed it events and read the verdict.
 
-[![Anti Rea MCP server](https://mcprush.com/badge/anti-rea-mcp/card.svg)](https://mcprush.com/to/anti-rea-mcp?ref=badge)
-
 ```json
 {
   "mcpServers": {
@@ -170,6 +168,17 @@ belongs in-process, in your own app.
 
 ## Latest release
 
+### v3.0.0 - Tier-2 conversion, bulk capability keys, and the farm-calibrated pin statistic
+
+Three measured systems graduate from the lab and the farm. All are opt-in; no default changes.
+
+- **Tier-2 conversion (`createTier2Conversion`, NEW):** the C27+C35 enforcement layer, built under the locked decisions of 2026-11-04. A persistent C27 flag (present in >= 2 distinct evidence epochs) with independent corroboration from a different detector family steps the identity's record budget down toward a floor of 500 records/identity/24h - never below the floor, never a hard block. A first C35 decoy touch applies taint + step-up immediately, with the V-C self-disarm and retroactive void built in, not optional. An alpha-wealth fleet FP budget ships with the layer: on exhaustion it falls back to observe-only automatically. Strata enter by host declaration only. Evidence basis: FC-03R PREMISE-CONFIRMED on the farm's age-aligned statistic (ages 1-12) plus the lab pin; the C35 leg is lab-only evidence and no farm claim is made for it.
+- **Bulk capability keys (`createBulkAccessKeyAuthority`, NEW):** bulk access - novel records past a 150-record free zone, any tail record, any novel export - requires a server-issued key, and issuance is the metered event: the anonymous channel is bound by a fleet-wide pool (6 keys/24h at the lab defaults), each key unlocks one non-contiguous 150-record slice of a seeded epoch permutation, and records served under a key carry that key's watermark variant. In the frozen lab probe (GATEKEY-01 Step-0), ordinary and heavy readers were served in full with zero denials and zero step-up demands, while a 200-identity rotation farm was held to the pool rate and needed 12 days for the tail. Those economics cover the tail, exports and beyond-free-zone serving only; the head stays keyless by design.
+- **FC-07 pin statistic (`fitPinNovelStatistic` / `scorePinNovelStatistic`, NEW, opt-in):** novel-only per-identity exposure counts, thresholds fitted per host-declared stratum under C-LAW, strict flag rule (novel > tau). On the farm calibration window it flags 0% of both legitimate strata while detecting the slow attacker 2/2 and the bulk shapes 4/4; its cost is printed with it (review-team-shaped traffic crosses at 100%), and holdout validation on the 16-22/11 traces is still pending. The shipped (novel, total) forms and the default are unchanged.
+- Also new: the queue-stuffing axis of the vote-brigading law (`createQueueStuffingSignal`; PASS-LAB in seeded simulation), three advisory modules in their measured restricted forms (`analyzeHeaderCoherence` V1, `classifyUserAgent` named catalogue, `createFakeEndpoints` opt-in decoy pack), origin-only referer storage with the WART-1 fix, and a permanent garbage-conformance test pinning all 7 verify surfaces (146 calls: 0 throws, 0 success verdicts).
+
+1056 tests: 1054 passed, none failed, 2 skipped (measured on Linux x64, Node 24.22.1).
+
 ### v2.9.3 - Shadow decoy graphs and token issued-at checks
 
 New module - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: decoy record sets whose authors, series and records cross-reference each other with full referential consistency, instead of standalone canaries an offline reconstruction can filter out. In the lab (BLA-02, frozen registration, 12 seeded instances), a fixpoint referential-integrity filter removed 100% of standalone decoys (720/720) and 0% of shadow decoys (0/720), while the decoy-free control lost 0 of 24,000 real records. No statistical-fingerprinting claim is made: consistency is the measured property, population mimicry is not. The token verifiers (`verifyCursor`, `verifyCursorV2`, `verifyEchoId`) now reject a future `iat` beyond 60 s of clock skew as `not_yet_valid` and treat a non-numeric `iat` as malformed. `createDecoyMirage` now accepts host `fieldNames` / `featureNames` vocabularies, so decoy documents speak the host's own dialect instead of the built-in one.
@@ -180,7 +189,7 @@ New module - `generateShadowDecoyGraph` / `verifyShadowGraphClosure`: decoy reco
 
 Exact token matching, bounded telemetry state, correct late-event ownership windows, finite invalid-session features, and cycle-safe surface inspection. The host still decides every consequence; runtime dependencies remain zero.
 
-The local Windows audit ran 963 tests: 960 passed, none failed, and 3 skipped (two RSA-PSS vectors and one symlink privilege case). Historical lab figures below retain their original scope; missing generators are explicitly NOT VERIFIED in the audit.
+The local Windows audit ran 963 tests: 960 passed, none failed, and 3 skipped (two RSA-PSS vectors and one symlink privilege case). Historical lab figures below retain their original scope; the generators missing from the bundle were later located in the study tree, and the affected figures (D2 seed streams, EMP population, declaration/watermark experiment, RECOMB-03 lineage) were reproduced exactly in the 2026-11-16 Phase 1 reruns; the residual unverified items are the archive-only receipts listed in the audit summary.
 
 [2.9.2 deep dive](docs/v2.9.2-deep-dive.md) | [Audit measurements](docs/audit-2.9.2.json)
 
@@ -400,8 +409,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **974
-automated tests** (972 passing, none failing, 2 skipped, measured on Linux x64 with Node 24.22.1) and
+Working on the repo itself: `npm run check` compiles, runs **1056
+automated tests** (1054 passing, none failing, 2 skipped, measured on Linux x64 with Node 24.22.1) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.

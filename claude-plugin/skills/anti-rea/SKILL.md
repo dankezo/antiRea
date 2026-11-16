@@ -5,7 +5,7 @@ description: >-
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
-  version: "2.9.3"
+  version: "3.0.0"
   npm-package: "@dannyphan190/anti-rea"
   source-repository: "https://github.com/dankezo/antiRea"
 ---
@@ -204,7 +204,7 @@ Field note (real site, inspected 2026-11-06): wetube cine's skip rule is "30% of
 
 ## Section F - `createRoomHopSignal` (new in 2.7.3)
 
-Per-identity enumeration shape: flags an identity joining **16+ distinct rooms in any trailing hour** (legit surfers measured at most 11). It carries a self-disarm: if more than 25% of tracked identities would flag, the result names nobody and reports `disarmed: true`. A disarm usually means "the platform changed or the feed is wrong" - but it can also engage during a genuine concentrated attack while the legitimate background is thin (at night, say): the 2.7.3 integration benchmark saw names emitted first, then the disarm flipping on as the evening background thinned. So: never act on names while `disarmed` (there are none), but DO alert a human when `disarmed: true` arrives with `flaggedCount > 0` - that combination is a population-level attack signal, not noise.
+Per-identity enumeration shape: flags an identity joining **16+ distinct rooms in any trailing hour** (legit surfers measured at most 11). It carries a self-disarm: if more than 25% of tracked identities would flag, the result names nobody and reports `disarmed: true`. A disarm usually means "the platform changed or the feed is wrong". The flagged share is computed over the cumulative tracked population (every identity the module has ever tracked), not over identities active in a trailing window: before 3.0.0 the windowed denominator let the disarm engage mid-attack as the legitimate background thinned (the 2.7.3 integration benchmark saw exactly that); Phase 1 re-measurement found the divergence and the denominator was fixed for 3.0.0 - on the fixed build the frozen pin re-measured 20/20 named on time under periodic evaluation with zero disarms and the FP cells unchanged. So: never act on names while `disarmed` (there are none), but DO alert a human when `disarmed: true` arrives with `flaggedCount > 0` - that combination is a population-level signal, not noise.
 
 ```ts
 import { createRoomHopSignal } from "@dannyphan190/anti-rea";
@@ -225,7 +225,7 @@ Contract details: never key this by IP - carrier NAT makes shared IPs meaningles
 
 ## Section G - `createReconnectStormSignal` (new in 2.7.3)
 
-Per-source reconnect abuse over your socket layer's app-level connect/disconnect hooks: flags a source with **40+ connects in 10 minutes whose sessions median under 5 seconds**. Flaky phones (13) and train commuters (21) measured well under the rate leg. Same 25% self-disarm as Section F - a bad deploy that makes every client flap SHOULD disarm it; that is the platform telling on itself. The same disarm can also cover a genuine concentrated storm at night: in the 2.7.3 integration benchmark the raw law flagged 20/20 storm sources, but `disarmed` stayed true for the storm's whole duration (at 22:45 almost nobody legitimate is connecting, so the flagged share sits over 25%) and the named list stayed empty. Wire your alerting on `disarmed: true` WITH `flaggedCount > 0`, not only on named flags - a host that reads only `flagged` is blind exactly during a concentrated night storm.
+Per-source reconnect abuse over your socket layer's app-level connect/disconnect hooks: flags a source with **40+ connects in 10 minutes whose sessions median under 5 seconds**. Flaky phones (13) and train commuters (21) measured well under the rate leg. Same 25% self-disarm as Section F - a bad deploy that makes every client flap SHOULD disarm it; that is the platform telling on itself. The flagged share is computed over the cumulative tracked population (every source the module has ever tracked), not over sources active in a trailing window: before 3.0.0 the windowed denominator let the disarm cover a genuine concentrated night storm for its whole duration (the 2.7.3 integration benchmark measured that failure); Phase 1 re-measurement found the divergence and the denominator was fixed for 3.0.0 - on the fixed build the frozen pin re-measured 20/20 named on time under periodic evaluation with zero disarms and the FP cells unchanged. Wire your alerting on `disarmed: true` WITH `flaggedCount > 0`, not only on named flags.
 
 ```ts
 import { createReconnectStormSignal } from "@dannyphan190/anti-rea";
@@ -429,7 +429,7 @@ const archive = decl.export(); // JSON; importDeclarationLog re-verifies and ref
 - Volume-rank's historical FP bound belongs to generator-component lab strata. It does not transfer to the SDK's volume-derived regrouping. The audit reproduced 1/115 HIGH false flags at kappa 1000 in that regrouping.
 - E-value histories are never silently evicted or restarted. Capacity and invalid-input errors are telemetry failures to catch and report, not authorization decisions.
 - D2 defaults remain unchanged: a registered FAST-only candidate lost the minority attack cell and was not shipped. RECOMB-03 remains excluded after a fresh independent pair experiment showed heavy legitimate persona harm. These are synthetic measurements, not production calibration.
-- Historical quantitative claims in Section L retain their original scope. The release audit marks missing generator dependencies as NOT VERIFIED; it does not upgrade them into newly verified measurements.
+- Historical quantitative claims in Section L retain their original scope. The 2.9.2 release audit marked missing generator dependencies as NOT VERIFIED; the generators were later located in the study tree and the affected figures (B1-B4: D2, EMP, declaration/watermark, RECOMB-03 lineage) were reproduced exactly in the 2026-11-16 Phase 1 reruns, resolving those marks. The residual unverified items are archive-only receipts (claims.csv rows beyond B1-B5, the independent RECOMB-03 pair-experiment receipts, raw mutant/parity/smoke receipts, the audit292-d2-margin-lab runner), listed in the audit summary.
 
 ## Section N - 2.9.3: the shadow decoy graph, issued-at checks, decoy vocabularies
 
@@ -438,6 +438,17 @@ const archive = decl.export(); // JSON; importDeclarationLog re-verifies and ref
 - **Web Bot Auth robustness (SLC-05).** `verify()` returns the structured `no_signature_headers` verdict for a null or non-object request instead of throwing.
 - **Decoy vocabularies (RSH-01).** `createDecoyMirage` accepts host `fieldNames` / `featureNames` (at least 4 distinct names each). The built-in lists are constants of this public source and fingerprint default documents with certainty; wire the host's own dialect. The shadow graph generator likewise takes a host `categories` vocabulary.
 - **Measured and NOT shipped:** IA-02 parameter jitter (deployment-level budget jitter in [130, 170]) was killed at its frozen false-positive gate: legitimate power users were newly blocked at 1.38-5.14% against a 1% ceiling - the same population that killed IA-01 edge-hugging. A different band is a new registration, not a retune.
+
+## Section N - 3.0.0 opt-in modules (tier-2 conversion, bulk capability keys, FC-07 pin statistic, queue stuffing, UAS forms)
+
+3.0.0 graduates three measured systems and a set of restricted-form modules. Everything in this section is opt-in; no 2.9.x default changes.
+
+- **Tier-2 conversion (`createTier2Conversion`).** Opt-in enforcement, default observe. Persistent C27 flag (>= 2 distinct evidence epochs) + independent corroboration (different detector family) steps the record budget down toward the 500 floor - never below, never a hard block. C35 first touch = taint + step-up with V-C self-disarm and retroactive void built in. Alpha-wealth fleet FP budget ships with it: exhaustion falls back to observe-only automatically. Strata by host declaration only. Evidence: FC-03R PREMISE-CONFIRMED (farm ages 1-12) + lab; the C35 leg is lab-only, no farm claim; no theta 31-90 claim.
+- **Bulk capability keys (`createBulkAccessKeyAuthority`).** Bulk (novel past the free zone, any tail record, any novel export) requires a server-issued key; issuance is rationed per channel with a fleet-wide anonymous pool, keys unlock non-contiguous seeded slices, served records carry the key's watermark variant, shared keys manufacture fork evidence. Lab (GATEKEY-01 Step-0): legit strata served in full with zero denials; a 200-identity farm needed 12 days for the tail. The economics cover the tail, exports and beyond-free-zone serving ONLY - the head stays keyless by design.
+- **FC-07 pin statistic (`fitPinNovelStatistic` / `scorePinNovelStatistic`).** Opt-in batch evaluator: novel-only counts, per-stratum C-LAW fit, strict rule. Farm calibration window: FP 0% on both legit strata, slow 2/2, shapes 4/4; cost printed (review-team shape crosses 100%); holdout validation on 16-22/11 traces pending - do not present it as field-validated, and do not make it a default.
+- **Queue stuffing (`createQueueStuffingSignal`).** The vote-brigading law over the submission stream, PASS-LAB in seeded simulation; constants harness-fitted, uncalibrated for real traffic.
+- **UAS forms (advisory-only).** `analyzeHeaderCoherence` ships only the fixed V1 form, with the proxy FP class disclosed (75.15% behind header-stripping proxies). `classifyUserAgent` ships the named catalogue minus the generic tokens (the generics flag real in-app webview users). `createFakeEndpoints` is an opt-in decoy pack, default OFF, its /.env credential bound to canary-echo. `asset-referrer-profile` stores referer origins only (WART-1 fixed). On the signed-in (copied-profile) surface the UA catalogue is defeated and header coherence weakened by construction - say so when it matters.
+- The MCP wrapper remains 2.8.2 and pins SDK 2.8.1; it is not part of the 3.0.0 release.
 
 ## Safe defaults (do not retune silently)
 
