@@ -353,3 +353,80 @@ export function validateHerdResponseConfig(config: HerdResponseConfig): { valid:
   }
   return { valid: errors.length === 0, errors };
 }
+
+/* ------------------------------------------------------------------------ */
+/* ABP-04 ladder reachability audit.                                        */
+/*                                                                          */
+/* The neighbour failure, measured in the ABP Step-0 lab: on first-party    */
+/* signals alone its ladder capped at score 55 (slow scanner, unique vuln   */
+/* paths - the degrade rung); the block and tarpit rungs were reachable     */
+/* only through trap hits or a low third-party (Cloudflare) score, and      */
+/* that dependency was nowhere stated. The rule this audit encodes: every   */
+/* rung of THIS ladder must either be reachable on first-party signals      */
+/* alone, or carry its dependency in writing, in the table itself.          */
+/*                                                                          */
+/* "First-party signals alone" for antiRea means: a cohort the SDK          */
+/* inferred from the host's own traffic, gated by a shipped signal          */
+/* (tripwireGated), with NO host declaration and NO calibration manifest    */
+/* (calibrationTier "audit_only" - the uncalibrated default). The audit     */
+/* is DERIVED from maxEnforcementAction, not restated by hand: if the       */
+/* tiering law changes, this table's reachability column changes with       */
+/* it, and the pinning tests fail loudly instead of drifting.               */
+/* ------------------------------------------------------------------------ */
+
+export interface EnforcementRungAudit {
+  action: EnforcementAction;
+  /** True when the rung is reachable in the first-party-only context defined above. */
+  reachableOnFirstPartySignals: boolean;
+  /** The stated dependency when the rung is NOT first-party reachable; null when it is. */
+  dependency: string | null;
+  /** What reaching the rung means in this SDK. */
+  basis: string;
+}
+
+const FIRST_PARTY_ONLY_CONTEXT: EnforcementContext = {
+  origin: "inferred",
+  calibrationTier: "audit_only",
+  tripwireGated: true,
+};
+
+const RUNG_BASIS: Record<EnforcementAction, string> = {
+  observe: "no consequence; the default state of every cohort",
+  step_up: "friction tier, leg 1: host-side step-up (session expiry / dwell) for gated inferred cohorts",
+  budget_step_down:
+    "friction tier, leg 2: soft budget step-down for gated inferred cohorts, floored at SOFT_BUDGET_FLOOR_RECORDS",
+  hard_ceiling: "a hard budget ceiling (budget to 0 / refusal) for the cohort",
+  deny: "outright denial of the cohort",
+};
+
+const RUNG_DEPENDENCY: Record<EnforcementAction, string | null> = {
+  observe: null,
+  step_up: null,
+  budget_step_down: null,
+  hard_ceiling:
+    "requires a host-declared cohort (origin host_declared) or ceiling-tier calibrated evidence (calibrationTier ceiling); first-party inferred evidence alone never opens it",
+  deny: "requires a host-declared cohort AND ceiling-tier calibrated evidence together",
+};
+
+/**
+ * The ABP-04 reachability audit of the enforcement ladder, derived
+ * live from `maxEnforcementAction`: a rung is first-party reachable
+ * exactly when its rank is at or below the cap of the first-party-only
+ * context (inferred origin, audit_only calibration, tripwire gated).
+ * Every rung above that cap carries its dependency in the table.
+ */
+export function auditEnforcementLadder(): EnforcementRungAudit[] {
+  const firstPartyCap = maxEnforcementAction(FIRST_PARTY_ONLY_CONTEXT);
+  const capRank = ACTION_RANK[firstPartyCap];
+  return (Object.keys(ACTION_RANK) as EnforcementAction[])
+    .sort((a, b) => ACTION_RANK[a] - ACTION_RANK[b])
+    .map(action => {
+      const reachable = ACTION_RANK[action] <= capRank;
+      return {
+        action,
+        reachableOnFirstPartySignals: reachable,
+        dependency: reachable ? null : RUNG_DEPENDENCY[action],
+        basis: RUNG_BASIS[action],
+      };
+    });
+}

@@ -192,6 +192,16 @@ export interface RecordBudget {
   clearOverride(identity: string): void;
   /** Clear one identity, or every identity when called with no argument. */
   reset(identity?: string): void;
+  /**
+   * TTL sweep (ABP-06): drop every identity entry whose window has
+   * expired on the monotonic clock, across both pools, and return how
+   * many entries were removed. Entries are otherwise expired lazily on
+   * their next touch, so an idle identity's state would linger for the
+   * life of the process; a host timer can call this to reclaim it.
+   * Semantics are unchanged: a swept entry is exactly the entry the
+   * next touch would have found expired.
+   */
+  sweepExpired(): number;
   readonly maxDistinctPerWindow: number;
   readonly windowMs: number;
 }
@@ -441,6 +451,19 @@ export function createRecordBudget(options: RecordBudgetOptions): RecordBudget {
       } else {
         poolFor(identity).delete(identity);
       }
+    },
+    sweepExpired(): number {
+      const nowMono = monoClock();
+      let removed = 0;
+      for (const pool of [accountPool, ipPool]) {
+        for (const [identity, entry] of [...pool]) {
+          if (nowMono - entry.windowStartMono >= windowMs) {
+            pool.delete(identity);
+            removed++;
+          }
+        }
+      }
+      return removed;
     },
     maxDistinctPerWindow: baseLimit,
     windowMs,

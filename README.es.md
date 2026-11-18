@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
 </p>
 
 <p align="center">
@@ -178,16 +178,15 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
 
-### v3.0.0 - Conversión de nivel 2, claves de capacidad bulk y el estadístico pin calibrado en farm
+### v3.1.0 - Endurecimiento de GATEKEY y todo el backlog PASS-LAB
 
-Tres sistemas medidos se gradúan del laboratorio y del farm. Todos son opt-in; ningún valor por defecto cambia.
+Tres correcciones endurecen las claves de capacidad bulk, y todo el backlog PASS-LAB restante se gradúa. Todos los módulos nuevos son opt-in; ningún valor por defecto cambia.
 
-- **Conversión de nivel 2 (`createTier2Conversion`, NUEVO):** la capa de aplicación C27+C35, construida bajo las decisiones fijadas del 2026-11-04. Una marca C27 persistente (>= 2 épocas de evidencia distintas) con corroboración independiente de una familia de detectores distinta reduce el presupuesto de registros de la identidad hacia un suelo de 500 registros/identidad/24 h - nunca por debajo del suelo, nunca un bloqueo duro. Un primer toque C35 a un señuelo aplica taint + step-up de inmediato, con el auto-desarme V-C y la anulación retroactiva integrados, no opcionales. Un presupuesto de FP de flota con riqueza alfa (alpha-wealth) acompaña a la capa: al agotarse, vuelve automáticamente a solo observación. Los estratos entran solo por declaración del host. Base de evidencia: FC-03R PREMISE-CONFIRMED sobre el estadístico del farm alineado por edad (edades 1-12) más el pin de laboratorio; la pata C35 es evidencia solo de laboratorio y no se hace ninguna afirmación de farm sobre ella.
-- **Claves de capacidad bulk (`createBulkAccessKeyAuthority`, NUEVO):** el acceso bulk - registros nuevos más allá de una zona gratuita de 150, cualquier registro de la cola, cualquier exportación nueva - requiere una clave emitida por el servidor, y la emisión es el evento medido: el canal anónimo está limitado por un pool de toda la flota (6 claves/24 h con los valores de laboratorio), cada clave desbloquea una porción no contigua de 150 registros de una permutación de época con semilla, y los registros servidos bajo una clave llevan la variante de marca de agua de esa clave. En la sonda congelada de laboratorio (GATEKEY-01 Paso 0), los lectores ordinarios y pesados fueron servidos por completo con cero denegaciones y cero demandas de step-up, mientras un farm de rotación de 200 identidades quedó sujeto a la tasa del pool y necesitó 12 días para la cola. Esa economía cubre solo la cola, las exportaciones y el servicio más allá de la zona gratuita; la cabeza permanece sin clave por diseño.
-- **Estadístico pin FC-07 (`fitPinNovelStatistic` / `scorePinNovelStatistic`, NUEVO, opt-in):** conteos de exposición de registros nuevos por identidad, umbrales ajustados por estrato declarado por el host bajo C-LAW, regla de marca estricta (novel > tau). En la ventana de calibración del farm marca 0% de ambos estratos legítimos mientras detecta al atacante lento 2/2 y las formas bulk 4/4; su coste se imprime con él (el tráfico con forma de equipo de revisión cruza al 100%), y la validación holdout sobre las trazas del 16-22/11 sigue pendiente. Las formas (novel, total) publicadas y el valor por defecto no cambian.
-- También nuevo: el eje de stuffing de colas de la ley anti-brigading de votos (`createQueueStuffingSignal`; PASS-LAB en simulación con semilla), tres módulos advisory en sus formas restringidas medidas (`analyzeHeaderCoherence` V1, `classifyUserAgent` catálogo nominal, `createFakeEndpoints` paquete señuelo opt-in), almacenamiento de referer solo por origen con la corrección WART-1, y una prueba permanente de conformidad con basura que fija las 7 superficies de verificación (146 llamadas: 0 excepciones, 0 veredictos de éxito).
+- **Correcciones GATEKEY (`createBulkAccessKeyAuthority`):** reclamar una clave ahora es idempotente - las claves emitidas hacia una identidad nueva durante una recarga quedaban varadas (medido: 6 de 6 reclamos varados nunca recibieron token; 0 de 6 tras la corrección). El carril de cola anónima ahora falla cerrado cuando no hay un verificador de prueba step-up configurado: antes de la corrección se aceptaba cualquier cadena de prueba no vacía, y los sybils de prueba se llevaban las 6 claves anónimas diarias mientras los que esperaban honestamente pasaban hambre. La permutación de época ahora se extrae de un flujo HMAC en modo contador en lugar de una semilla de 32 bits - un escaneo completo de 2^32 reconstruía los 67 bloques desde un solo bloque observado antes de la corrección (0 de 67 después). La puerta step-up dentro de `mint` conserva su valor por defecto documentado, fijado por la celda congelada GK-G6.
+- **107 candidatos PASS-LAB construidos:** todo el backlog medido se publica como módulos opt-in en 14 familias (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB), cada uno bajo su registro congelado y su presupuesto de FP, varios en formas deliberadamente restringidas cuando la forma de laboratorio violaba una regla de la casa. Tres candidatos fueron excluidos tras intentos genuinos de mejora, con las mediciones impresas en el changelog: RSP-13, AC-10 y AC-17.
+- **Retenidos para validación del farm (no están en esta versión):** AN-02, RECOMB-01, RECOMB-03 y C26 están construidos pero quedan fuera hasta que la validación holdout del farm los resuelva; aún no se afirma ninguna cifra para ellos.
 
-1056 pruebas: 1054 superadas, ningún fallo, 2 omitidas (medido en Linux x64, Node 24.22.1).
+1661 pruebas: 1659 superadas, ningún fallo, 2 omitidas.
 
 Versiones anteriores: consulta el [Changelog](CHANGELOG.md).
 
@@ -272,7 +271,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**1056 pruebas automatizadas** (1054 superadas, ningún fallo, 2 omitidas, medido en Linux x64 con Node 24.22.1) y realiza comprobaciones estáticas. Escanea una compilación
+**1661 pruebas automatizadas** (1659 superadas, ningún fallo, 2 omitidas) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.
 

@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
 </p>
 
 <p align="center">
@@ -168,16 +168,15 @@ belongs in-process, in your own app.
 
 ## Latest release
 
-### v3.0.0 - Tier-2 conversion, bulk capability keys, and the farm-calibrated pin statistic
+### v3.1.0 - GATEKEY hardening and the full PASS-LAB backlog
 
-Three measured systems graduate from the lab and the farm. All are opt-in; no default changes.
+Three fixes harden the bulk capability keys, and the entire remaining PASS-LAB backlog graduates. All new modules are opt-in; no default changes.
 
-- **Tier-2 conversion (`createTier2Conversion`, NEW):** the C27+C35 enforcement layer, built under the locked decisions of 2026-11-04. A persistent C27 flag (present in >= 2 distinct evidence epochs) with independent corroboration from a different detector family steps the identity's record budget down toward a floor of 500 records/identity/24h - never below the floor, never a hard block. A first C35 decoy touch applies taint + step-up immediately, with the V-C self-disarm and retroactive void built in, not optional. An alpha-wealth fleet FP budget ships with the layer: on exhaustion it falls back to observe-only automatically. Strata enter by host declaration only. Evidence basis: FC-03R PREMISE-CONFIRMED on the farm's age-aligned statistic (ages 1-12) plus the lab pin; the C35 leg is lab-only evidence and no farm claim is made for it.
-- **Bulk capability keys (`createBulkAccessKeyAuthority`, NEW):** bulk access - novel records past a 150-record free zone, any tail record, any novel export - requires a server-issued key, and issuance is the metered event: the anonymous channel is bound by a fleet-wide pool (6 keys/24h at the lab defaults), each key unlocks one non-contiguous 150-record slice of a seeded epoch permutation, and records served under a key carry that key's watermark variant. In the frozen lab probe (GATEKEY-01 Step-0), ordinary and heavy readers were served in full with zero denials and zero step-up demands, while a 200-identity rotation farm was held to the pool rate and needed 12 days for the tail. Those economics cover the tail, exports and beyond-free-zone serving only; the head stays keyless by design.
-- **FC-07 pin statistic (`fitPinNovelStatistic` / `scorePinNovelStatistic`, NEW, opt-in):** novel-only per-identity exposure counts, thresholds fitted per host-declared stratum under C-LAW, strict flag rule (novel > tau). On the farm calibration window it flags 0% of both legitimate strata while detecting the slow attacker 2/2 and the bulk shapes 4/4; its cost is printed with it (review-team-shaped traffic crosses at 100%), and holdout validation on the 16-22/11 traces is still pending. The shipped (novel, total) forms and the default are unchanged.
-- Also new: the queue-stuffing axis of the vote-brigading law (`createQueueStuffingSignal`; PASS-LAB in seeded simulation), three advisory modules in their measured restricted forms (`analyzeHeaderCoherence` V1, `classifyUserAgent` named catalogue, `createFakeEndpoints` opt-in decoy pack), origin-only referer storage with the WART-1 fix, and a permanent garbage-conformance test pinning all 7 verify surfaces (146 calls: 0 throws, 0 success verdicts).
+- **GATEKEY fixes (`createBulkAccessKeyAuthority`):** claiming a key is now idempotent - keys minted into a fresh identity during a refill were previously stranded (measured: 6 of 6 stranded claims never received a token; 0 of 6 after the fix). The anonymous queue lane now fails closed when no step-up proof verifier is configured: before the fix any non-empty proof string was accepted, and proof sybils took all 6 anonymous keys per day while honest waiters starved. The epoch permutation now draws from a counter-mode HMAC stream instead of a 32-bit seed - a full 2^32 scan rebuilt all 67 blocks from one observed block before the fix (0 of 67 after). The step-up gate inside `mint` keeps its documented default, pinned by the frozen GK-G6 cell.
+- **107 PASS-LAB candidates built:** the whole measured backlog ships as opt-in modules across 14 families (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB), each under its frozen registration and false-positive budget, several in deliberately restricted forms where the lab form failed a house rule. Three candidates were excluded after genuine upgrade attempts, with the measurements printed in the changelog: RSP-13, AC-10 and AC-17.
+- **Held for farm validation (not in this release):** AN-02, RECOMB-01, RECOMB-03 and C26 are built but stay out until the farm holdout validation resolves them; no numbers are claimed for them yet.
 
-1056 tests: 1054 passed, none failed, 2 skipped (measured on Linux x64, Node 24.22.1).
+1661 tests: 1659 passed, none failed, 2 skipped.
 
 Earlier releases: see the [Changelog](CHANGELOG.md).
 
@@ -262,8 +261,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **1056
-automated tests** (1054 passing, none failing, 2 skipped, measured on Linux x64 with Node 24.22.1) and
+Working on the repo itself: `npm run check` compiles, runs **1661
+automated tests** (1659 passing, none failing, 2 skipped) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.

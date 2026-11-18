@@ -38,6 +38,13 @@
  *
  * Node.js builtins only (`node:crypto` HMAC); zero runtime dependencies.
  * Verification is one HMAC and one constant-time comparison per request.
+ *
+ * ABS-08: the binding value (`sessionId`) travels inside the signed
+ * JSON payload, never in a colon-delimited token prefix, so a
+ * session id that IS an IP address - including an IPv6 address such
+ * as "2001:db8::1", whose colons would shatter a naive
+ * split(":", 3) parse - round-trips verbatim. Pinned by
+ * tests/abs08-ipv6-token.test.cjs.
  */
 
 export type CursorSecret = string | Uint8Array;

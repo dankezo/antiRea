@@ -118,6 +118,7 @@
  */
 
 import { createStepUp402Responder, type StepUp402Options, type StepUp402Response } from "./step-up-402";
+import { PUBLIC_DEFAULT_SIGNING_SECRETS } from "./step-up-proof";
 import { createValueWatermark, type ValueWatermarkMarkedRecord, type ValueWatermarkRecord } from "./value-watermark";
 
 /* ------------------------------------------------------------------------ */
@@ -204,7 +205,7 @@ export interface BulkAccessKeyOptions {
   now?: () => number;
   /** Host hook: is this identity currently step-up-enrolled by any shipped signal? */
   isStepUpEnrolled?: (identity: string) => boolean;
-  /** Host hook: validate a presented step-up proof for this identity. When omitted, any non-empty proof value counts as presented-and-valid. */
+  /** Host hook: validate a presented step-up proof for this identity. When omitted, a non-empty proof value counts as presented-and-valid for the step-up GATE at issuance, but it buys NO anon fast-lane queue position: without a verifier the lane is closed and requests keep their FIFO place (3.1.0 safe default). Hosts that enroll identities for step-up should configure a verifier; without one, the gate cannot tell a real proof from a junk string. */
   verifyStepUpProof?: (identity: string, proof: unknown) => boolean;
   /** Host hook: prior non-bulk session days for an identity the host tracks itself. */
   priorNonBulkDays?: (identity: string) => number;
@@ -446,16 +447,6 @@ interface KeyPayload {
   exp: number;
 }
 
-function mulberry32(a: number): () => number {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 export function createBulkAccessKeyAuthority(options: BulkAccessKeyOptions): BulkAccessKeyAuthority {
   if (typeof options !== "object" || options === null) {
     throw new BulkAccessKeyError("createBulkAccessKeyAuthority: options are required");
@@ -463,6 +454,14 @@ export function createBulkAccessKeyAuthority(options: BulkAccessKeyOptions): Bul
   const secret = options.secret;
   if (typeof secret !== "string" || secret.length === 0) {
     throw new BulkAccessKeyError("createBulkAccessKeyAuthority: options.secret must be a non-empty string");
+  }
+  // ABS-01: a secret equal to a known public default is a missing
+  // secret wearing a costume - anyone who read the neighbour source
+  // could mint keys under it. Fail closed at construction.
+  if (PUBLIC_DEFAULT_SIGNING_SECRETS.includes(secret)) {
+    throw new BulkAccessKeyError(
+      "createBulkAccessKeyAuthority: options.secret must not be a known public default value (ABS-01)",
+    );
   }
   const posInt = (value: number | undefined, fallback: number, field: string): number => {
     const n = Math.floor(value ?? fallback);
@@ -495,12 +494,40 @@ export function createBulkAccessKeyAuthority(options: BulkAccessKeyOptions): Bul
   function epochBlocks(epoch: number): Set<number>[] {
     const hit = epochCache.get(epoch);
     if (hit) return hit.blocks;
-    const digest = sign(`gatekey-epoch:${epoch}`);
-    const seed = ((digest[0] ?? 0) << 24) | ((digest[1] ?? 0) << 16) | ((digest[2] ?? 0) << 8) | (digest[3] ?? 0);
-    const rand = mulberry32(seed >>> 0);
+    // Shuffle entropy (3.1.0 fix): the Fisher-Yates draws come from
+    // a counter-mode HMAC stream keyed with the host secret and the
+    // epoch, so the permutation carries the full 256-bit HMAC
+    // output per stream block. The pre-3.1.0 derivation seeded
+    // mulberry32 with only the first 4 bytes of the epoch HMAC,
+    // which made the whole permutation a function of a 32-bit
+    // value: one observed slice (block 66 is the only short block
+    // and identifies itself) was enough to brute-force the seed
+    // space and rebuild every other block in the epoch.
+    let streamBlock: Uint8Array = new Uint8Array(0);
+    let streamPos = 0;
+    let streamCounter = 0;
+    const nextUint32 = (): number => {
+      if (streamPos + 4 > streamBlock.length) {
+        streamBlock = sign(`gatekey-epoch-stream:${epoch}:${streamCounter++}`);
+        streamPos = 0;
+      }
+      const v = (((streamBlock[streamPos] as number) << 24) |
+        ((streamBlock[streamPos + 1] as number) << 16) |
+        ((streamBlock[streamPos + 2] as number) << 8) |
+        (streamBlock[streamPos + 3] as number)) >>> 0;
+      streamPos += 4;
+      return v;
+    };
+    const randBelow = (n: number): number => {
+      // Rejection sampling, so the shuffle draws carry no modulo bias.
+      const limit = Math.floor(0x1_0000_0000 / n) * n;
+      let x = nextUint32();
+      while (x >= limit) x = nextUint32();
+      return x % n;
+    };
     const perm = Array.from({ length: corpusSize }, (_, i) => i);
     for (let i = perm.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
+      const j = randBelow(i + 1);
       const t = perm[i] as number;
       perm[i] = perm[j] as number;
       perm[j] = t;
@@ -588,6 +615,20 @@ export function createBulkAccessKeyAuthority(options: BulkAccessKeyOptions): Bul
       }
     }
     return true;
+  }
+  // Queue-lane proof standing (3.1.0 safe default): a presented
+  // proof buys fast-lane position in the anon drain order ONLY
+  // when the host configured a verifier and the verifier accepts
+  // it. With no verifier configured the lane is closed and every
+  // request keeps its plain FIFO place. Before 3.1.0 any non-empty
+  // proof counted as valid, so junk proofs let sybils sort ahead
+  // of honest waiters and take the whole shared anon pool. The
+  // step-up GATE in mint keeps the presented-and-valid default
+  // documented on verifyStepUpProof; the lane is the surface that
+  // spends the shared pool, so the lane is what fails closed.
+  function laneProofValid(identity: string, proof: unknown): boolean {
+    if (!options.verifyStepUpProof) return false;
+    return proofValid(identity, proof);
   }
   function enrolled(st: IdentityState): boolean {
     if (st.stepUpRequired) return true;
@@ -798,6 +839,30 @@ export function createBulkAccessKeyAuthority(options: BulkAccessKeyOptions): Bul
     if (!CHANNELS.has(channel)) throw new BulkAccessKeyError("requestKey: channel must be anon | account | verified");
     const st = identityState(identity);
     if (channel !== "anon") return mint(st, channel, opts);
+    // Idempotent claim (3.1.0 fix): an identity that already holds
+    // an active key gets that SAME key back immediately, without
+    // enqueueing and without touching the pool. Before this, the
+    // only path back to a minted key was the anon drain, and the
+    // drain stops at the pool cap before it can reach mint's
+    // replay branch - so a key minted inside ANOTHER identity's
+    // requestKey call (the day-rollover refill) was stranded: the
+    // pool was debited, the token was returned to nobody, and its
+    // owner had no call that could ever claim it. The step-up gate
+    // runs first, exactly as in mint; a stale pending entry is
+    // satisfied by the held key (single-active rule) and dropped.
+    const active = activeKeyOf(st, now());
+    if (active) {
+      if (st.pending) {
+        const idx = queue.indexOf(st.pending);
+        if (idx >= 0) queue.splice(idx, 1);
+        st.pending = null;
+      }
+      if (enrolled(st) && !proofValid(st.id, opts.stepUpProof)) {
+        stepUpDemands.push({ sub: st.id, at: now() });
+        return { status: "step_up_required", channel };
+      }
+      return { status: "replay", channel, token: active.token, key: keyInfoOf(active) };
+    }
     // Anon: enqueue (a standing request is one request), then drain
     // unless the host drains at day-start itself.
     if (!st.pending) {
@@ -806,7 +871,7 @@ export function createBulkAccessKeyAuthority(options: BulkAccessKeyOptions): Bul
         opts,
         queuedAt: now(),
         seq: seqCounter++,
-        proofValid: proofValid(identity, opts.stepUpProof),
+        proofValid: laneProofValid(identity, opts.stepUpProof),
         rhythmBlockedDay: -1,
       };
       st.pending = entry;

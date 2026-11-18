@@ -234,7 +234,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "url": "https://antirea.dannyphan.me/",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Node.js 20+",
-      "softwareVersion": "3.0.0",
+      "softwareVersion": "3.1.0",
       "license": "https://opensource.org/licenses/MIT",
       "isAccessibleForFree": true,
       "offers": {
@@ -261,7 +261,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "programmingLanguage": "TypeScript",
       "runtimePlatform": "Node.js 20+",
       "license": "https://opensource.org/licenses/MIT",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "targetProduct": {
         "@id": "https://antirea.dannyphan.me/#software"
       }
@@ -274,11 +274,11 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
 
 <header class="site">
   <div class="wrap hd">
-    <a class="wordmark" href="#">anti<b>Rea</b><sup>V3.0.0</sup></a>
+    <a class="wordmark" href="#">anti<b>Rea</b><sup>V3.1.0</sup></a>
     <nav class="main">
       <a class="anch" href="#signals">Signals</a>
       <a class="anch" href="#how">Protocol</a>
-      <a class="anch" href="#release">3.0.0</a>
+      <a class="anch" href="#release">3.1.0</a>
       <a class="anch" href="#mcp">MCP</a>
       <a href="https://lab.dannyphan.me">Super Lab</a>
       <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea">npm</a>
@@ -295,7 +295,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
         <p class="kicker"><span class="a">Fig 00</span> - A meter for your dataset</p>
         <h1>Every identity<br>gets a <span class="m">meter.</span></h1>
         <p class="lede">Server-side TypeScript library that meters dataset access per identity and flags coordinated bot abuse. Advisory only.</p>
-        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.0.0</span> <i>&rarr;</i></a></p>
+        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.1.0</span> <i>&rarr;</i></a></p>
       </div>
       <div class="rail">
         <div class="rail-hd"><span>Install</span><span class="a">Node 20+</span></div>
@@ -304,7 +304,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
           <button class="copybtn" type="button" data-copy="npm install @dannyphan190/anti-rea">Copy</button>
         </div>
         <div class="facts">
-          <div><span>VERSION</span><span>3.0.0</span></div>
+          <div><span>VERSION</span><span>3.1.0</span></div>
           <div><span>SIGNAL KINDS</span><span>8</span></div>
           <div><span>RUNTIME DEPS</span><span>0</span></div>
           <div><span>LICENSE</span><span>MIT</span></div>
@@ -388,21 +388,21 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
     </div>
   </section>
 
-  <!-- 3.0.0 -->
+  <!-- 3.1.0 -->
   <section class="band" id="release">
     <div class="wrap">
       <div class="rel-grid">
         <div>
-          <p class="kicker"><span class="a">03</span> - Release 3.0.0</p>
+          <p class="kicker"><span class="a">03</span> - Release 3.1.0</p>
           <h2>Measured in the lab. Shipped as opt-in.</h2>
-          <p class="intro">3.0.0 promotes six lab-measured defenses to opt-in SDK modules: tier-2 conversion, bulk capability keys, the FC-07 pin statistic, queue stuffing, the UAS family and a permanent verify-surface conformance test. Every claim is measured under a frozen registration; defaults are unchanged and advisory signals remain advisory. The MCP wrapper remains at 2.8.2.</p>
+          <p class="intro">3.1.0 hardens the bulk capability keys with three fixes from adversarial review and promotes 107 more lab-measured candidates to opt-in SDK modules across 14 families. Every claim is measured under a frozen registration; defaults are unchanged and advisory signals remain advisory. The MCP wrapper remains at 2.8.2.</p>
         </div>
         <div class="ledger">
-          <div class="led"><code>TIER2</code><div><h4>Flags become budgets, softly</h4><p>The tier-2 conversion layer steps a persistent, independently corroborated C27 flag down to a 500-record floor (never a hard block) and keeps C35 decoy taint in a self-disarming ledger with retroactive void. Lab regression 29/29 against the shipped module; the C35 leg is lab-only evidence.</p></div></div>
-          <div class="led"><code>KEYS</code><div><h4>A capability key for the tail</h4><p>Bulk access keys serve a dataset tail in seeded 150-record slices. In the frozen probe, ordinary and heavy readers were served in full with 0 denials, while a 200-identity rotation farm drew exactly 6 anonymous keys a day and needed 12 days to finish the tail.</p></div></div>
-          <div class="led"><code>PIN</code><div><h4>The pin statistic, opt-in</h4><p>FC-07's novel-only per-stratum statistic (tau 500) flagged 0 of 54 legit farm identities and both slow attackers on the calibration window; review-team crossing is its disclosed cost. Holdout validation on fresh traces is still pending, so it ships opt-in, default unchanged.</p></div></div>
-          <div class="led"><code>MORE</code><div><h4>Also in this release</h4><p>Queue stuffing extends the brigading law to submissions (a burst flags at A = 15; the dangerous legit null peaks at A = 3). The UAS family adds header coherence, a UA catalogue, fake-200 decoys and referer minimization in their measured forms, and the verify surfaces now carry a permanent garbage-conformance test.</p></div></div>
-          <div class="led"><code>GATE</code><div><h4>Evidence with limits</h4><p>1056 tests: 1054 pass, 0 fail, 2 skipped (Linux x64, Node 24.22.1). The full release gate passes 17/17 cells, including six new 3.0.0 cells and the golden-equivalence Gate 2.5. <a href="EVIDENCE.md">Read the 3.0.0 evidence addendum</a>.</p></div></div>
+          <div class="led"><code>BACKLOG</code><div><h4>The whole lab backlog, shipped</h4><p>107 PASS-LAB candidates graduate as opt-in modules across 14 families, each under its frozen registration and false-positive budget, several in deliberately restricted forms where the lab form failed a house rule. Three more were excluded after genuine upgrade attempts, with the measurements printed in the changelog.</p></div></div>
+          <div class="led"><code>KEYS</code><div><h4>Capability keys, hardened</h4><p>Three GATEKEY fixes: stranded claims now return their token (6 of 6 stranded before, 0 after); the anonymous queue lane fails closed when no step-up proof verifier is configured; and the epoch permutation draws from a counter-mode HMAC stream, so a 2^32 scan no longer rebuilds it from one observed block (67/67 before, 0/67 after).</p></div></div>
+          <div class="led"><code>HELD</code><div><h4>Held back on purpose</h4><p>Four built modules (AN-02, RECOMB-01, RECOMB-03, C26) stay out of this release until the farm holdout validation resolves them, and three candidates (RSP-13, AC-10, AC-17) were excluded after upgrade attempts measured false-flag rates up to 97.5% on real user populations. Nothing ships on a hope.</p></div></div>
+          <div class="led"><code>MORE</code><div><h4>Also in this release</h4><p>Every new module is opt-in and advisory by default; restricted forms are used wherever the lab form failed a house rule - computed-values response shaping instead of real holds, corroboration-only components that can never be a sole key, and observe-only wrappers with no consequence state.</p></div></div>
+          <div class="led"><code>GATE</code><div><h4>Evidence with limits</h4><p>1661 tests: 1659 pass, 0 fail, 2 skipped. <a href="EVIDENCE.md">Read the 3.1.0 evidence addendum</a>.</p></div></div>
         </div>
       </div>
     </div>
@@ -412,8 +412,8 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
   <section class="band" style="padding-top:72px;padding-bottom:72px">
     <div class="wrap">
       <div class="stats">
-        <div class="stat"><div class="stat-num">3.0<span class="u">.0</span></div><div class="stat-cap">Current release</div></div>
-        <div class="stat"><div class="stat-num">1056</div><div class="stat-cap">Automated tests<br>1054 passing, 2 skipped</div></div>
+        <div class="stat"><div class="stat-num">3.1<span class="u">.0</span></div><div class="stat-cap">Current release</div></div>
+        <div class="stat"><div class="stat-num">1661</div><div class="stat-cap">Automated tests<br>1659 passing, 2 skipped</div></div>
         <div class="stat"><div class="stat-num">0</div><div class="stat-cap">Runtime<br>dependencies</div></div>
         <div class="stat"><div class="stat-num">MIT</div><div class="stat-cap">License<br>Use it anywhere</div></div>
       </div>

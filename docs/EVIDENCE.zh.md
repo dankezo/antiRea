@@ -1,5 +1,13 @@
 # 实测结果--完整证据表
 
+## 3.1.0
+
+版本附录：Linux x64，Node 24.22.1，maintainer 的 Linux 虚拟机。套件 1661/1659/0/2；完整发布门 PASS，17/17 个单元（Gate 0 SDK 套件；Gate 1+2 冻结的 FP/检测单元；Gate 2.5 golden 等价，零漂移；Gate 3 在本 dist 上的 live range 冒烟测试，range 报告 SDK 3.1.0）。三项 GATEKEY 修复与 107 个 PASS-LAB 候选以 opt-in 模块形式发布；未更改任何默认项。四个已构建的模块（AN-02、RECOMB-01、RECOMB-03、C26）被留在本版本之外，等待 2026-11-23 的 farm holdout 验证，在此不作任何主张；三个候选（RSP-13、AC-10、AC-17）在真实的升级尝试后被排除，其测量数据见下文与 changelog。
+
+**GATEKEY 修复（bulk-access-key）。** 搁浅 token：领取密钥是幂等的（修复前 6/6 个领取被搁浅，修复后 0/6）。队列通道：在未配置 step-up proof 验证器时 fail-closed（修复前任何非空 proof 字符串都会被接受；在实测攻击中，1000 个 proof sybil 在 10 天内每天拿走全部 6 把匿名密钥，诚实等待者得到零）。epoch 种子：counter 模式的 HMAC 流取代 32 位 mulberry32 种子（修复前攻击模型在完整 2^32 扫描后匹配 67/67 个 block；修复后 0/67）。`mint` 中 step-up 门的文档化默认值不变（冻结单元 GK-G6）。
+
+**PASS-LAB backlog。** 剩余 114 个候选中的 107 个在其冻结注册下构建，覆盖 14 个家族（MGH、WDN、NHS、RSP、ABE、ABS、ABP、AC、LCP、ABG、CS、MISC、R14、RECOMB）。每个模块的实验室数字与限制位于其头部，具有 FP 表面的候选记录在 LIMITATIONS 中。带数字的排除：RSP-13（注册的机制本身就是一次真实的 60 秒保持，被家族规则禁止；计算值形式的移植将是一个未测量的新机制）；AC-10（升级尝试后隐私扩展用户的 FP 为 39/40 = 0.975；移除 referer 轴使所有人群上的检测都崩溃为 0）；AC-17（升级尝试后 devtools 用户的 FP 为 28/60 = 0.467；仅 advisory 形式重新测量后不变）。
+
 ## 3.0.0
 
 版本附录:Linux x64,Node 24.22.1,维护者的 Linux 虚拟机。套件 1056/1054/0/2;完整发布门 PASS,17/17 单元(Gate 0 SDK 套件;Gate 1+2 冻结的 FP/检测单元,含六个 3.0.0 新单元;Gate 2.5 黄金等价;Gate 3 在本 dist 上的实时 range 冒烟,range 报告 SDK 3.0.0)。以下每个模块均为 opt-in;未更改任何默认项。

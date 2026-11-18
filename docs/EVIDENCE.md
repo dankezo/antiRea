@@ -1,5 +1,13 @@
 # Measured results - the full evidence table
 
+## 3.1.0
+
+Release addendum: Linux x64, Node 24.22.1, on the maintainer's Linux VM. Suite 1661/1659/0/2; full release gate PASS, 17/17 cells (Gate 0 SDK suite; Gates 1+2 frozen FP/detection cells; Gate 2.5 golden equivalence, zero drift; Gate 3 live range smoke on this dist, range reporting SDK 3.1.0). Three GATEKEY fixes and 107 PASS-LAB candidates ship as opt-in modules; no default changed. Four built modules (AN-02, RECOMB-01, RECOMB-03, C26) are held out of this release pending the farm holdout validation of 2026-11-23 and make no claims here; three candidates (RSP-13, AC-10, AC-17) were excluded after genuine upgrade attempts, with their measurements below and in the changelog.
+
+**GATEKEY fixes (bulk-access-key).** Stranded tokens: key claiming is idempotent (6/6 stranded claims pre-fix, 0/6 post-fix). Queue lane: fails closed when no step-up proof verifier is configured (pre-fix any non-empty proof string was accepted; in the measured attack 1,000 proof sybils took all 6 anonymous keys/day for 10 days, honest waiter zero). Epoch seed: a counter-mode HMAC stream replaces the 32-bit mulberry32 seed (pre-fix the attack model matched 67/67 blocks after a full 2^32 scan; post-fix 0/67). The mint step-up gate's documented default is unchanged (frozen cell GK-G6).
+
+**PASS-LAB backlog.** 107 of the 114 remaining candidates built under their frozen registrations across 14 families (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB). Each module's lab numbers and limits live in its header, and candidates with a false-positive surface are recorded in LIMITATIONS. Exclusions with numbers: RSP-13 (the registered mechanism is a real 60 s hold, forbidden by the family rule; a computed-values port would be a new unmeasured mechanism); AC-10 (privacy-extension FP 39/40 = 0.975 after upgrade attempts; removing the referer axis collapsed detection to 0 on every population); AC-17 (devtools-user FP 28/60 = 0.467 after upgrade attempts; the advisory-only form re-measured unchanged).
+
 ## 3.0.0
 
 Release addendum: Linux x64, Node 24.22.1, on the maintainer's Linux VM. Suite 1056/1054/0/2; full release gate PASS, 17/17 cells (Gate 0 SDK suite; Gates 1+2 frozen FP/detection cells including the six new 3.0.0 cells below; Gate 2.5 golden equivalence; Gate 3 live range smoke on this dist, range reporting SDK 3.0.0). Every module below is opt-in; no default changed.

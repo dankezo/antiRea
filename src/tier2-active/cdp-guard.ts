@@ -1,4 +1,12 @@
-/** Low-confidence diagnostic signals only. This cannot block CDP / REA. */
+/**
+ * Low-confidence diagnostic signals only. This cannot block CDP / REA.
+ *
+ * ABS-05 gap, stated plainly: these in-page signals are
+ * client-supplied and cannot be cryptographically bound from inside
+ * a browser, so they must never be the deciding input to a gate.
+ * See `CDP_GUARD_BINDING_GAP` in signal-binding.ts and
+ * `auditSignalInputs` for the gating-input audit.
+ */
 export interface AutomationSignalOptions {
   onDetected: (reason: string) => void;
   enabled?: boolean;

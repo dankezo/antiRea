@@ -192,6 +192,21 @@ export interface QuotaWindowStore {
     windowMs: number,
     limit: number,
   ): Promise<QuotaAtomicRecordResult> | QuotaAtomicRecordResult;
+  /**
+   * TTL sweep (ABP-06): proactively drop every window whose entries are
+   * all older than `windowMs` relative to `now`, and prune expired
+   * entries from windows that still hold live ones. Returns the number
+   * of windows removed. Optional: a store without it still prunes
+   * lazily on access, but its key set can then only shrink when a key
+   * is touched again or the capacity path runs - the exact unbounded
+   * growth the ABP-06 lab measured on the neighbour (its in-memory
+   * expire() was a no-op and per-IP state never expired). The bundled
+   * in-memory store implements it; hosts on a long timer should call
+   * it periodically so idle keys are reclaimed without traffic.
+   */
+  sweepExpired?(now: number, windowMs: number): Promise<number> | number;
+  /** Number of window keys currently held. Optional observability for the sweep contract. */
+  size?(): number;
 }
 
 export interface QuotaGuardOptions {
@@ -227,6 +242,20 @@ export interface QuotaGuardOptions {
    * behavior of skipping quota checks for such requests.
    */
   allowUnresolvedIdentity?: boolean;
+  /**
+   * Composite caller keying for the IP dimension (WDN-13, opt-in).
+   * When set, the IP dimension's bucket key is the composite key
+   * derived from these characteristics (for example ["ip", "path"]
+   * keys one bucket per IP+path instead of one per IP). An explicit
+   * keyBy always wins over the default ip-only keying. Derivation
+   * follows the lab law: if ANY characteristic resolves undefined the
+   * WHOLE key falls back to the bare IP (never a shared "missing"
+   * bucket), and a throwing function characteristic is treated as
+   * absent with no exception escaping. Identity reporting is
+   * unchanged - only the bucket key changes. Default: unset (plain
+   * IP keying, the pre-WDN-13 behaviour).
+   */
+  keyBy?: readonly QuotaKeyCharacteristic[];
   /** Clock override (ms since epoch), mainly for tests. Defaults to `Date.now`. Display timestamps only (L-DEEP-2). */
   now?: () => number;
   /**
@@ -246,12 +275,91 @@ export const DEFAULT_QUOTA_TIERS: Record<string, QuotaTierConfig> = {
   enterprise: { maxRequests: 3_000, windowMs: 60_000, maxPageSize: 1_000, maxPage: 1_000 },
 };
 
+/* ------------------------------------------------------------------------ */
+/* Composite caller key (WDN-13, WebDecoy characteristics port).            */
+/*                                                                          */
+/* Measured in the WDN Step-0 lab (wdn-lab/wdn13.cjs): under ["ip","path"]  */
+/* same-IP requests for /a and /b key as 1.1.1.1|/a vs 1.1.1.1|/b and        */
+/* identical requests key identically; a path-less request keys as the      */
+/* bare IP and path-less requests from two IPs key differently (a missing   */
+/* characteristic never merges strangers); a function characteristic        */
+/* contributes its value; an explicit characteristic list wins over the     */
+/* default list; a throwing function is treated as absent - the key falls   */
+/* back to the IP and no exception escapes.                                 */
+/* ------------------------------------------------------------------------ */
+
+/** The request facts a composite key can be derived from. Function characteristics receive this whole object. */
+export interface QuotaKeyContext {
+  ip?: string;
+  path?: string;
+  method?: string;
+  userAgent?: string;
+  headers?: Record<string, string | undefined>;
+  [key: string]: unknown;
+}
+
+/** One keying characteristic: a built-in name, or a function deriving a value from the context. */
+export type QuotaKeyCharacteristic =
+  | "ip"
+  | "path"
+  | "method"
+  | "userAgent"
+  | ((context: QuotaKeyContext) => string | undefined);
+
+function resolveQuotaCharacteristic(
+  context: QuotaKeyContext,
+  characteristic: QuotaKeyCharacteristic,
+): string | undefined {
+  if (typeof characteristic === "function") {
+    try {
+      return characteristic(context) || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  switch (characteristic) {
+    case "ip": return context.ip || undefined;
+    case "path": return context.path || undefined;
+    case "method": return context.method || undefined;
+    case "userAgent": return context.userAgent || undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Derive a composite caller key: the characteristic values joined with
+ * "|". If ANY characteristic resolves undefined (including a throwing
+ * function), the WHOLE key falls back to the bare IP - never a key
+ * with an empty component, never a shared missing bucket.
+ */
+export function deriveCompositeKey(
+  context: QuotaKeyContext,
+  characteristics: readonly QuotaKeyCharacteristic[] = ["ip"],
+): string | undefined {
+  if (characteristics.length === 0) return context.ip;
+  const parts: string[] = [];
+  for (const characteristic of characteristics) {
+    const value = resolveQuotaCharacteristic(context, characteristic);
+    if (value === undefined) return context.ip;
+    parts.push(value);
+  }
+  return parts.join("|");
+}
+
 /**
  * Bounded in-memory sliding-window store: expired timestamps are pruned on
  * every access and the key set is capped. The cap fails closed - only expired
  * windows are ever evicted; when the store is still full, `record` returns
  * `false` for a NEW window and the guard rejects the request instead of the
  * store silently dropping live accounting.
+ *
+ * TTL enforcement (ABP-06): lazy per-key pruning alone leaves a key in the
+ * map forever once its owner goes idle below the capacity cap, so the store
+ * also exposes `sweepExpired(now, windowMs)` - a full-map pass under the
+ * same expiry rule - plus `size()` so a host timer (or a conformance test)
+ * can prove idle state is actually reclaimed. The sweep changes no
+ * decision semantics: a swept window is exactly the window `peek` would
+ * have reported as empty.
  */
 export function createInMemoryQuotaStore(maxEntries = 10_000): QuotaWindowStore {
   const cap = Math.max(100, Math.floor(maxEntries) || 10_000);
@@ -301,6 +409,22 @@ export function createInMemoryQuotaStore(maxEntries = 10_000): QuotaWindowStore 
       fresh.push(now);
       windows.set(key, fresh);
       return { recorded: true, count: fresh.length, oldest: Math.min(...fresh) };
+    },
+    sweepExpired(now, windowMs) {
+      // ABP-06 TTL sweep: visit EVERY key, not only the one a request
+      // touched. prune() already deletes a key whose list empties and
+      // rewrites a partially expired list in place, so the sweep is a
+      // full pass over the map with the same expiry rule as access.
+      let removed = 0;
+      for (const key of [...windows.keys()]) {
+        const before = windows.has(key);
+        prune(key, now, windowMs);
+        if (before && !windows.has(key)) removed++;
+      }
+      return removed;
+    },
+    size() {
+      return windows.size;
     },
   };
 }
@@ -457,10 +581,29 @@ export function createQuotaGuard(options: QuotaGuardOptions = {}): QuotaGuard {
     const tierName = identity.tier ?? options.defaultTier ?? "anonymous";
     const tier = tierConfig(tierName);
 
+    // WDN-13: with a keyBy configured, the IP dimension is bucketed by
+    // the composite key (path = URL pathname). Derivation failure of
+    // any characteristic falls the key back to the bare IP inside
+    // deriveCompositeKey, so this can never throw or merge strangers.
+    let ipBucketKey = ip;
+    if (ip && options.keyBy && options.keyBy.length > 0) {
+      let pathname: string | undefined;
+      try {
+        pathname = new URL(req.url, "http://quota.invalid").pathname;
+      } catch {
+        pathname = undefined;
+      }
+      ipBucketKey =
+        deriveCompositeKey(
+          { ip, path: pathname, method: req.method, userAgent: getHeader(req, "user-agent") },
+          options.keyBy,
+        ) ?? ip;
+    }
+
     const dimensions: Array<{ dimension: QuotaDimension; key: string }> = [];
     if (identity.accountId) dimensions.push({ dimension: "account", key: `account:${identity.accountId}` });
     if (identity.apiKeyId) dimensions.push({ dimension: "apiKey", key: `apikey:${identity.apiKeyId}` });
-    if (ip) dimensions.push({ dimension: "ip", key: `ip:${ip}` });
+    if (ip) dimensions.push({ dimension: "ip", key: `ip:${ipBucketKey}` });
     if (dimensions.length === 0 && options.allowUnresolvedIdentity !== true) {
       // No account, no API key and no determinable IP: never silently exempt.
       // All such requests share one "unknown" bucket at the tier's limits.

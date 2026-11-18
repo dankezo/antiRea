@@ -65,6 +65,26 @@
  * (a raw CUSUM score, a normalized ratio-to-threshold, ...) and set
  * `flagThreshold` to the level that normally triggers step-up in
  * those units. The module never invents an evidence scale.
+ *
+ * LCP-07 verdict-TTL asymmetry (opt-in policy, 3.1.0): the lab
+ * measured a third-party verifier whose POSITIVE verdict was cached
+ * for 24 h while a negative verdict lived only 300 s - a positive
+ * verdict still bypassed at t = 3,600 s, and an IP reassigned to a
+ * new holder inherited the bypass for up to 24 h. This module's
+ * default window is likewise 24 h, and grace is keyed by whatever
+ * identity string the host supplies, so a host that keys grace by
+ * a reassignable key (an IP) inherits the same shape. Two opt-in
+ * options close it without changing defaults:
+ * - `positiveVerdictMaxMs` caps the effective grace window, so a
+ *   host can bound the positive verdict's TTL (for example to the
+ *   300 s scale of a negative verdict) while keeping a longer
+ *   configured window for other reasons.
+ * - `requireBinding` plus a per-record `binding` (an opaque
+ *   continuity value the host controls - an account id, a session
+ *   epoch, a device fingerprint hash) makes grace non-transferable:
+ *   an evaluation that does not present the binding recorded at
+ *   verification time receives `binding_mismatch` and no
+ *   suppression, so a reassigned key inherits nothing silently.
  */
 
 import { resolveIntervalClock } from "../internal/mono-clock";
@@ -118,6 +138,25 @@ export interface VerificationGraceOptions {
    * Default 2,000 (the CUSUM tripwire's state cap).
    */
   maxIdentities?: number;
+  /**
+   * LCP-07 opt-in cap on the POSITIVE verdict's effective TTL, in
+   * milliseconds: the enforced grace window becomes
+   * min(graceWindowMs, positiveVerdictMaxMs). Unset by default (the
+   * configured window applies in full). Set it when a passed
+   * verification must not outlive the scale on which negative
+   * outcomes expire in the host's stack (the lab asymmetry was
+   * 24 h positive against 300 s negative). Same range as
+   * `graceWindowMs`: 1 s to 30 days.
+   */
+  positiveVerdictMaxMs?: number;
+  /**
+   * LCP-07 opt-in: when true, `recordVerified` REQUIRES a
+   * `binding` and evaluations only suppress step-up when they
+   * present the same binding (see `VerificationGraceRecordInput.binding`).
+   * Default false: bindings are still honored when a record carries
+   * one, but records without one behave exactly as before.
+   */
+  requireBinding?: boolean;
   /** Wall clock override (audit timestamps only), mainly for tests. Defaults to `Date.now`. */
   now?: () => number;
   /**
@@ -139,6 +178,25 @@ export interface VerificationGraceRecordInput {
   evidenceLevel?: number;
   /** Why/how the identity verified, in the host's words. Recorded verbatim; never interpreted. */
   reason?: string;
+  /**
+   * LCP-07 continuity binding: an opaque single-line value the host
+   * controls that identifies the CONTINUING holder of the identity
+   * key (an account id, a session epoch, a device fingerprint
+   * hash - never a secret). When a record carries a binding, an
+   * evaluation suppresses step-up only when it presents the same
+   * binding; a different or missing binding yields
+   * `binding_mismatch`. This is what stops a reassigned key (the
+   * lab case: an IP handed to a new holder) from silently
+   * inheriting the previous holder's positive verdict. The value
+   * is stored in-process only and never appears on any verdict.
+   */
+  binding?: string;
+}
+
+/** Optional per-evaluation inputs (LCP-07). */
+export interface VerificationGraceEvaluateOptions {
+  /** The continuity binding the current holder presents; see `VerificationGraceRecordInput.binding`. */
+  binding?: string;
 }
 
 export interface VerificationGraceRecord {
@@ -164,6 +222,7 @@ export type VerificationGraceReason =
   | "in_grace"
   | "grace_expired"
   | "grace_broken_escalation"
+  | "binding_mismatch"
   | "invalid_evidence";
 
 export interface VerificationGraceVerdict {
@@ -227,16 +286,21 @@ export interface VerificationGrace {
    * returns an `invalid_evidence` verdict that suppresses nothing
    * (pre-grace behavior), mirroring the tripwire's invalid-input rule.
    */
-  evaluate(identity: string, evidenceLevel: number): VerificationGraceVerdict;
+  evaluate(identity: string, evidenceLevel: number, options?: VerificationGraceEvaluateOptions): VerificationGraceVerdict;
   /**
    * The one-line host gate, mirroring
    * `createProtectedCohortRegistry`'s `guardInferredConsequence`:
    * identical to `evaluate`, plus the consequence collapses to
    * `observe` while suppressed and stays `step_up` otherwise.
    */
-  guardStepUp(identity: string, evidenceLevel: number): VerificationGraceStepUpVerdict;
-  /** True while a live grace record covers the identity (time/state only; no evidence input). */
-  isInGrace(identity: string): boolean;
+  guardStepUp(identity: string, evidenceLevel: number, options?: VerificationGraceEvaluateOptions): VerificationGraceStepUpVerdict;
+  /**
+   * True while a live grace record covers the identity (time/state
+   * only; no evidence input). When the record carries an LCP-07
+   * binding, the caller must present it via `options.binding` or
+   * this returns false.
+   */
+  isInGrace(identity: string, options?: VerificationGraceEvaluateOptions): boolean;
   /** Drop an identity's record entirely. Returns true when one existed. */
   forget(identity: string): boolean;
   /** State summary for operator tooling. */
@@ -293,6 +357,7 @@ interface GraceState {
   verifiedWallMs: number;
   baselineEvidence: number | null;
   reason: string | null;
+  binding: string | null;
   verifications: number;
   broken: boolean;
   brokenMonoMs: number | null;
@@ -318,6 +383,16 @@ export function createVerificationGrace(
     options.maxIdentities === undefined
       ? DEFAULT_GRACE_MAX_IDENTITIES
       : requireIntInRange(options.maxIdentities, "maxIdentities", 1, 1_000_000);
+  // LCP-07: the enforced window is the configured window, capped by
+  // the opt-in positive-verdict TTL when one is set. Without the
+  // cap the two are identical and behavior is unchanged.
+  const positiveVerdictMaxMs =
+    options.positiveVerdictMaxMs === undefined
+      ? null
+      : requireFiniteInRange(options.positiveVerdictMaxMs, "positiveVerdictMaxMs", 1_000, 2_592_000_000);
+  const effectiveWindowMs = positiveVerdictMaxMs === null ? graceWindowMs : Math.min(graceWindowMs, positiveVerdictMaxMs);
+  const requireBinding = options.requireBinding === undefined ? false : options.requireBinding;
+  if (typeof requireBinding !== "boolean") fail("requireBinding must be a boolean");
   const escalationThreshold = flagThreshold * escalationFactor;
 
   const clocks = resolveIntervalClock(options);
@@ -329,7 +404,7 @@ export function createVerificationGrace(
     Math.max(0, monoMs - state.verifiedMonoMs);
 
   const liveAt = (state: GraceState, monoMs: number): boolean =>
-    !state.broken && elapsedMs(state, monoMs) < graceWindowMs;
+    !state.broken && elapsedMs(state, monoMs) < effectiveWindowMs;
 
   const recordVerified = (
     identityRaw: string,
@@ -347,6 +422,20 @@ export function createVerificationGrace(
       }
       reason = record.reason;
     }
+    let binding: string | null = null;
+    if (record.binding !== undefined) {
+      if (
+        typeof record.binding !== "string" ||
+        record.binding.length === 0 ||
+        record.binding.length > 1024 ||
+        hasControlOrNewline(record.binding)
+      ) {
+        fail("binding must be a single-line string of 1-1024 characters");
+      }
+      binding = record.binding;
+    } else if (requireBinding) {
+      fail("binding is required by this instance (requireBinding): a positive verdict must name its continuing holder");
+    }
     const monoMs = clocks.mono();
     const previous = records.get(identity);
     const state: GraceState = {
@@ -354,6 +443,7 @@ export function createVerificationGrace(
       verifiedWallMs: clocks.wall(),
       baselineEvidence,
       reason,
+      binding,
       verifications: (previous?.verifications ?? 0) + 1,
       broken: false,
       brokenMonoMs: null,
@@ -370,15 +460,19 @@ export function createVerificationGrace(
     return {
       identity,
       verifiedAtMs: state.verifiedWallMs,
-      graceExpiresAtMonoMs: state.verifiedMonoMs + graceWindowMs,
-      graceWindowMs,
+      graceExpiresAtMonoMs: state.verifiedMonoMs + effectiveWindowMs,
+      graceWindowMs: effectiveWindowMs,
       baselineEvidence: state.baselineEvidence,
       reason: state.reason,
       verifications: state.verifications,
     };
   };
 
-  const evaluate = (identityRaw: string, evidenceLevel: number): VerificationGraceVerdict => {
+  const evaluate = (
+    identityRaw: string,
+    evidenceLevel: number,
+    evalOptions: VerificationGraceEvaluateOptions = {},
+  ): VerificationGraceVerdict => {
     const identity = requireIdentity(identityRaw);
     const state = records.get(identity);
     const base = {
@@ -424,13 +518,30 @@ export function createVerificationGrace(
     }
     const monoMs = clocks.mono();
     const elapsed = elapsedMs(state, monoMs);
-    if (elapsed >= graceWindowMs) {
+    if (elapsed >= effectiveWindowMs) {
       return {
         ...base,
         inGrace: false,
         stepUpSuppressed: false,
         escalated: false,
         reason: "grace_expired",
+        evidenceLevel,
+        graceRemainingMs: null,
+      };
+    }
+    if (state.binding !== null && evalOptions.binding !== state.binding) {
+      // LCP-07: the presenter is not the holder the positive verdict
+      // was recorded for (the key was reassigned, or the new holder
+      // cannot show continuity). No suppression - and no latch: a
+      // stranger's presentation must not destroy the real holder's
+      // grace by tripping the escalation break either, so this
+      // check runs before the escalation check and mutates nothing.
+      return {
+        ...base,
+        inGrace: false,
+        stepUpSuppressed: false,
+        escalated: false,
+        reason: "binding_mismatch",
         evidenceLevel,
         graceRemainingMs: null,
       };
@@ -456,19 +567,25 @@ export function createVerificationGrace(
       escalated: false,
       reason: "in_grace",
       evidenceLevel,
-      graceRemainingMs: graceWindowMs - elapsed,
+      graceRemainingMs: effectiveWindowMs - elapsed,
     };
   };
 
-  const guardStepUp = (identity: string, evidenceLevel: number): VerificationGraceStepUpVerdict => {
-    const verdict = evaluate(identity, evidenceLevel);
+  const guardStepUp = (
+    identity: string,
+    evidenceLevel: number,
+    evalOptions: VerificationGraceEvaluateOptions = {},
+  ): VerificationGraceStepUpVerdict => {
+    const verdict = evaluate(identity, evidenceLevel, evalOptions);
     return { ...verdict, action: verdict.stepUpSuppressed ? "observe" : "step_up" };
   };
 
-  const isInGrace = (identityRaw: string): boolean => {
+  const isInGrace = (identityRaw: string, evalOptions: VerificationGraceEvaluateOptions = {}): boolean => {
     const identity = requireIdentity(identityRaw);
     const state = records.get(identity);
-    return state !== undefined && liveAt(state, clocks.mono());
+    if (state === undefined || !liveAt(state, clocks.mono())) return false;
+    if (state.binding !== null && evalOptions.binding !== state.binding) return false;
+    return true;
   };
 
   const forget = (identityRaw: string): boolean => {
@@ -483,7 +600,7 @@ export function createVerificationGrace(
     let expired = 0;
     for (const state of records.values()) {
       if (state.broken) broken += 1;
-      else if (elapsedMs(state, monoMs) >= graceWindowMs) expired += 1;
+      else if (elapsedMs(state, monoMs) >= effectiveWindowMs) expired += 1;
       else active += 1;
     }
     return {
@@ -491,7 +608,7 @@ export function createVerificationGrace(
       active,
       broken,
       expired,
-      graceWindowMs,
+      graceWindowMs: effectiveWindowMs,
       flagThreshold,
       escalationFactor,
       escalationThreshold,

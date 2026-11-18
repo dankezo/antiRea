@@ -65,18 +65,15 @@
 
 import { mintEchoId, type EchoSecret } from "./canary-echo";
 import type { CanaryRequest } from "./honeypot-middleware";
+import { FAKE_TRAP_PATHS } from "./trap-paths";
 
-/** The 8 registered decoy paths (UserAgentSpy decoys.js, verbatim, in source order). */
-export const FAKE_ENDPOINT_PATHS = [
-  "/wp-login.php",
-  "/wp-admin/",
-  "/xmlrpc.php",
-  "/.env",
-  "/.git/config",
-  "/phpinfo.php",
-  "/server-status",
-  "/config.json",
-] as const;
+/**
+ * The 8 registered decoy paths. The single source of truth is the
+ * ABP-08 registry in `trap-paths.ts`; this constant is a re-export
+ * of that array (same object), so bait surfaces and detectors
+ * cannot drift.
+ */
+export const FAKE_ENDPOINT_PATHS = FAKE_TRAP_PATHS;
 
 export type FakeEndpointPath = (typeof FAKE_ENDPOINT_PATHS)[number];
 

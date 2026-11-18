@@ -61,6 +61,19 @@
  *
  * Normal users exporting a filtered report (the legitimate use) stay far
  * below the cap; the cap only bites on unfiltered, dataset-scale pulls.
+ *
+ * AC-02 export-axis attribution (opt-in, PASS-LAB): the lab measured
+ * both axes of a quota-bounded session exactly - the served axis
+ * (distinct served 20 / 120 / 60 on fresh sessions at quotas
+ * 20 / 120 / 60) and the retained axis (all 15 captures of served
+ * pages attributable to the axis that served them, zero leakage: no
+ * capture held a token the server did not serve to that session).
+ * A capture of a 429-rejected export is attributable-with-0: it
+ * names its own URL and holds 0 tokens. The `attribution` option
+ * adds that attribution shape to guard results, and
+ * `createExportAxisAttributor` is the standalone tracker a host
+ * uses to record which axis (list / detail / export) served which
+ * records and to attribute a later capture to its serving axis.
  */
 
 import type { QuotaExpressNext, QuotaExpressResponse, QuotaRequestLike } from "./quota-guard";
@@ -131,6 +144,122 @@ export interface ExportGuardOptions extends RecordBudgetIdentityOptions {
   noStore?: boolean;
   /** Structured operator event sink for rejections. Errors thrown here are swallowed. */
   onRejected?: (event: ExportGuardRejection) => Promise<void> | void;
+  /**
+   * AC-02 opt-in: when true, every guard result carries an
+   * `attribution` field naming the export axis, how many distinct
+   * records this call served (the estimate, or 0 on a rejection),
+   * and whether the call is attributable-with-0. Defaults to false.
+   */
+  attribution?: boolean;
+}
+
+/** The serving axis a record arrived through (AC-02). */
+export type ExportAxis = "list" | "detail" | "export";
+
+export interface ExportAxisAttribution {
+  axis: ExportAxis;
+  /** Distinct records this call served (0 on a rejection). */
+  servedDistinct: number;
+  /** The call or capture can be attributed to its serving axis. */
+  attributable: boolean;
+  /** True when attribution holds with exactly 0 records (the 429-export shape). */
+  attributableWithZero: boolean;
+}
+
+export interface CaptureAttribution {
+  attributable: boolean;
+  /** The single axis that served every matched record, when there is one. */
+  axis?: ExportAxis;
+  /** Every axis that served a matched record. */
+  axes: ExportAxis[];
+  matchedRecords: number;
+  /** Records in the capture that no axis served to this identity (leakage if > 0). */
+  leakedRecords: number;
+  attributableWithZero: boolean;
+}
+
+export interface ExportAxisAttributor {
+  /** Record that `axis` served these records to `identity`. Returns the identity's distinct served count. */
+  recordServe(identity: string, axis: ExportAxis, recordIds: readonly string[]): { distinctServed: number };
+  /** Distinct records served to `identity`, optionally restricted to one axis. */
+  distinctServed(identity: string, axis?: ExportAxis): number;
+  /**
+   * Attribute a capture (the record ids it holds) for `identity`:
+   * attributable when every held record was served to that identity
+   * (zero leakage). An empty capture is attributable-with-0, the
+   * 429-export shape, and takes its axis from `axisHint`.
+   */
+  attributeCapture(identity: string, recordIds: readonly string[], axisHint?: ExportAxis): CaptureAttribution;
+  /** Forget one identity, or all when called with no argument. */
+  reset(identity?: string): void;
+}
+
+/**
+ * AC-02 standalone tracker. First-serve wins: a record keeps the
+ * axis that first served it to the identity, so a capture of a
+ * served page attributes to that page's axis even if the record
+ * was later also exported.
+ */
+export function createExportAxisAttributor(): ExportAxisAttributor {
+  const served = new Map<string, Map<string, ExportAxis>>();
+  return {
+    recordServe(identity, axis, recordIds) {
+      let per = served.get(identity);
+      if (!per) {
+        per = new Map();
+        served.set(identity, per);
+      }
+      for (const id of recordIds) {
+        if (typeof id === "string" && id.length > 0 && !per.has(id)) per.set(id, axis);
+      }
+      return { distinctServed: per.size };
+    },
+    distinctServed(identity, axis) {
+      const per = served.get(identity);
+      if (!per) return 0;
+      if (!axis) return per.size;
+      let n = 0;
+      for (const a of per.values()) if (a === axis) n++;
+      return n;
+    },
+    attributeCapture(identity, recordIds, axisHint) {
+      const ids = (recordIds ?? []).filter(id => typeof id === "string" && id.length > 0);
+      if (ids.length === 0) {
+        return {
+          attributable: true,
+          ...(axisHint ? { axis: axisHint } : {}),
+          axes: axisHint ? [axisHint] : [],
+          matchedRecords: 0,
+          leakedRecords: 0,
+          attributableWithZero: true,
+        };
+      }
+      const per = served.get(identity);
+      const axes: ExportAxis[] = [];
+      let matched = 0;
+      let leaked = 0;
+      for (const id of ids) {
+        const axis = per?.get(id);
+        if (axis === undefined) leaked++;
+        else {
+          matched++;
+          if (!axes.includes(axis)) axes.push(axis);
+        }
+      }
+      return {
+        attributable: leaked === 0,
+        ...(axes.length === 1 ? { axis: axes[0] as ExportAxis } : {}),
+        axes,
+        matchedRecords: matched,
+        leakedRecords: leaked,
+        attributableWithZero: false,
+      };
+    },
+    reset(identity) {
+      if (identity === undefined) served.clear();
+      else served.delete(identity);
+    },
+  };
 }
 
 export type ExportGuardRejectionKind =
@@ -157,6 +286,8 @@ export interface ExportGuardResult {
   estimatedRows?: number;
   /** Budget identity key the export was charged to, when a budget is wired. */
   identityKey?: string;
+  /** AC-02 attribution, present only when the `attribution` option is enabled. */
+  attribution?: ExportAxisAttribution;
 }
 
 export interface ExportGuard {
@@ -186,6 +317,18 @@ export function createExportGuard(options: ExportGuardOptions): ExportGuard {
     "X-Export-Max-Rows": String(maxRows),
     ...(options.noStore !== false ? { "Cache-Control": "private, no-store" } : {}),
   });
+
+  const attributionFor = (servedDistinct: number): { attribution?: ExportAxisAttribution } =>
+    options.attribution
+      ? {
+          attribution: {
+            axis: "export",
+            servedDistinct,
+            attributable: true,
+            attributableWithZero: servedDistinct === 0,
+          },
+        }
+      : {};
 
   const emit = async (rejection: ExportGuardRejection): Promise<void> => {
     if (!options.onRejected) return;
@@ -242,6 +385,16 @@ export function createExportGuard(options: ExportGuardOptions): ExportGuard {
         body,
         ...(context.estimatedRows !== undefined ? { estimatedRows: context.estimatedRows } : {}),
         ...(identityKey ? { identityKey } : {}),
+        ...(options.attribution
+          ? {
+              attribution: {
+                axis: "export" as const,
+                servedDistinct: 0,
+                attributable: true,
+                attributableWithZero: true,
+              },
+            }
+          : {}),
       };
     };
 
@@ -332,6 +485,7 @@ export function createExportGuard(options: ExportGuardOptions): ExportGuard {
           },
           ...(estimatedRows !== undefined ? { estimatedRows } : {}),
           identityKey,
+          ...attributionFor(estimatedRows ?? 0),
         };
       }
       if (estimatedRows !== undefined) {
@@ -365,6 +519,7 @@ export function createExportGuard(options: ExportGuardOptions): ExportGuard {
           },
           estimatedRows,
           identityKey,
+          ...attributionFor(estimatedRows),
         };
       }
     }
@@ -374,6 +529,7 @@ export function createExportGuard(options: ExportGuardOptions): ExportGuard {
       status: 200,
       headers: baseHeaders(),
       ...(estimatedRows !== undefined ? { estimatedRows } : {}),
+      ...attributionFor(estimatedRows ?? 0),
     };
   };
 

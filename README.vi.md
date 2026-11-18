@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1056%20total-informational" alt="tests: 1056 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
 </p>
 
 <p align="center">
@@ -174,16 +174,15 @@ in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
 
-### v3.0.0 - Chuyển hóa tier-2, khoá năng lực bulk và thống kê pin hiệu chuẩn farm
+### v3.1.0 - Vá cứng GATEKEY và toàn bộ backlog PASS-LAB
 
-Ba hệ thống đã đo tốt nghiệp từ lab và farm. Tất cả đều opt-in; không mặc định nào thay đổi.
+Ba bản vá làm cứng khoá năng lực bulk, và toàn bộ backlog PASS-LAB còn lại tốt nghiệp. Mọi module mới đều opt-in; không mặc định nào thay đổi.
 
-- **Chuyển hóa tier-2 (`createTier2Conversion`, MỚI):** lớp thực thi C27+C35, dựng theo các quyết định đã khóa ngày 2026-11-04. Một cờ C27 bền vững (có mặt trong >= 2 epoch bằng chứng khác nhau) kèm corroboration độc lập từ một họ detector khác sẽ hạ ngân sách bản ghi của identity về phía sàn 500 bản ghi/identity/24h - không bao giờ dưới sàn, không bao giờ chặn cứng. Lần chạm decoy C35 đầu tiên áp taint + step-up ngay lập tức, với cơ chế tự giải trừ V-C và void hồi tố tích hợp sẵn, không phải tùy chọn. Một ngân sách FP toàn fleet kiểu alpha-wealth đi kèm lớp này: khi cạn, nó tự động rơi về observe-only. Strata chỉ vào bằng khai báo của host. Cơ sở bằng chứng: FC-03R PREMISE-CONFIRMED trên thống kê farm căn theo tuổi (tuổi 1-12) cộng pin lab; chân C35 là bằng chứng lab-only và không có tuyên bố farm nào cho nó.
-- **Khoá năng lực bulk (`createBulkAccessKeyAuthority`, MỚI):** truy cập bulk - bản ghi mới vượt vùng miễn phí 150 bản ghi, mọi bản ghi thuộc phần đuôi, mọi export mới - đều cần một khoá do server cấp, và việc CẤP khoá là sự kiện bị đo: kênh ẩn danh bị bound bởi pool toàn fleet (6 khoá/24h theo giá trị lab), mỗi khoá mở một lát 150 bản ghi không liên tục của một hoán vị epoch có seed, và bản ghi được phục vụ dưới một khoá mang biến thể watermark của khoá đó. Trong probe lab đông cứng (GATEKEY-01 Step-0), độc giả thường và độc giả nặng được phục vụ đủ với 0 lần bị từ chối và 0 lần bị đòi step-up, trong khi farm xoay 200 identity bị giữ ở nhịp pool và cần 12 ngày cho phần đuôi. Các số kinh tế đó chỉ phủ phần đuôi, export và phần phục vụ vượt vùng miễn phí; phần đầu vẫn không khoá theo thiết kế.
-- **Thống kê pin FC-07 (`fitPinNovelStatistic` / `scorePinNovelStatistic`, MỚI, opt-in):** đếm phơi nhiễm bản ghi mới theo identity, ngưỡng fit theo stratum do host khai báo theo C-LAW, luật cờ strict (novel > tau). Trên cửa sổ hiệu chuẩn farm, nó gắn cờ 0% cả hai stratum hợp lệ trong khi phát hiện attacker chậm 2/2 và các shape bulk 4/4; cái giá của nó được in kèm (traffic dạng review-team crossing 100%), và kiểm chứng holdout trên trace 16-22/11 vẫn đang chờ. Các dạng (novel, total) đã ship và mặc định không đổi.
-- Mới nữa: trục stuffing hàng chờ của luật vote-brigading (`createQueueStuffingSignal`; PASS-LAB trong mô phỏng có seed), ba module advisory ở dạng hạn chế đã đo (`analyzeHeaderCoherence` V1, `classifyUserAgent` catalogue tên riêng, `createFakeEndpoints` gói decoy opt-in), lưu referer chỉ theo origin kèm bản vá WART-1, và một test conformance rác vĩnh viễn ghim cả 7 bề mặt verify (146 lời gọi: 0 throw, 0 verdict thành công).
+- **Các bản vá GATEKEY (`createBulkAccessKeyAuthority`):** việc nhận khoá giờ là idempotent - khoá được mint vào một identity mới trong đợt refill trước đây bị mắc kẹt (đo được: 6/6 claim mắc kẹt không bao giờ nhận được token; 0/6 sau khi vá). Lane hàng chờ ẩn danh giờ fail-closed khi chưa cấu hình verifier cho step-up proof: trước khi vá, mọi chuỗi proof khác rỗng đều được chấp nhận, và sybil proof lấy hết 6 khoá ẩn danh mỗi ngày trong khi người chờ thật bị bỏ đói. Hoán vị epoch giờ lấy từ dòng HMAC dạng counter thay vì seed 32-bit - một lần quét trọn 2^32 đã dựng lại cả 67 block từ một block quan sát được trước khi vá (0/67 sau khi vá). Cổng step-up bên trong `mint` giữ mặc định đã ghi trong tài liệu, được ghim bởi ô đông cứng GK-G6.
+- **107 ứng viên PASS-LAB đã build:** toàn bộ backlog đã đo ship dưới dạng module opt-in trên 14 họ (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB), mỗi món theo đăng ký đông cứng và ngân sách FP của nó, vài món ở dạng hạn chế có chủ ý khi dạng lab phạm luật nhà. Ba ứng viên bị loại sau các nỗ lực nâng cấp thật, số đo in trong changelog: RSP-13, AC-10 và AC-17.
+- **Giữ chờ kiểm chứng farm (không có trong bản này):** AN-02, RECOMB-01, RECOMB-03 và C26 đã build nhưng ở ngoài cho tới khi kiểm chứng holdout farm chốt xong; chưa có số nào được tuyên bố cho chúng.
 
-1056 test: 1054 đạt, không lỗi, 2 bỏ qua (đo trên Linux x64, Node 24.22.1).
+1661 test: 1659 đạt, không lỗi, 2 bỏ qua.
 
 Các bản phát hành trước: xem [Changelog](CHANGELOG.md).
 
@@ -269,8 +268,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **1056
-test tự động** (1054 đạt, không lỗi, 2 bỏ qua, đo trên Linux x64 với Node 24.22.1) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **1661
+test tự động** (1659 đạt, không lỗi, 2 bỏ qua) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.

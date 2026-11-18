@@ -1,5 +1,13 @@
 # Hiệu quả đã đo được - bảng bằng chứng đầy đủ
 
+## 3.1.0
+
+Phụ lục phát hành: Linux x64, Node 24.22.1, trên máy ảo Linux của maintainer. Suite 1661/1659/0/2; cổng phát hành đầy đủ PASS, 17/17 ô (Gate 0 suite SDK; Gates 1+2 các ô FP/detection đông cứng; Gate 2.5 golden equivalence, lệch 0; Gate 3 live range smoke trên chính dist này, range báo SDK 3.1.0). Ba bản vá GATEKEY và 107 ứng viên PASS-LAB ship dưới dạng module opt-in; không mặc định nào thay đổi. Bốn module đã build (AN-02, RECOMB-01, RECOMB-03, C26) bị giữ ngoài bản phát hành này chờ kiểm chứng holdout farm ngày 2026-11-23 và không có tuyên bố nào tại đây; ba ứng viên (RSP-13, AC-10, AC-17) bị loại sau các nỗ lực nâng cấp thật, số đo ở dưới và trong changelog.
+
+**Các bản vá GATEKEY (bulk-access-key).** Token mắc kẹt: việc nhận khoá là idempotent (6/6 claim mắc kẹt trước khi vá, 0/6 sau khi vá). Lane hàng chờ: fail-closed khi chưa cấu hình verifier cho step-up proof (trước khi vá mọi chuỗi proof khác rỗng đều được chấp nhận; trong đợt tấn công đã đo, 1.000 sybil proof lấy hết 6 khoá ẩn danh/ngày suốt 10 ngày, người chờ thật nhận 0). Seed epoch: dòng HMAC dạng counter thay seed mulberry32 32-bit (trước khi vá mô hình tấn công khớp 67/67 block sau khi quét trọn 2^32; sau khi vá 0/67). Mặc định đã ghi tài liệu của cổng step-up trong `mint` không đổi (ô đông cứng GK-G6).
+
+**Backlog PASS-LAB.** 107 trong 114 ứng viên còn lại được build theo đăng ký đông cứng của chúng trên 14 họ (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB). Số lab và giới hạn của từng module nằm trong header của nó, và các ứng viên có bề mặt FP được ghi trong LIMITATIONS. Các món loại kèm số: RSP-13 (cơ chế đã đăng ký chính là một lần giữ thật 60 s, bị luật họ cấm; bản port dạng giá trị tính sẵn sẽ là một cơ chế mới chưa đo); AC-10 (FP trên người dùng extension riêng tư 39/40 = 0.975 sau các nỗ lực nâng cấp; bỏ trục referer làm khả năng phát hiện sụp về 0 trên mọi quần thể); AC-17 (FP trên người dùng devtools 28/60 = 0.467 sau các nỗ lực nâng cấp; dạng advisory-only đo lại không đổi).
+
 ## 3.0.0
 
 Phụ lục phát hành: Linux x64, Node 24.22.1, trên máy ảo Linux của người duy trì. Suite 1056/1054/0/2; cổng phát hành đầy đủ PASS, 17/17 ô (Gate 0 suite SDK; Gate 1+2 các ô FP/phát hiện đông cứng gồm sáu ô 3.0.0 mới; Gate 2.5 tương đương vàng; Gate 3 khói trực tiếp trên bản dist này, range báo SDK 3.0.0). Mọi module dưới đây đều opt-in; không mặc định nào thay đổi.

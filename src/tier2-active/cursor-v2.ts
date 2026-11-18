@@ -30,6 +30,12 @@
  *
  * Like V1, a V2 token is integrity protection only: the payload is
  * readable by any holder and is not encryption.
+ *
+ * ABS-08: binding values (`subject`, `cohortId`, `scope`) travel
+ * inside the signed JSON payload, never in a colon-delimited token
+ * prefix, so a subject that IS an IPv6 address ("2001:db8::1")
+ * round-trips verbatim instead of being misparsed by colon
+ * splitting. Pinned by tests/abs08-ipv6-token.test.cjs.
  */
 
 export type CursorV2Secret = string | Uint8Array;

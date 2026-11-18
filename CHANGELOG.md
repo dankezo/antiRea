@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.1.0 - 2026-11-18
+
+The backlog release: the bulk capability keys are hardened by three fixes from adversarial review, and the entire remaining PASS-LAB backlog is processed - 107 of the 114 candidates built as opt-in modules, 3 excluded after genuine upgrade attempts with the measurements printed below, and 4 built but held out of this release pending farm validation. No default changes, and no advisory signal acquires a hard block.
+
+- **GATEKEY stranded-token fix (`createBulkAccessKeyAuthority`):** `requestKey` returned only the caller's own settled claim, so keys minted inside a fresh identity's call during a day-2 refill were stranded - measured 6 of 6 stranded claims never received a token. Claiming is now idempotent: a caller whose claim already settled receives its token on a later call (0 of 6 stranded after the fix).
+- **GATEKEY queue-lane proof fix:** with no `verifyStepUpProof` configured, the anonymous queue lane accepted any non-empty proof string - in the measured attack, 1,000 proof sybils took all 6 anonymous keys per day for 10 days while the honest waiter received zero. The lane now fails closed when no verifier is configured. The step-up gate inside `mint` deliberately keeps its documented presented-and-valid default, because the frozen GK-G6 cell pins fork recovery in a default configuration; it is unchanged.
+- **GATEKEY epoch-seed fix:** the epoch permutation was seeded from 32 bits of an HMAC and expanded by mulberry32; a full 2^32 scan (about 58 s) rebuilt the permutation of all 67 blocks from one observed 100-record block (model matched 67/67). The permutation is now drawn from a counter-mode HMAC stream with no 32-bit state; the same model matches 0/67 after the fix.
+- **107 PASS-LAB candidates built (all opt-in):** the full measured backlog graduates under its frozen registrations across 14 families - MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14 and RECOMB. Each module carries its lab numbers and limits in its header; candidates with a false-positive surface are recorded in LIMITATIONS. Several ship in deliberately restricted forms where the lab form failed a house rule (computed-values-only response shaping instead of real holds; corroboration-only components that can never be a sole key; observe-only wrappers with no consequence state).
+- **Excluded after upgrade attempts (measured, NOT shipped):** RSP-13 - the registered mechanism is itself a real 60 s response hold, which the family rule forbids, and a computed-values port would be a new unmeasured mechanism (RSP-04 already ships the bounded hold accounting). AC-10 - false-flag rate 39/40 (97.5%) on privacy-extension users, unrescuable after genuine upgrade attempts: removing the referer axis collapsed detection to zero on every population, and raising the bar traded the privacy FP against recall until recall collapsed. AC-17 - false-flag rate 28/60 (46.7%) on devtools users, unrescuable: the signal is the source-map fetch developers generate by doing their job, and the advisory-only component form re-measured unchanged at 0.467.
+- **Held for farm validation (built, NOT in this release):** AN-02, RECOMB-01, RECOMB-03 and C26 stay out until the farm holdout validation (2026-11-23) resolves them; no enforcement numbers are claimed for them here. The MCP wrapper stays 2.8.2 and pins SDK 2.8.1; it is not part of this release.
+
+Suite: 1661 tests / 1659 pass / 0 fail / 2 skipped. Runtime dependencies remain zero.
+
+Compatibility: additive only, plus the three GATEKEY behavior fixes above - stranded claims now return their token on a later call, the anonymous queue lane rejects proofs when no step-up verifier is configured, and epoch permutations are no longer reproducible from a 32-bit seed. Everything else keeps its 3.0.0 behavior and defaults.
+
 ## 3.0.0 - 2026-11-16
 
 The farm-calibration release: three measured systems graduate from the lab and the 14-day farm calibration round, all opt-in, no default retuned, and no advisory signal acquires a hard block. Built under the frozen registrations of the 3.0 program; every number below names its receipt.
