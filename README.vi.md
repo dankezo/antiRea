@@ -19,7 +19,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1683%20total-informational" alt="tests: 1683 total"></a>
 </p>
 
 <p align="center">
@@ -174,15 +174,16 @@ in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
 
-### v3.1.0 - Vá cứng GATEKEY và toàn bộ backlog PASS-LAB
+### v3.2.0 - Bề mặt đa hình theo từng host: anti-reverse có hạn dùng
 
-Ba bản vá làm cứng khoá năng lực bulk, và toàn bộ backlog PASS-LAB còn lại tốt nghiệp. Mọi module mới đều opt-in; không mặc định nào thay đổi.
+Các canary trap path đóng gói sẵn trước đây giống hệt trên mọi deployment - đọc SDK 1 lần là biết bẫy của mọi site mãi mãi. Bản này biến bề mặt của mỗi deployment thành một hình dạng khác nhau và xoay vòng theo tuần. Tất cả đều opt-in và advisory; không mặc định nào thay đổi.
 
-- **Các bản vá GATEKEY (`createBulkAccessKeyAuthority`):** việc nhận khoá giờ là idempotent - khoá được mint vào một identity mới trong đợt refill trước đây bị mắc kẹt (đo được: 6/6 claim mắc kẹt không bao giờ nhận được token; 0/6 sau khi vá). Lane hàng chờ ẩn danh giờ fail-closed khi chưa cấu hình verifier cho step-up proof: trước khi vá, mọi chuỗi proof khác rỗng đều được chấp nhận, và sybil proof lấy hết 6 khoá ẩn danh mỗi ngày trong khi người chờ thật bị bỏ đói. Hoán vị epoch giờ lấy từ dòng HMAC dạng counter thay vì seed 32-bit - một lần quét trọn 2^32 đã dựng lại cả 67 block từ một block quan sát được trước khi vá (0/67 sau khi vá). Cổng step-up bên trong `mint` giữ mặc định đã ghi trong tài liệu, được ghim bởi ô đông cứng GK-G6.
-- **107 ứng viên PASS-LAB đã build:** toàn bộ backlog đã đo ship dưới dạng module opt-in trên 14 họ (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB), mỗi món theo đăng ký đông cứng và ngân sách FP của nó, vài món ở dạng hạn chế có chủ ý khi dạng lab phạm luật nhà. Ba ứng viên bị loại sau các nỗ lực nâng cấp thật, số đo in trong changelog: RSP-13, AC-10 và AC-17.
-- **Giữ chờ kiểm chứng farm (không có trong bản này):** AN-02, RECOMB-01, RECOMB-03 và C26 đã build nhưng ở ngoài cho tới khi kiểm chứng holdout farm chốt xong; chưa có số nào được tuyên bố cho chúng.
+- **Bề mặt đa hình (`derivePolymorphCanaryPaths`, `derivePolymorphSurface`):** sinh canary trap path trông tự nhiên từ seed của host và epoch theo tuần (tất định, chỉ dùng SHA-256, không thêm dependency) rồi truyền cho bộ máy canary đang dùng. Path của epoch trước quay lại thành retired trap - chỉ giữ detector, nên ai chạm vào là đang dùng intel cũ hoặc ăn trộm.
+- **Toàn vẹn variant (`buildVariantManifest`, `verifyVariantManifest`):** manifest SHA-256 trên các file của variant. Việc kiểm tra không bao giờ throw và không bao giờ chặn; nó trả một object tín hiệu kèm lý do lệch cho từng file để host ghi log hoặc cảnh báo.
+- **Generator đa hình (`tools/polymorph/`):** tool build-time làm rối 4 module bề mặt (cursor, canary-echo, fake-endpoints, trap-paths) theo seed của host, nhúng watermark fingerprint bất hoạt để truy nguồn rò rỉ (traitor tracing), thêm dead code mồi hợp lý và ghi surface manifest. javascript-obfuscator chỉ là tool build-time tuỳ chọn cho generator; runtime của SDK vẫn zero-dependency.
+- **Số đo (prototype lab, 19/11/2026):** module bề mặt đã biến đổi tốn khoảng 1,6 lần CPU trên đường cursor và +11,7% kích thước trên 4 module; trên variant do chính generator của bản này sinh ra, 7 file test bề mặt đạt 72/72, fuzz vi phân cursor 2.000 ca giống bản sạch từng byte, token echo cross-verify 500/500 cả hai chiều. Bài test agent đọc code thật chưa chạy, nên không tuyên bố mức khó phân tích tự động tăng bao nhiêu.
 
-1661 test: 1659 đạt, không lỗi, 2 bỏ qua.
+1683 test: 1681 đạt, không lỗi, 2 bỏ qua.
 
 Các bản phát hành trước: xem [Changelog](CHANGELOG.md).
 
@@ -268,8 +269,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Làm việc trên chính repo: `npm run check` biên dịch, chạy **1661
-test tự động** (1659 đạt, không lỗi, 2 bỏ qua) và thực
+Làm việc trên chính repo: `npm run check` biên dịch, chạy **1683
+test tự động** (1681 đạt, không lỗi, 2 bỏ qua) và thực
 hiện các kiểm tra tĩnh. Quét một bản build công khai trước khi
 deploy bằng `node scripts/run-audit.cjs /path/to/dist` hoặc
 `python3 scripts/verify-build.py /path/to/dist`.

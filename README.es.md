@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1683%20total-informational" alt="tests: 1683 total"></a>
 </p>
 
 <p align="center">
@@ -178,15 +178,16 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
 
-### v3.1.0 - Endurecimiento de GATEKEY y todo el backlog PASS-LAB
+### v3.2.0 - Superficie polimorfa por host: anti-reverse con caducidad
 
-Tres correcciones endurecen las claves de capacidad bulk, y todo el backlog PASS-LAB restante se gradúa. Todos los módulos nuevos son opt-in; ningún valor por defecto cambia.
+Las rutas trampa canary empaquetadas eran idénticas en cada despliegue: leer el SDK una vez era conocer las trampas de todos los sitios para siempre. Esta versión convierte la superficie de cada despliegue en una forma distinta que rota semanalmente. Todo es opt-in y advisory; ningún valor por defecto cambia.
 
-- **Correcciones GATEKEY (`createBulkAccessKeyAuthority`):** reclamar una clave ahora es idempotente - las claves emitidas hacia una identidad nueva durante una recarga quedaban varadas (medido: 6 de 6 reclamos varados nunca recibieron token; 0 de 6 tras la corrección). El carril de cola anónima ahora falla cerrado cuando no hay un verificador de prueba step-up configurado: antes de la corrección se aceptaba cualquier cadena de prueba no vacía, y los sybils de prueba se llevaban las 6 claves anónimas diarias mientras los que esperaban honestamente pasaban hambre. La permutación de época ahora se extrae de un flujo HMAC en modo contador en lugar de una semilla de 32 bits - un escaneo completo de 2^32 reconstruía los 67 bloques desde un solo bloque observado antes de la corrección (0 de 67 después). La puerta step-up dentro de `mint` conserva su valor por defecto documentado, fijado por la celda congelada GK-G6.
-- **107 candidatos PASS-LAB construidos:** todo el backlog medido se publica como módulos opt-in en 14 familias (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB), cada uno bajo su registro congelado y su presupuesto de FP, varios en formas deliberadamente restringidas cuando la forma de laboratorio violaba una regla de la casa. Tres candidatos fueron excluidos tras intentos genuinos de mejora, con las mediciones impresas en el changelog: RSP-13, AC-10 y AC-17.
-- **Retenidos para validación del farm (no están en esta versión):** AN-02, RECOMB-01, RECOMB-03 y C26 están construidos pero quedan fuera hasta que la validación holdout del farm los resuelva; aún no se afirma ninguna cifra para ellos.
+- **Superficie polimorfa (`derivePolymorphCanaryPaths`, `derivePolymorphSurface`):** derive rutas canary de aspecto natural desde una semilla del host y una época semanal (determinista, solo SHA-256, sin dependencias nuevas) y páselas a la maquinaria canary que ya usa. Las rutas de la época anterior vuelven como trampas retiradas, solo detectores: un toque en una de ellas significa información vieja o robada.
+- **Integridad de variante (`buildVariantManifest`, `verifyVariantManifest`):** manifiestos SHA-256 sobre los archivos de una variante. La verificación nunca lanza y nunca bloquea; devuelve un objeto señal con el motivo de discrepancia por archivo para registrar o alertar.
+- **Generador polimorfo (`tools/polymorph/`):** herramienta de build que ofusca los cuatro módulos de superficie (cursor, canary-echo, fake-endpoints, trap-paths) con su semilla, incrusta una marca de agua inerte y extraíble con la huella del host para rastrear filtraciones, añade código muerto señuelo plausible y escribe el manifiesto de superficie. javascript-obfuscator es solo una herramienta de build opcional para el generador; el runtime del SDK sigue con cero dependencias.
+- **Medido (prototipo de laboratorio, 2026-11-19):** los módulos de superficie transformados cuestan alrededor de 1,6x de CPU en la ruta del cursor y +11,7% de tamaño en los cuatro módulos; en una variante generada por el propio generador de esta versión, los 7 archivos de test de superficie pasan 72/72, un fuzz diferencial de cursor de 2.000 casos es idéntico byte a byte a la dist limpia, y los tokens echo se verifican cruzados 500/500 en ambas direcciones. Aún no se ha ejecutado una prueba real de lectura por un agente, así que no se afirma cuánto más difícil se vuelve el análisis automatizado.
 
-1661 pruebas: 1659 superadas, ningún fallo, 2 omitidas.
+1683 pruebas: 1681 superadas, ningún fallo, 2 omitidas.
 
 Versiones anteriores: consulta el [Changelog](CHANGELOG.md).
 
@@ -271,7 +272,7 @@ python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
 Trabajar en el propio repositorio: `npm run check` compila, ejecuta
-**1661 pruebas automatizadas** (1659 superadas, ningún fallo, 2 omitidas) y realiza comprobaciones estáticas. Escanea una compilación
+**1683 pruebas automatizadas** (1681 superadas, ningún fallo, 2 omitidas) y realiza comprobaciones estáticas. Escanea una compilación
 pública antes de desplegar con `node scripts/run-audit.cjs /path/to/dist`
 o `python3 scripts/verify-build.py /path/to/dist`.
 

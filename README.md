@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1683%20total-informational" alt="tests: 1683 total"></a>
 </p>
 
 <p align="center">
@@ -168,15 +168,16 @@ belongs in-process, in your own app.
 
 ## Latest release
 
-### v3.1.0 - GATEKEY hardening and the full PASS-LAB backlog
+### v3.2.0 - Per-host polymorph surface: anti-reverse that expires
 
-Three fixes harden the bulk capability keys, and the entire remaining PASS-LAB backlog graduates. All new modules are opt-in; no default changes.
+The shipped canary trap paths were identical on every deployment - read the SDK once, know every site's traps forever. This release makes each deployment's surface a different, rotating shape. All of it is opt-in and advisory; no default changes.
 
-- **GATEKEY fixes (`createBulkAccessKeyAuthority`):** claiming a key is now idempotent - keys minted into a fresh identity during a refill were previously stranded (measured: 6 of 6 stranded claims never received a token; 0 of 6 after the fix). The anonymous queue lane now fails closed when no step-up proof verifier is configured: before the fix any non-empty proof string was accepted, and proof sybils took all 6 anonymous keys per day while honest waiters starved. The epoch permutation now draws from a counter-mode HMAC stream instead of a 32-bit seed - a full 2^32 scan rebuilt all 67 blocks from one observed block before the fix (0 of 67 after). The step-up gate inside `mint` keeps its documented default, pinned by the frozen GK-G6 cell.
-- **107 PASS-LAB candidates built:** the whole measured backlog ships as opt-in modules across 14 families (MGH, WDN, NHS, RSP, ABE, ABS, ABP, AC, LCP, ABG, CS, MISC, R14, RECOMB), each under its frozen registration and false-positive budget, several in deliberately restricted forms where the lab form failed a house rule. Three candidates were excluded after genuine upgrade attempts, with the measurements printed in the changelog: RSP-13, AC-10 and AC-17.
-- **Held for farm validation (not in this release):** AN-02, RECOMB-01, RECOMB-03 and C26 are built but stay out until the farm holdout validation resolves them; no numbers are claimed for them yet.
+- **Polymorph surface (`derivePolymorphCanaryPaths`, `derivePolymorphSurface`):** derive natural-looking canary trap paths from a host seed and a weekly epoch (deterministic, SHA-256 only, zero new dependencies) and pass them to the canary machinery you already use. Last epoch's paths come back as retired traps - detectors only, so a hit on one means old or stolen intel. The fake-endpoint paths stay exactly as shipped: they are the fixed scanner liturgy.
+- **Variant integrity (`buildVariantManifest`, `verifyVariantManifest`):** SHA-256 manifests over a variant's files. Verification never throws and never blocks; it returns a signal object with per-file mismatch reasons for you to log or alert on.
+- **Polymorph generator (`tools/polymorph/`):** a build-time tool that obfuscates the four surface modules (cursor, canary-echo, fake-endpoints, trap-paths) under your seed, embeds an inert, extractable host-fingerprint watermark for leak tracing (traitor tracing), appends plausible decoy dead code, and writes the surface manifest. javascript-obfuscator is an optional build-time tool for the generator only; the SDK runtime stays zero-dependency.
+- **Measured (lab prototype, 2026-11-19):** transformed surface modules cost about 1.6x CPU on the cursor path and +11.7% size across the four modules; on a variant from this release's own generator, the 7 surface test files pass 72/72, a 2,000-case cursor differential fuzz is byte-identical to the clean dist, and echo tokens cross-verify 500/500 both ways. A live agent-readability trial has not been run, so no claim is made about how much harder automated analysis becomes.
 
-1661 tests: 1659 passed, none failed, 2 skipped.
+1683 tests: 1681 passed, none failed, 2 skipped.
 
 Earlier releases: see the [Changelog](CHANGELOG.md).
 
@@ -261,8 +262,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-Working on the repo itself: `npm run check` compiles, runs **1661
-automated tests** (1659 passing, none failing, 2 skipped) and
+Working on the repo itself: `npm run check` compiles, runs **1683
+automated tests** (1681 passing, none failing, 2 skipped) and
 performs static checks. Scan a public build before deploying with
 `node scripts/run-audit.cjs /path/to/dist` or
 `python3 scripts/verify-build.py /path/to/dist`.

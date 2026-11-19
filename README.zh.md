@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1661%20total-informational" alt="tests: 1661 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1683%20total-informational" alt="tests: 1683 total"></a>
 </p>
 
 <p align="center">
@@ -160,15 +160,16 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 
 ## 最新版本
 
-### v3.1.0 - GATEKEY 加固与完整的 PASS-LAB backlog
+### v3.2.0 - 按 host 多态表面：会过期的 anti-reverse
 
-三项修复加固了批量能力密钥，整个剩余的 PASS-LAB backlog 全部毕业。所有新模块均为 opt-in；不改变任何默认值。
+此前打包的 canary 陷阱路径在每个部署中完全相同：读一次 SDK 就能永远知道所有站点的陷阱。本版本让每个部署的表面成为不同的形状，并按周轮换。全部为 opt-in 且仅 advisory；不改变任何默认值。
 
-- **GATEKEY 修复（`createBulkAccessKeyAuthority`）：** 领取密钥现在是幂等的：在 refill 期间向新 identity 签发的密钥此前会被搁浅（实测：6/6 个被搁浅的领取从未收到 token；修复后 0/6）。匿名队列通道现在在未配置 step-up proof 验证器时 fail-closed：修复前任何非空 proof 字符串都会被接受，proof sybil 每天拿走全部 6 把匿名密钥，而诚实的等待者被饿死。epoch 置换现在从 counter 模式的 HMAC 流中抽取，而不是 32 位种子：修复前一次完整的 2^32 扫描可以从一个观察到的 block 重建全部 67 个 block（修复后 0/67）。`mint` 内部的 step-up 门保留其文档化的默认值，由冻结的 GK-G6 单元锁定。
-- **107 个 PASS-LAB 候选已构建：** 整个已测量的 backlog 以 opt-in 模块的形式发布，覆盖 14 个家族（MGH、WDN、NHS、RSP、ABE、ABS、ABP、AC、LCP、ABG、CS、MISC、R14、RECOMB），每个都在其冻结注册和 FP 预算下，数个以刻意受限的形式发布，因为实验室形式违反了家规。三个候选在真实的升级尝试后被排除，测量数据印在 changelog 中：RSP-13、AC-10 和 AC-17。
-- **留待 farm 验证（不在本版本中）：** AN-02、RECOMB-01、RECOMB-03 和 C26 已构建，但在 farm holdout 验证解决它们之前保持在外；目前不对它们主张任何数字。
+- **多态表面（`derivePolymorphCanaryPaths`、`derivePolymorphSurface`）：** 从 host 种子和周 epoch 确定性地派生外观自然的 canary 陷阱路径（仅 SHA-256，零新依赖），并传给您已经在用的 canary 机制。上一 epoch 的路径作为 retired trap 返回，仅保留检测器：命中即意味着对方在使用过期或被窃取的情报。
+- **变体完整性（`buildVariantManifest`、`verifyVariantManifest`）：** 对变体文件的 SHA-256 清单。验证从不抛错、从不阻断；它返回一个信号对象，逐文件说明不一致的原因，供 host 记录或告警。
+- **多态生成器（`tools/polymorph/`）：** 构建期工具，用您的种子混淆四个表面模块（cursor、canary-echo、fake-endpoints、trap-paths），嵌入惰性且可提取的 host 指纹水印以追踪泄漏来源，附加可信的诱饵死代码，并写出表面清单。javascript-obfuscator 仅是生成器的可选构建期工具；SDK 运行时仍为零依赖。
+- **实测（实验室原型，2026-11-19）：** 变换后的表面模块在 cursor 路径上约消耗 1.6 倍 CPU，四个模块总大小 +11.7%；在本版本自带生成器产生的变体上，7 个表面测试文件 72/72 通过，2,000 例 cursor 差分 fuzz 与干净 dist 逐字节相同，echo token 双向交叉验证 500/500。真实 agent 阅读试验尚未运行，因此不对自动化分析变难多少作任何主张。
 
-1661 项测试：1659 项通过、0 项失败、2 项跳过。
+1683 项测试：1681 项通过、0 项失败、2 项跳过。
 
 更早版本：见[更新日志](CHANGELOG.md)。
 
@@ -244,8 +245,8 @@ python -m playwright install chromium firefox webkit
 python benchmark/run_all.py --browsers chromium,firefox,webkit --iterations 5
 ```
 
-在本仓库本身上工作：`npm run check` 会编译代码、运行 **1661 个自动化
-测试**（1659 个通过、0 个失败、2 个跳过），并执行静态检查。在部署
+在本仓库本身上工作：`npm run check` 会编译代码、运行 **1683 个自动化
+测试**（1681 个通过、0 个失败、2 个跳过），并执行静态检查。在部署
 前扫描公开构建：`node scripts/run-audit.cjs /path/to/dist` 或
 `python3 scripts/verify-build.py /path/to/dist`。
 

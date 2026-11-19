@@ -6,7 +6,7 @@
   "codeRepository": "https://github.com/dankezo/antiRea",
   "url": "https://antirea.dannyphan.me",
   "license": "https://spdx.org/licenses/MIT",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "programmingLanguage": {
     "@type": "ComputerLanguage",
     "name": "TypeScript",

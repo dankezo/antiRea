@@ -99,6 +99,8 @@ export * from "./tier2-active/breadcrumb-lure";
 export * from "./tier2-active/ua-map-classifier";
 export * from "./tier2-active/decoy-hygiene";
 export * from "./tier2-active/trap-paths";
+export * from "./tier2-active/polymorph-surface";
+export * from "./tier2-active/variant-integrity";
 export * from "./tier2-active/path-classifier";
 export * from "./tier2-active/wdn-test-trigger";
 export * from "./tier2-active/wdn-bot-registry";
