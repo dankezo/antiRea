@@ -1,6 +1,12 @@
 'use strict';
 /*
- * antiRea decoy surface generator (3.3.0, build-time tool, opt-in).
+ * antiRea decoy surface generator (3.3.0; 3.3.1 additions
+ * mirrored: provenance chain routes (B2) and the GraphQL
+ * declaration with its SDL extension (B3) in the spec render,
+ * identity variants (B4) carried in the bundle surface, and
+ * declared image paths (B5) in the spec render with the
+ * images carried in the bundle surface.
+ * Build-time tool, opt-in.
  *
  * DEC-3 packaging: the decoy discovery pack (A1) and the spec
  * decoy (A2) ship as build-time tooling first, like the 3.2.0
@@ -75,6 +81,10 @@ function generateSurface(registry) {
     expandables: registry.expandables || [],
     contradictions: registry.contradictions || [],
     workedExamples: registry.workedExamples || [],
+    chains: registry.chains || [],
+    graphql: registry.graphql || null,
+    identityVariants: registry.identityVariants || [],
+    images: registry.images || [],
     discovery: {
       disallowPaths: (registry.discovery && registry.discovery.disallowPaths) || [],
       sitemapPaths: (registry.discovery && registry.discovery.sitemapPaths) || [],
@@ -118,6 +128,9 @@ function buildSpec(surface) {
   for (const ep of surface.endpoints) {
     paths[ep.path] = { get: { summary: ep.summary !== undefined ? ep.summary : (ep.kind === 'phantom' ? 'Preview endpoint' : 'Decoy endpoint'), ...ok } };
   }
+  for (const img of surface.images || []) {
+    paths[img.path] = { get: { summary: img.summary !== undefined ? img.summary : 'Decoy image', ...ok } };
+  }
   for (const js of surface.joinSets) {
     paths[js.parentPath] = { get: { summary: 'Directory (decoy)', ...ok } };
     paths[js.childPath] = { get: { summary: 'Records referencing the directory by id (decoy)', ...ok } };
@@ -137,7 +150,65 @@ function buildSpec(surface) {
   for (const x of surface.expandables) {
     paths[`${x.path}?${x.param}=${x.value}`] = { get: { summary: `Expanded variant (${x.kind})`, ...ok } };
   }
-  return { openapi: '3.0.3', info: { title: `${surface.specTitle} API`, version: surface.specVersion }, paths };
+  for (const chain of surface.chains) {
+    for (const level of chain.levels) {
+      for (const record of level.records) {
+        paths[level.route.split('{id}').join(String(record[level.idField]))] = { get: { summary: 'Provenance record', ...ok } };
+      }
+    }
+  }
+  if (surface.graphql) {
+    paths[surface.graphql.path || '/graphql'] = { get: { summary: 'GraphQL endpoint - schema via GET introspection, queries via POST', ...ok } };
+  }
+  const spec = { openapi: '3.0.3', info: { title: `${surface.specTitle} API`, version: surface.specVersion }, paths };
+  if (surface.graphql) spec['x-graphql-schema'] = renderGraphqlSdl(surface.graphql);
+  return spec;
+}
+
+/* ------------------------------------------------------------------ */
+/* GraphQL schema + SDL (mirror decoy-graphql.ts exactly).             */
+/* ------------------------------------------------------------------ */
+
+function graphqlSchemaTypes(decl) {
+  const decoyByType = new Map();
+  for (const df of decl.decoyFields || []) {
+    const list = decoyByType.get(df.onType) || [];
+    list.push(df.field);
+    decoyByType.set(df.onType, list);
+  }
+  const withDecoys = (t) => {
+    const fields = t.fields.map((f) => ({ name: f.name, type: f.type !== undefined ? f.type : 'String' }));
+    const seen = new Set(fields.map((f) => f.name));
+    for (const f of decoyByType.get(t.name) || []) {
+      if (!seen.has(f.name)) fields.push({ name: f.name, type: f.type !== undefined ? f.type : 'String' });
+    }
+    return { name: t.name, fields };
+  };
+  const real = decl.realTypes || [];
+  const queryReal = real.find((t) => t.name === 'Query');
+  const query = {
+    name: 'Query',
+    fields: [
+      ...(queryReal ? queryReal.fields.map((f) => ({ name: f.name, type: f.type !== undefined ? f.type : 'String' })) : []),
+      ...(decl.phantomQueries || []).map((q) => ({ name: q.name, type: q.type })),
+    ],
+  };
+  const out = [query];
+  for (const t of real) if (t.name !== 'Query') out.push(withDecoys(t));
+  if (queryReal) {
+    const seen = new Set(query.fields.map((f) => f.name));
+    for (const f of decoyByType.get('Query') || []) {
+      if (!seen.has(f.name)) query.fields.push({ name: f.name, type: f.type !== undefined ? f.type : 'String' });
+    }
+  }
+  for (const t of decl.phantomTypes || []) out.push({ name: t.name, fields: t.fields.map((f) => ({ name: f.name, type: f.type !== undefined ? f.type : 'String' })) });
+  return out;
+}
+
+function renderGraphqlSdl(decl) {
+  return graphqlSchemaTypes(decl)
+    .map((t) => `type ${t.name} {\n${t.fields.map((f) => `  ${f.name}: ${f.type}`).join('\n')}\n}`)
+    .join('\n');
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,6 +287,10 @@ function main(argv) {
     endpoints: surface.endpoints.length,
     joinSets: surface.joinSets.length,
     expandables: surface.expandables.length,
+    chains: surface.chains.length,
+    graphql: surface.graphql ? 1 : 0,
+    identityVariants: surface.identityVariants.length,
+    images: surface.images.length,
     invariantSets: bundle.invariantSets ? bundle.invariantSets.length : 0,
   }, null, 2));
 }
@@ -230,4 +305,5 @@ if (require.main === module) {
 module.exports = {
   decoyRng, generateSurface, renderRobots, renderSitemap,
   sequentialStepsTotal, buildSpec, plantInvariantViolations,
+  graphqlSchemaTypes, renderGraphqlSdl,
 };

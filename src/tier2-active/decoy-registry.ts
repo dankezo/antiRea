@@ -45,7 +45,53 @@
  * part of a host's real API contract, and is never mixed into
  * real responses. Nothing in this module serves, detects or
  * blocks anything by itself; it only describes and renders.
+ *
+ * 3.3.1 ADDITIONS (same registry, three more declaration
+ * families, each measured in decoy-map trial v4 before the
+ * scope froze): provenance chains (B2, `decoy-fanout.ts`) -
+ * decoy records referencing further decoy record routes, so
+ * traversal itself spends the extractor's metered fetches; a
+ * GraphQL declaration (B3, `decoy-graphql.ts`) - phantom
+ * types, phantom Query fields and decoy fields on real types,
+ * served by the endpoint as an introspection document (the
+ * measured carrier; the spec carries the same schema as an
+ * SDL extension and declares the path); and identity-bound
+ * variants (B4, `decoy-identity-variants.ts`) - one decoy list
+ * served in per-identity shapes (skew-field subsets, enum
+ * subsets, field aliases). The v4 numbers and their caveats
+ * live in the sibling modules' headers and in the 3.3.1
+ * changelog entry; the fan-out yield figure in particular is
+ * accounting-dependent and is never quoted bare.
+ *
+ * B5 ADDITION (same registry, one more declaration family,
+ * measured in the VID-TRACE trial before it was built):
+ * images (`decoy-images.ts`) - decoy images declared as
+ * luminance planes and served by the surface as PNGs, so the
+ * surface's watermark option can sign every image it serves,
+ * not only a hero image. The B6 visible fingerprint has no
+ * registry family: it is a surface option over the record
+ * lists this registry already declares (see
+ * `decoy-fingerprint.ts`).
  */
+
+import {
+  validateDecoyChainDecl,
+  chainRoutes,
+  type DecoyChainDecl,
+} from "./decoy-fanout";
+import {
+  validateDecoyGraphqlDecl,
+  renderGraphqlSdl,
+  type DecoyGraphqlDecl,
+} from "./decoy-graphql";
+import {
+  validateDecoyIdentityVariantDecl,
+  type DecoyIdentityVariantDecl,
+} from "./decoy-identity-variants";
+import {
+  validateDecoyImageDecl,
+  type DecoyImageDecl,
+} from "./decoy-images";
 
 /* ------------------------------------------------------------------------ */
 /* Registry shape.                                                          */
@@ -151,6 +197,14 @@ export interface DecoyRegistry {
   workedExamples?: DecoyWorkedExampleDecl[];
   joinSets?: DecoyJoinSetDecl[];
   expandables?: DecoyExpandableDecl[];
+  /** Provenance chains (3.3.1, B2): decoy records referencing further decoy record routes. See decoy-fanout.ts. */
+  chains?: DecoyChainDecl[];
+  /** GraphQL decoy declaration (3.3.1, B3): phantom schema served as introspection. See decoy-graphql.ts. */
+  graphql?: DecoyGraphqlDecl;
+  /** Identity-bound variants (3.3.1, B4): per-identity shapes for declared live endpoints. See decoy-identity-variants.ts. */
+  identityVariants?: DecoyIdentityVariantDecl[];
+  /** Decoy images (3.3.1, B5): luminance planes the surface serves as PNGs at their declared paths. See decoy-images.ts. */
+  images?: DecoyImageDecl[];
 }
 
 /* ------------------------------------------------------------------------ */
@@ -197,7 +251,28 @@ export function validateDecoyRegistry(registry: unknown): string[] {
     if (!Array.isArray(js.children) || js.children.length === 0) errors.push(`joinSets[${i}].children must be a non-empty array`);
   }
 
-  const declared = new Set<string>([...endpointPaths, ...joinPaths]);
+  // Decoy images (3.3.1, B5): structural validation and the
+  // collisions knowable here; collisions with the late
+  // families (chain routes, the GraphQL path) and the
+  // generated document paths are checked in the 3.3.1 section
+  // below, once those sets exist.
+  const imagePaths = new Set<string>();
+  for (const [i, img] of (r.images ?? []).entries()) {
+    for (const e of validateDecoyImageDecl(img)) errors.push(`images[${i}]: ${e}`);
+    if (img && typeof img === "object" && isPath(img.path)) {
+      if (endpointPaths.has(img.path) || joinPaths.has(img.path)) {
+        errors.push(`images[${i}].path collides with another surface path: ${img.path}`);
+      } else if ((r.workedExamples ?? []).some((w) => w && w.path === img.path)) {
+        errors.push(`images[${i}].path collides with a worked-example path: ${img.path}`);
+      } else if (imagePaths.has(img.path)) {
+        errors.push(`duplicate image path: ${img.path}`);
+      } else {
+        imagePaths.add(img.path);
+      }
+    }
+  }
+
+  const declared = new Set<string>([...endpointPaths, ...joinPaths, ...imagePaths]);
   for (const w of r.workedExamples ?? []) if (isPath(w.path)) declared.add(w.path);
   for (const p of r.discovery?.disallowPaths ?? []) {
     if (!declared.has(p)) errors.push(`discovery.disallowPaths entry is not a declared decoy path: ${p}`);
@@ -233,6 +308,42 @@ export function validateDecoyRegistry(registry: unknown): string[] {
     if (x.subsPerRecord !== undefined && !(Number.isInteger(x.subsPerRecord) && x.subsPerRecord >= 1)) errors.push(`expandables[${i}].subsPerRecord must be an integer >= 1`);
     if (x.fixedSubs !== undefined && !(Number.isInteger(x.fixedSubs) && x.fixedSubs >= 1)) errors.push(`expandables[${i}].fixedSubs must be an integer >= 1`);
   }
+
+  // 3.3.1 families: chains (B2), GraphQL (B3), identity variants (B4).
+  const chainPaths = new Set<string>();
+  for (const [i, chain] of (r.chains ?? []).entries()) {
+    const chainErrors = validateDecoyChainDecl(chain);
+    for (const e of chainErrors) errors.push(`chains[${i}]: ${e}`);
+    if (chainErrors.length === 0) {
+      for (const route of chainRoutes(chain)) {
+        if (declared.has(route) || chainPaths.has(route)) errors.push(`chains[${i}] route collides with another surface path: ${route}`);
+        else chainPaths.add(route);
+      }
+    }
+  }
+  if (r.graphql !== undefined) {
+    for (const e of validateDecoyGraphqlDecl(r.graphql)) errors.push(`graphql: ${e}`);
+    const gqlPath = r.graphql?.path ?? "/graphql";
+    if (declared.has(gqlPath) || chainPaths.has(gqlPath)) errors.push(`graphql.path collides with another surface path: ${gqlPath}`);
+  }
+  const livePaths = new Set<string>((r.endpoints ?? []).filter((ep) => ep?.kind === "live").map((ep) => ep.path));
+  for (const [i, v] of (r.identityVariants ?? []).entries()) {
+    for (const e of validateDecoyIdentityVariantDecl(v)) errors.push(`identityVariants[${i}]: ${e}`);
+    if (v && typeof v.path === "string" && !livePaths.has(v.path)) {
+      errors.push(`identityVariants[${i}].path is not a declared live endpoint: ${v.path}`);
+    }
+  }
+  // Image collisions with the late families and the generated
+  // document paths (checked here, where those sets exist).
+  const specPath = r.spec?.specPath ?? "/openapi.json";
+  const docsPath = r.spec?.docsPath ?? "/api-docs";
+  for (const p of imagePaths) {
+    if (chainPaths.has(p)) errors.push(`image path collides with a chain route: ${p}`);
+    if (r.graphql !== undefined && p === (r.graphql.path ?? "/graphql")) errors.push(`image path collides with the GraphQL path: ${p}`);
+    if (p === specPath || p === docsPath || p === "/robots.txt" || p === "/sitemap.xml") {
+      errors.push(`image path collides with a generated document path: ${p}`);
+    }
+  }
   return errors;
 }
 
@@ -246,6 +357,10 @@ export interface DecoySurface {
   expandables: DecoyExpandableDecl[];
   contradictions: DecoyContradictionDecl[];
   workedExamples: DecoyWorkedExampleDecl[];
+  chains: DecoyChainDecl[];
+  graphql: DecoyGraphqlDecl | null;
+  identityVariants: DecoyIdentityVariantDecl[];
+  images: DecoyImageDecl[];
   discovery: Required<DecoyDiscoveryDecl>;
   specPath: string;
   docsPath: string;
@@ -269,6 +384,10 @@ export function generateDecoySurface(registry: DecoyRegistry): DecoySurface {
     expandables: [...(registry.expandables ?? [])],
     contradictions: [...(registry.contradictions ?? [])],
     workedExamples: [...(registry.workedExamples ?? [])],
+    chains: [...(registry.chains ?? [])],
+    graphql: registry.graphql ?? null,
+    identityVariants: [...(registry.identityVariants ?? [])],
+    images: [...(registry.images ?? [])],
     discovery,
     specPath: registry.spec?.specPath ?? "/openapi.json",
     docsPath: registry.spec?.docsPath ?? "/api-docs",
@@ -278,12 +397,15 @@ export function generateDecoySurface(registry: DecoyRegistry): DecoySurface {
   };
 }
 
-/** Every path the surface owns (endpoints, join paths, worked-example paths, spec and docs paths). */
+/** Every path the surface owns (endpoints, join paths, worked-example paths, chain routes, the GraphQL path, image paths, spec and docs paths). */
 export function decoySurfacePaths(surface: DecoySurface): string[] {
   const out = new Set<string>();
   for (const ep of surface.endpoints) out.add(ep.path);
+  for (const img of surface.images) out.add(img.path);
   for (const js of surface.joinSets) { out.add(js.parentPath); out.add(js.childPath); }
   for (const w of surface.workedExamples) out.add(w.path);
+  for (const chain of surface.chains) for (const route of chainRoutes(chain)) out.add(route);
+  if (surface.graphql) out.add(surface.graphql.path ?? "/graphql");
   out.add(surface.specPath);
   out.add(surface.docsPath);
   out.add("/robots.txt");
@@ -327,7 +449,14 @@ export function renderDecoySitemap(surface: DecoySurface): string {
  * each expandable variant as its own path key with the query
  * string attached (the exact shape the lab twins served and the
  * extractor consumed), carries each contradiction feed with its
- * endorsement text (A3), and each worked example (A5).
+ * endorsement text (A3), and each worked example (A5). The
+ * 3.3.1 additions: every concrete chain route (B2, the shape
+ * the v4 twin declared), every declared image path (B5), and,
+ * when a GraphQL decoy is declared,
+ * the GraphQL path plus the schema as an `x-graphql-schema`
+ * SDL extension (B3 - the extension is the discovery surface;
+ * the measured carrier is the endpoint's introspection
+ * response, see decoy-graphql.ts).
  */
 export function buildDecoyOpenApiSpec(surface: DecoySurface): Record<string, unknown> {
   const ok = { responses: { "200": { description: "OK" } } };
@@ -335,6 +464,9 @@ export function buildDecoyOpenApiSpec(surface: DecoySurface): Record<string, unk
   for (const p of surface.realPaths) paths[p] = { get: { summary: "Real endpoint (mirrored path only)", ...ok } };
   for (const ep of surface.endpoints) {
     paths[ep.path] = { get: { summary: ep.summary ?? (ep.kind === "phantom" ? "Preview endpoint" : "Decoy endpoint"), ...ok } };
+  }
+  for (const img of surface.images) {
+    paths[img.path] = { get: { summary: img.summary ?? "Decoy image", ...ok } };
   }
   for (const js of surface.joinSets) {
     paths[js.parentPath] = { get: { summary: "Directory (decoy)", ...ok } };
@@ -355,7 +487,21 @@ export function buildDecoyOpenApiSpec(surface: DecoySurface): Record<string, unk
   for (const x of surface.expandables) {
     paths[`${x.path}?${x.param}=${x.value}`] = { get: { summary: `Expanded variant (${x.kind})`, ...ok } };
   }
-  return { openapi: "3.0.3", info: { title: `${surface.specTitle} API`, version: surface.specVersion }, paths };
+  for (const chain of surface.chains) {
+    for (const route of chainRoutes(chain)) paths[route] = { get: { summary: "Provenance record", ...ok } };
+  }
+  if (surface.graphql) {
+    paths[surface.graphql.path ?? "/graphql"] = {
+      get: { summary: "GraphQL endpoint - schema via GET introspection, queries via POST", ...ok },
+    };
+  }
+  const spec: Record<string, unknown> = {
+    openapi: "3.0.3",
+    info: { title: `${surface.specTitle} API`, version: surface.specVersion },
+    paths,
+  };
+  if (surface.graphql) spec["x-graphql-schema"] = renderGraphqlSdl(surface.graphql);
+  return spec;
 }
 
 /* ------------------------------------------------------------------------ */

@@ -42,12 +42,50 @@ exactly what it was without this release.
   expand/include variants; following one generates synthetic
   subresources that the host bills to the same record budget as
   real records.
+- **Provenance fan-out** (3.3.1) - decoy records arranged as a
+  chain of individually routed records: one record carries the
+  next record's id, and the next record lives at its own
+  route, so following the references spends one metered fetch
+  per record instead of one page per dataset.
+- **GraphQL decoy** (3.3.1) - a phantom GraphQL schema layered
+  over the host's declared real types (phantom types, phantom
+  Query fields, decoy fields on real types), served by the
+  decoy endpoint as an introspection document; the discovery
+  spec declares the path and carries the schema as an SDL
+  extension.
+- **Identity-bound variants** (3.3.1) - one decoy endpoint
+  whose record list is served in a different shape per
+  requesting identity: which auxiliary fields exist, which
+  values a field can take, and what some fields are called all
+  vary by identity.
 - **Canary records** - synthetic records a host mixes into a
   dataset it serves, at a dose the host chooses, each carrying
   a keyed tag naming the identity the dataset was served to.
   This is the one family that is mixed into a served dataset
   rather than confined to decoy-only routes; see the exposure
   section below.
+- **Image watermark attribution** (3.3.1) - an invisible
+  per-identity payload embedded in images the host serves
+  (Y-DCT watermark), so a leaked copy of an image can be
+  attributed to the identity it was served to, if a marked
+  copy is later observed. Like the canary tag, it marks
+  content the host already serves; it changes no visible
+  content and carries no message.
+- **Surface-wide image watermarking** (3.3.1) - when a host
+  enables it, every image the decoy surface itself serves
+  carries the per-identity watermark payload above, not only
+  a hero image, so a leaked copy of any surface image can be
+  attributed the same way. With the option off, declared
+  images are served exactly as declared.
+- **Visible identity fingerprint** (3.3.1) - when a host
+  enables it, the decoy surface's record lists are served
+  with a visible per-identity fingerprint: an assortment
+  token and a stock phrase woven into the records' text, and
+  a per-identity rotation of the list order. A copied or
+  recorded decoy list therefore names the identity it was
+  served to in plain text. The fingerprint exists only
+  inside decoy lists served by this surface; it is never
+  applied to real content.
 
 Nothing in the decoy surface is part of the host's real API
 contract: legitimate integrations must follow the host's
@@ -124,3 +162,51 @@ identity and 100% across two; and billed expansions cut real
 yield per identity from 150 to 50 records (-66.7%). The full
 numbers are in the 3.3.0 changelog entry. What was not
 measured is not claimed.
+
+The 3.3.1 families were measured the same way (decoy-map
+trial v4 and the VIS trial, 2026-11-20): the provenance
+fan-out cut real yield from 150 to 100 records under the
+harness's all-or-nothing page budget - under partial-page
+accounting the same arm yields 131 (-12.7%), so the fan-out
+effect is partly accounting-dependent and is never quoted
+without that framing; the GraphQL decoy's 10 planted
+identifiers (3 phantom types, 3 phantom queries, 4 decoy
+fields) all entered the capture, and the measured carrier was
+the endpoint's introspection response - no claim is made that
+spec text is captured; identity-bound variants left 8 of 10
+auxiliary fields visible to exactly one identity, capped one
+identity's coverage of an enum field at 60% of its values, and
+held cross-identity field-name overlap to a 30% Jaccard -
+whether extraction code written against one identity's shape
+then fails on another's was NOT measured and is not claimed;
+and the image watermark's payload was recovered in full
+(32/32 bits) from all 10 screenshots an extractor captured of
+marked pages, at 78.50 dB PSNR against the original image.
+The full numbers are in the 3.3.1 changelog entry.
+
+A further 3.3.1 measurement round (the VID-TRACE trial,
+2026-11-20) covered the screen-recording channel, running
+the rea-video tool's deterministic + OCR pipeline end to end
+on recordings of a decoy twin: the tool's text inventory
+carried the planted decoy share exactly (83.33% of
+inventoried items were decoys, in 9 of 9 runs, with no flag
+anywhere in its output); the image watermark payload was
+recovered in full (32/32 bits) from inside the tool's own
+output packages in 3 of 3 watermarked runs, in both image
+classes served (hero 720x360 and banner 480x320), and never
+from a clean package (best clean extraction 19/32, the
+chance band); and the visible fingerprint's three channels
+(token, stock phrase, list rotation) were all legible in the
+tool's output in 3 of 3 runs, with three distinct
+fingerprints for three identities. The scope of those
+verdicts, stated plainly: they are from the tool's
+deterministic + OCR pipeline - the trial's vision-model leg
+did not run (the gateway was unreachable), so no verdict
+covers a vision-model reading; and the recordings used a
+clean H.264 CRF 23 chain, kinder than an OBS or re-upload
+chain, so survival is not extended to harsher recorders or
+platform re-encodes. The watermark and the fingerprint are
+attribution and contamination mechanisms. They are NOT
+recording prevention: nothing in this release stops a
+screen recording, or the cloning of anything a legitimate
+viewer can see.
