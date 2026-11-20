@@ -5,7 +5,7 @@ description: >-
 license: MIT
 compatibility: Requires Node.js >= 20 and the npm package @dannyphan190/anti-rea, wired server-side at the application layer. Examples are TypeScript; plain JavaScript works the same way.
 metadata:
-  version: "3.2.0"
+  version: "3.3.0"
   npm-package: "@dannyphan190/anti-rea"
   source-repository: "https://github.com/dankezo/antiRea"
 ---

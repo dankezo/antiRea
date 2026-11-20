@@ -178,6 +178,18 @@ sigue perteneciendo al proceso, dentro de tu propia aplicación.
 
 ## Última versión
 
+### v3.3.0 - La superficie señuelo: la copia se construye desde nuestro mapa
+
+La medición limita cuánto se lleva un extractor; esta versión contamina aquello desde lo que se construyen las copias. El host publica una superficie señuelo - endpoints, una spec, ejemplos resueltos - que existe solo para ser copiada, mientras su superficie real queda intacta. Todo es opt-in y está desactivado por defecto; un host que no activa nada se comporta exactamente como la 3.2.0.
+
+- **Paquete de descubrimiento y spec señuelo (`generateDecoySurface`, `buildDecoyOpenApiSpec`, `createDecoySurface`):** un registro genera el bloque disallow de robots, el sitemap y una spec OpenAPI que declara señuelos vivos más endpoints fantasma que nunca se sirven. En las pruebas de laboratorio, los canales de lectura automática llevaron 8/8 señuelos a la captura del extractor con huella cero de usuarios reales, y 4/4 señuelos vivos más 2/2 fantasma entraron en su mapa con 0 avisos.
+- **Contradicciones que necesitan dos mitades (A3 + A5 + A6):** un feed avalado por la spec y un ejemplo resuelto miden cero por separado; combinados, y junto a violaciones de invariantes entre rutas plantadas dentro de los datos señuelo, metieron 36 pares de contradicción con autoridad y 10/10 violaciones de join supervivientes en la captura, con 0 inconsistencias reportadas por el extractor.
+- **Joins con llave por identidad y expandibles sumidero de presupuesto (A7 + A8):** los joins señuelo solo resuelven bajo la identidad que los extrajo - una captura fusionada de dos identidades dejó huérfanos 30/30 joins (100%) frente a 0/30 con una identidad - y las expansiones declaradas en la spec facturan subrecursos sintéticos al mismo presupuesto de registros, recortando el rendimiento real por identidad de 150 a 50 registros (-66,7%).
+- **Dosis canary (`planCanaryInterleave`, opt-in, sin valor por defecto en el código):** el host mezcla sus propios registros sintéticos con una dosis que declara en cada llamada (recomendación documentada: 10%); la respuesta a la dosis medida es lineal (10% plantado extraído a exactamente 10,0%; 25% a 24,7%), y cada canary lleva una etiqueta HMAC ligada a la identidad servida. En la prueba agent-loop, la superficie señuelo multiplicó por 2,09 el coste en tokens de un extractor LLM (mediana 7.101 frente a 14.808 tokens por sesión) mientras el medidor de 150 registros se mantuvo en todos los brazos.
+- **REALTEST-3.3: LAUNCHABLE.** La prueba canónica de lanzamiento ejecutó el atacante real REA 6.9.0 contra esta build: una identidad se detuvo en 150 registros con exportación a 0, el brazo de rotación tomó 1.445 de 10.000 mientras el control 2.9.3 drenó los 10.000, y el tráfico legítimo vio cero falsos positivos. Puerta de lanzamiento 17/17. La línea K1 (señuelos con instrucciones) sigue aparcada y no está en esta versión; el wrapper MCP permanece en 2.8.2.
+
+1725 pruebas: 1723 superadas, ningún fallo, 2 omitidas.
+
 ### v3.2.0 - Superficie polimorfa por host: anti-reverse con caducidad
 
 Las rutas trampa canary empaquetadas eran idénticas en cada despliegue: leer el SDK una vez era conocer las trampas de todos los sitios para siempre. Esta versión convierte la superficie de cada despliegue en una forma distinta que rota semanalmente. Todo es opt-in y advisory; ningún valor por defecto cambia.

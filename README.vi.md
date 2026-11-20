@@ -174,6 +174,18 @@ in-process, trong chính ứng dụng của bạn.
 
 ## Bản phát hành mới nhất
 
+### v3.3.0 - Bề mặt decoy: bản sao được dựng từ bản đồ của ta
+
+Meter giới hạn kẻ trích xuất lấy được bao nhiêu; bản này làm nhiễm chính thứ mà các bản sao được dựng từ đó. Host công bố một bề mặt decoy - endpoint, spec, ví dụ mẫu - chỉ tồn tại để bị sao chép, trong khi bề mặt thật không hề bị chạm. Tất cả đều opt-in và mặc định TẮT; host không bật gì thì hành vi đúng như 3.2.0.
+
+- **Gói discovery và spec decoy (`generateDecoySurface`, `buildDecoyOpenApiSpec`, `createDecoySurface`):** một registry sinh ra block disallow trong robots, sitemap và một OpenAPI spec khai cả decoy sống lẫn endpoint phantom không bao giờ được phục vụ. Trong các trial ở lab, kênh máy-đọc mang 8/8 decoy vào capture của kẻ trích xuất với footprint người dùng thật bằng 0, và 4/4 decoy sống cộng 2/2 phantom vào bản đồ của nó với 0 cờ.
+- **Mâu thuẫn cần đủ hai nửa (A3 + A5 + A6):** feed được spec chứng thực và ví dụ mẫu, mỗi thứ riêng lẻ đo được bằng 0; kết hợp với các vi phạm bất biến liên route được trồng sẵn trong dữ liệu decoy, chúng đưa 36 cặp mâu thuẫn có chứng thực và 10/10 vi phạm join sống sót vào capture, kẻ trích xuất báo 0 mâu thuẫn.
+- **Join khóa theo identity và expandable bẫy ngân sách (A7 + A8):** join của decoy chỉ resolve dưới đúng identity đã trích xuất - capture gộp hai identity mồ côi 30/30 join (100%) so với 0/30 dưới một identity - và các expansion khai trong spec tính phí subresource tổng hợp vào cùng ngân sách bản ghi, kéo yield thật mỗi identity từ 150 xuống 50 bản ghi (-66,7%).
+- **Liều canary (`planCanaryInterleave`, opt-in, code không đặt mặc định):** host trộn bản ghi tổng hợp của chính mình theo liều tự khai ở mỗi lần gọi (khuyến nghị trong tài liệu là 10%); đáp ứng liều đo được là tuyến tính (trồng 10% bị hút đúng 10,0%; 25% bị hút 24,7%), mỗi canary mang tag HMAC khóa theo identity phục vụ. Qua trial agent-loop, bề mặt decoy nhân chi phí token của một extractor LLM lên 2,09 lần (median 7.101 so với 14.808 token mỗi phiên) trong khi meter 150 giữ nguyên ở mọi arm.
+- **REALTEST-3.3: LAUNCHABLE.** Bài test phát hành chuẩn chạy REA 6.9.0 thật tấn công bản build này: một identity dừng ở 150 bản ghi với export bằng 0, arm xoay identity lấy 1.445/10.000 trong khi bản đối chứng 2.9.3 bị rút cạn 10.000, và traffic hợp lệ có 0 false positive. Cổng phát hành 17/17. Dòng K1 (decoy mang chỉ thị) vẫn parked và không có trong bản này; MCP wrapper giữ 2.8.2.
+
+1725 test: 1723 đạt, không lỗi, 2 bỏ qua.
+
 ### v3.2.0 - Bề mặt đa hình theo từng host: anti-reverse có hạn dùng
 
 Các canary trap path đóng gói sẵn trước đây giống hệt trên mọi deployment - đọc SDK 1 lần là biết bẫy của mọi site mãi mãi. Bản này biến bề mặt của mỗi deployment thành một hình dạng khác nhau và xoay vòng theo tuần. Tất cả đều opt-in và advisory; không mặc định nào thay đổi.

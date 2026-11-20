@@ -160,6 +160,18 @@ antiRea 附带一个面向 AI 智能体的官方 MCP 服务器：
 
 ## 最新版本
 
+### v3.3.0 - 诱饵表面：副本按我们的地图构建
+
+计量限制了提取者能拿走多少；本版本污染副本所依据的蓝图。host 发布一个诱饵表面（endpoint、spec、示例），它只为被复制而存在，真实表面不受任何影响。全部为 opt-in 且默认关闭；什么都不启用的 host 行为与 3.2.0 完全一致。
+
+- **发现包与 spec 诱饵（`generateDecoySurface`、`buildDecoyOpenApiSpec`、`createDecoySurface`）：** 一个注册表生成 robots disallow 块、sitemap 以及一份 OpenAPI spec，其中声明真实诱饵和从不提供服务的 phantom endpoint。实验室试验中，机器读取通道将 8/8 诱饵带入提取者的 capture，真实用户足迹为零；4/4 真实诱饵加 2/2 phantom 进入其地图，0 标记。
+- **需要两半才能成立的矛盾（A3 + A5 + A6）：** spec 背书的 feed 与示例各自单独测量为零；与预先植入在诱饵数据中的跨路由不变量违规结合后，它们把 36 对带权威背书的矛盾对和 10/10 存活的 join 违规送入 capture，提取者报告 0 处不一致。
+- **按 identity 锁定的 join 与预算陷阱 expandable（A7 + A8）：** 诱饵 join 仅在提取它的 identity 下解析：双 identity 合并的 capture 使 30/30 join 成为孤儿（100%），单 identity 下为 0/30；spec 声明的 expansion 把合成子资源计入同一记录预算，使每个 identity 的真实产量从 150 条降至 50 条（-66.7%）。
+- **Canary 剂量（`planCanaryInterleave`，opt-in，代码不设默认值）：** host 按每次调用时声明的剂量混入自己的合成记录（文档推荐 10%）；实测剂量响应为线性（植入 10% 被提取恰好 10.0%；25% 为 24.7%），每条 canary 带按服务 identity 密钥化的 HMAC 标签。在 agent-loop 试验中，诱饵表面使 LLM 提取者的 token 成本倍增 2.09 倍（每会话中位数 7,101 对 14,808 token），而 150 条记录的 meter 在每个 arm 中都守住。
+- **REALTEST-3.3：LAUNCHABLE。** 标准发布测试用真实 REA 6.9.0 攻击者对本 build 实测：单 identity 停在 150 条、导出为 0；轮换 arm 取走 1,445/10,000，而 2.9.3 对照被抽干全部 10,000；合法流量 0 误报。发布门 17/17。K1 线（带指令的诱饵）继续 parked，不在本版本中；MCP wrapper 保持 2.8.2。
+
+1725 项测试：1723 项通过、0 项失败、2 项跳过。
+
 ### v3.2.0 - 按 host 多态表面：会过期的 anti-reverse
 
 此前打包的 canary 陷阱路径在每个部署中完全相同：读一次 SDK 就能永远知道所有站点的陷阱。本版本让每个部署的表面成为不同的形状，并按周轮换。全部为 opt-in 且仅 advisory；不改变任何默认值。

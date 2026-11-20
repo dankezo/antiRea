@@ -234,7 +234,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "url": "https://antirea.dannyphan.me/",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Node.js 20+",
-      "softwareVersion": "3.2.0",
+      "softwareVersion": "3.3.0",
       "license": "https://opensource.org/licenses/MIT",
       "isAccessibleForFree": true,
       "offers": {
@@ -261,7 +261,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "programmingLanguage": "TypeScript",
       "runtimePlatform": "Node.js 20+",
       "license": "https://opensource.org/licenses/MIT",
-      "version": "3.2.0",
+      "version": "3.3.0",
       "targetProduct": {
         "@id": "https://antirea.dannyphan.me/#software"
       }
@@ -274,11 +274,11 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
 
 <header class="site">
   <div class="wrap hd">
-    <a class="wordmark" href="#">anti<b>Rea</b><sup>V3.2.0</sup></a>
+    <a class="wordmark" href="#">anti<b>Rea</b><sup>V3.3.0</sup></a>
     <nav class="main">
       <a class="anch" href="#signals">Signals</a>
       <a class="anch" href="#how">Protocol</a>
-      <a class="anch" href="#release">3.2.0</a>
+      <a class="anch" href="#release">3.3.0</a>
       <a class="anch" href="#mcp">MCP</a>
       <a href="https://lab.dannyphan.me">Super Lab</a>
       <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea">npm</a>
@@ -295,7 +295,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
         <p class="kicker"><span class="a">Fig 00</span> - A meter for your dataset</p>
         <h1>Every identity<br>gets a <span class="m">meter.</span></h1>
         <p class="lede">Server-side TypeScript library that meters dataset access per identity and flags coordinated bot abuse. Advisory only.</p>
-        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.2.0</span> <i>&rarr;</i></a></p>
+        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.3.0</span> <i>&rarr;</i></a></p>
       </div>
       <div class="rail">
         <div class="rail-hd"><span>Install</span><span class="a">Node 20+</span></div>
@@ -304,7 +304,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
           <button class="copybtn" type="button" data-copy="npm install @dannyphan190/anti-rea">Copy</button>
         </div>
         <div class="facts">
-          <div><span>VERSION</span><span>3.2.0</span></div>
+          <div><span>VERSION</span><span>3.3.0</span></div>
           <div><span>SIGNAL KINDS</span><span>8</span></div>
           <div><span>RUNTIME DEPS</span><span>0</span></div>
           <div><span>LICENSE</span><span>MIT</span></div>
@@ -388,22 +388,23 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
     </div>
   </section>
 
-  <!-- 3.2.0 -->
+  <!-- 3.3.0 -->
   <section class="band" id="release">
     <div class="wrap">
       <div class="rel-grid">
         <div>
-          <p class="kicker"><span class="a">03</span> - Release 3.2.0</p>
-          <h2>Every deployment<br>a different shape.</h2>
-          <p class="intro">3.2.0 is the anti-reverse release: one measured idea, applied in five parts. The shipped canary trap paths used to be identical on every deployment, so reading the SDK once revealed the traps of every site, forever. A host can now derive its own surface from its own seed, rotate it weekly, verify its integrity, and trace a leaked variant back to its host. Everything is opt-in, advisory-only and server-side; defaults are unchanged, and a host that never opts in ships exactly the 3.1.0 surface. The MCP wrapper remains at 2.8.2.</p>
+          <p class="kicker"><span class="a">03</span> - Release 3.3.0</p>
+          <h2>The copy is built<br>from our map.</h2>
+          <p class="intro">3.3.0 is the decoy surface release: the meter still caps how much an extractor takes, and now part of the surface it copies from is ours. A host publishes decoy endpoints, a decoy spec and worked examples that exist only to be copied, while its real surface is untouched. Everything is opt-in, OFF by default and server-side; a host that enables nothing ships exactly the 3.2.0 behavior. The disclosure ships with the release (docs/PROTECTIVE_DECOYS.md in the repo). The MCP wrapper remains at 2.8.2.</p>
         </div>
         <div class="ledger">
-          <div class="led"><code>SURFACE</code><div><h4>A canary surface of your own (A2)</h4><p>New runtime helpers derive natural-looking canary paths from a host seed and a weekly epoch, deterministically (SHA-256 chain, zero new dependencies), ready to pass to the canary machinery the host already uses. The previous epoch's paths return as retired traps: still registered as detectors, linked from nowhere, so a hit on one means the caller is working from old or stolen intel. The fake-endpoint paths are deliberately not derived - they are the fixed scanner liturgy and stay exactly as shipped.</p></div></div>
-          <div class="led"><code>GEN</code><div><h4>Polymorph generator (A1 + A5)</h4><p>A build-time CLI under tools/polymorph rewrites a built dist per host: the four surface modules (cursor, canary-echo, fake-endpoints, trap-paths) are transformed with the host seed, believable never-called decoy business logic is appended with seed-varied constants, and a surface-manifest.json records the host fingerprint, epoch, derived paths and module hashes. On the variant generated by this release's own generator, the surface tests pass 72/72, a 2,000-case cursor differential fuzz is byte-identical to the clean dist, and canary-echo tokens cross-verify 500/500 in both directions.</p></div></div>
-          <div class="led"><code>TRACE</code><div><h4>Watermark and integrity (A4 + A3)</h4><p>Each generated variant carries its host fingerprint - a SHA-256 of the host seed, which names the host without revealing the seed - as an inert marker split across eight shards and never executed, so a leaked variant can be traced to its host with the bundled extractor. A variant-integrity manifest lets a host verify its surface files and get per-file mismatch reasons. Verification never throws and never blocks: a mismatch is a signal to log, not proof of tampering.</p></div></div>
-          <div class="led"><code>REAL</code><div><h4>REALTEST-3.2: LAUNCHABLE</h4><p>The canonical release test ran the real REA 6.9.0 attacker against this build on the isolated range. A single identity stopped at exactly 150 records with export at 0; the identity-rotation arm took 1,445 of 10,000 records with the tail hard-capped at 900 records per day, while the 2.9.3 control arm still drained all 10,000; the signed-in arms held at 980 records against the 1,050 per-account ceiling; and legitimate traffic saw zero false positives across every pattern. Release gate: 17/17.</p></div></div>
-          <div class="led"><code>HONEST</code><div><h4>What 3.2.0 does not claim</h4><p>A controlled trial on 2026-11-19 handed a capable AI analyst the clean code and one transformed variant: it read the variant as accurately as the clean code (10/10 on both), so transformed code is not unreadable code and no such claim is made. The claim is narrower and measured: reverse one deployment and you learn nothing about the next, and what you did learn expires at the next weekly rotation.</p></div></div>
-          <div class="led"><code>GATE</code><div><h4>Evidence with limits</h4><p>1683 tests: 1681 pass, 0 fail, 2 skipped. Full notes in the <a href="https://github.com/dankezo/antiRea/blob/main/CHANGELOG.md">changelog</a>.</p></div></div>
+          <div class="led"><code>MAP</code><div><h4>Discovery pack and spec decoy (A1 + A2)</h4><p>One decoy registry generates the robots disallow block, the sitemap and an OpenAPI spec declaring the decoy endpoints, including phantom endpoints that are never served. In the lab trials the machine-read channels carried 8 of 8 decoys into the extractor's capture with a real-user footprint of zero, and 4 of 4 live decoys plus 2 of 2 phantoms entered its map with 0 flags.</p></div></div>
+          <div class="led"><code>POISON</code><div><h4>Contradictions with two halves (A3 + A5 + A6)</h4><p>A spec-endorsed feed and a worked example each measure at zero alone; combined, and joined by planted cross-route invariant violations inside decoy data, they put 36 authoritative contradiction pairs and 10 of 10 surviving join violations into the capture. The extractor reported 0 inconsistencies and 0 flags.</p></div></div>
+          <div class="led"><code>JOIN</code><div><h4>Identity-gated joins, budget-sink expandables (A7 + A8)</h4><p>Decoy joins resolve only under the identity that extracted them: a capture merged from two identities orphaned 30 of 30 joins (100%), against 0 of 30 under one identity. Spec-declared expansions bill deterministic synthetic subresources to the same record budget, cutting real yield per identity from 150 to 50 records (-66.7%) at the same decoy endpoint count.</p></div></div>
+          <div class="led"><code>DOSE</code><div><h4>Canary dose and the cost of copying (A4)</h4><p>The host can mix its own synthetic records into a served dataset at a dose it states on every call - the code sets no default; the documented recommendation is 10%. Measured dose response is linear: 10% planted was extracted at exactly 10.0% and 25% at 24.7%, and every canary carries an HMAC tag keyed to the serving identity. Across the agent-loop trial the decoy surface multiplied an LLM extractor's token cost by 2.09x (median 7,101 vs 14,808 tokens per session) while the 150-record meter held in every arm.</p></div></div>
+          <div class="led"><code>REAL</code><div><h4>REALTEST-3.3: LAUNCHABLE</h4><p>The canonical release test ran the real REA 6.9.0 attacker against this build on the isolated range. A single identity stopped at exactly 150 records with export at 0; the identity-rotation arm took 1,445 of 10,000 records, while the 2.9.3 control arm still drained all 10,000; the signed-in arms held at 980 records against the 1,050 per-account ceiling; and legitimate traffic saw zero false positives across every pattern. Release gate: 17/17.</p></div></div>
+          <div class="led"><code>HONEST</code><div><h4>What 3.3.0 does not claim</h4><p>Decoys contaminate the map a lazy extractor copies; they do not make extraction impossible, and a careful verifier can still reconcile the real data. The meter remains the wall. The K1 line - decoys carrying instructions or mirages - failed its registered median test twice and stays parked: this release contains none of it. What was not measured is not claimed.</p></div></div>
+          <div class="led"><code>GATE</code><div><h4>Evidence with limits</h4><p>1725 tests: 1723 pass, 0 fail, 2 skipped. Full notes in the <a href="https://github.com/dankezo/antiRea/blob/main/CHANGELOG.md">changelog</a>.</p></div></div>
         </div>
       </div>
     </div>
@@ -413,8 +414,8 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
   <section class="band" style="padding-top:72px;padding-bottom:72px">
     <div class="wrap">
       <div class="stats">
-        <div class="stat"><div class="stat-num">3.2<span class="u">.0</span></div><div class="stat-cap">Current release</div></div>
-        <div class="stat"><div class="stat-num">1683</div><div class="stat-cap">Automated tests<br>1681 passing, 2 skipped</div></div>
+        <div class="stat"><div class="stat-num">3.3<span class="u">.0</span></div><div class="stat-cap">Current release</div></div>
+        <div class="stat"><div class="stat-num">1725</div><div class="stat-cap">Automated tests<br>1723 passing, 2 skipped</div></div>
         <div class="stat"><div class="stat-num">0</div><div class="stat-cap">Runtime<br>dependencies</div></div>
         <div class="stat"><div class="stat-num">MIT</div><div class="stat-cap">License<br>Use it anywhere</div></div>
       </div>

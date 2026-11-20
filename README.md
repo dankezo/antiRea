@@ -168,6 +168,18 @@ belongs in-process, in your own app.
 
 ## Latest release
 
+### v3.3.0 - The decoy surface: the copy is built from our map
+
+Metering caps how much an extractor takes; this release contaminates what the copies are built from. A host publishes a decoy surface - endpoints, a spec, worked examples - that exists only to be copied, while its real surface stays untouched. Everything is opt-in and OFF by default; a host that enables nothing ships exactly the 3.2.0 behavior.
+
+- **Discovery pack and spec decoy (`generateDecoySurface`, `buildDecoyOpenApiSpec`, `createDecoySurface`):** one registry generates the robots disallow block, the sitemap and an OpenAPI spec declaring live decoys plus phantom endpoints that are never served. In the lab trials the machine-read channels carried 8/8 decoys into the extractor's capture with zero real-user footprint, and 4/4 live plus 2/2 phantom endpoints entered its map with 0 flags.
+- **Contradictions that need two halves (A3 + A5 + A6):** a spec-endorsed feed and a worked example each measure at zero alone; combined, and joined by planted cross-route invariant violations inside decoy data, they put 36 authoritative contradiction pairs and 10/10 surviving join violations into the capture, with 0 inconsistencies reported by the extractor.
+- **Identity-gated joins and budget-sink expandables (A7 + A8):** decoy joins resolve only under the identity that extracted them - a capture merged from two identities orphaned 30/30 joins (100%) against 0/30 under one identity - and spec-declared expansions bill synthetic subresources to the same record budget, cutting real yield per identity from 150 to 50 records (-66.7%).
+- **Canary dose (`planCanaryInterleave`, opt-in, no default in code):** the host mixes its own synthetic records at a dose it states on every call (documented recommendation 10%); measured dose response is linear (10% planted extracted at exactly 10.0%; 25% at 24.7%), and each canary carries an HMAC tag keyed to the serving identity. Across the agent-loop trial the decoy surface multiplied an LLM extractor's token cost by 2.09x (median 7,101 vs 14,808 tokens per session) while the 150-record meter held in every arm.
+- **REALTEST-3.3: LAUNCHABLE.** The canonical release test ran the real REA 6.9.0 attacker against this build: a single identity stopped at 150 records with export at 0, the rotation arm took 1,445 of 10,000 while the 2.9.3 control drained all 10,000, and legitimate traffic saw zero false positives. Release gate 17/17. The K1 line (instruction-bearing decoys) stays parked and is not in this release; the MCP wrapper remains at 2.8.2.
+
+1725 tests: 1723 passed, none failed, 2 skipped.
+
 ### v3.2.0 - Per-host polymorph surface: anti-reverse that expires
 
 The shipped canary trap paths were identical on every deployment - read the SDK once, know every site's traps forever. This release makes each deployment's surface a different, rotating shape. All of it is opt-in and advisory; no default changes.
