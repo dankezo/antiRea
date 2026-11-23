@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1683%20total-informational" alt="tests: 1683 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1806%20total-informational" alt="tests: 1806 total"></a>
 </p>
 
 <p align="center">
@@ -167,6 +167,29 @@ It is an evaluation and demo channel. Production protection still
 belongs in-process, in your own app.
 
 ## Latest release
+
+### v3.3.2 - The shadow release
+
+The decoy surface learns to answer on the auth tier and on the write path, and antiRea grows its first client component - for one item only, under the DEC-1 decision, which breaks the server-only rule at exactly U2 and nowhere else. Everything is opt-in and OFF by default; runtime dependencies remain zero. A host that enables nothing gets byte-identical behavior to 3.3.1 on real surfaces.
+
+- **Shadow auth tier (N-T3, `createShadowAuthTier`):** a decoy auth tier - a fake permission matrix and decoy records - served only to identities the host's own flag gate marks as flagged. The module accepts no host data source at all: everything it serves is synthetic. Measured (Neon tactics trial): a gpt-5.4-level agent absorbed the shadow tier as a real auth component in 2 of 3 deciding runs (P-T3a HIT 2/3 - the caveat travels with the claim); safety PASS with 0 real account ids in any shadow response, and clean identities received byte-identical refusals with the tier on and off. The shadow loop is closed over the documented public demo credentials only; a flagged identity presenting a valid real token passes through to the host's real flow.
+- **Decoy write surface (B-N4, `createDecoyWriteSurface`):** a write-side decoy contract with a frozen fake constraint set - a fake required field, an inverted price format, a fake id space. Decoy 422 responses name the violated constraint, so a clone built against the decoy inherits the fake rules. The module holds no reference to any host store; writes land only in a module-owned sink, and the audit counts routed writes only. Measured (B-N4 trial): agent clones carried all three fake constraints into a clean twin, each producing exactly one purely fake-attributable failure; false positives PASS 36/36 byte-identical. The trial's one audit-gate incident is disclosed in full in the changelog (Addendum E).
+- **Polymorphic challenge (U2, `createPolymorphicChallenge` + the DEC-1 client component):** each session, the server issues a JavaScript payload morphed from the session seed - identifiers rotated, step order shuffled, decoy steps mixed in - which the client component executes to answer a step-up; the server verifies arithmetically from the same seed. Challenges are short-lived and single-use: the first verify attempt consumes the challenge, pass or fail. Framing, frozen: U2 is an execution tax, not a wall - a real agent that executes JavaScript still passes. No effectiveness number exists for U2 and none is claimed.
+- **REALTEST-3.3.2: LAUNCHABLE.** The canonical release test ran the real REA 6.9.0 attacker against this exact build: a single identity stopped at exactly 150 records with export at 0, the identity-rotation arm took 1,445 of 10,000 records while the 2.9.3 control drained all 10,000, and legitimate traffic saw zero false positives across every pattern. A confirmation re-run on 2026-11-23 against the byte-identical dist returned LAUNCHABLE again with every deciding number identical. Release gate 17/17. The four farm items are NOT in this release: the 2026-11-23 farm verdict failed RECOMB-01 and RECOMB-03 and left C26 and AN-02 inconclusive. The MCP wrapper remains at 2.8.2.
+
+1806 tests: 1804 passed, none failed, 2 skipped.
+
+### v3.3.1 - The provenance release
+
+The decoy surface learns to reference itself, to speak GraphQL, to change shape per identity, and to sign the images it serves. Every feature is opt-in and OFF by default, server-side only, and runtime dependencies remain zero. A host that enables nothing gets byte-identical behavior to 3.3.0 on real surfaces.
+
+- **Provenance fan-out (B2, `buildChainRouteMap` / `chainRoutes` + surface chain serving):** decoy records arranged as a chain of individually routed records - a level-1 record carries the next level's record id, and the next record lives at its own route - so extraction walks one metered fetch per record instead of one page per dataset. Measured (trial v4, arm FAN): real yield 150 -> 100 (-33.3%) under the harness's all-or-nothing page budget; under partial-page accounting the same arm yields 131 (-12.7%, below the registered -15% threshold), so the effect is quoted only with that framing. Decoy retention 78/78, meter 150 in every arm.
+- **GraphQL decoy (B3, `buildGraphqlIntrospection`):** a phantom GraphQL schema layered over the host's declared real types - phantom object types, phantom Query fields, decoy fields on real types - served at the declared path as an introspection document. Measured (trial v4, arm GQL): 10/10 planted identifiers (3 phantom types, 3 phantom queries, 4 decoy fields) entered the capture with 0 flags at meter 150. The measured carrier was the endpoint's introspection response; no GraphQL execution ships.
+- **Identity-bound variants (B4, `applyIdentityVariants`):** one decoy endpoint whose record list is reshaped per requesting identity - which skew fields exist, which enum values can appear, what the aliased fields are called. Measured (trial v4, arm S1, 2 classes): 8/10 skew fields appeared under exactly one identity; one identity's enum coverage was 60% of the universe; cross-identity field-name overlap was a 30% Jaccard. Not claimed: the mis-map leg - whether extraction code written against identity A's shape then fails on identity B's - was not measured.
+- **Image attribution and visible fingerprint (B1 + B5 + B6):** every image the host declares on the surface can carry the requesting identity's AC-23 payload in a Y-DCT watermark (recovered 32/32 from inside the extractor's own output packages in 3/3 watermarked runs, in both image classes served), and record lists can carry a visible per-identity fingerprint woven into the decoy text and list order (all three channels legible in 3/3 fingerprinted runs). Both are attribution mechanisms, NOT recording prevention; the trial verdicts come from the extractor's deterministic + OCR pipeline - the VLM leg did not run.
+- **REALTEST-3.3.1: LAUNCHABLE.** Release gate 17/17: a single identity stopped at 150 records with export at 0, the rotation arm lost 1,445 of 10,000 records while the 2.9.3 control drained all 10,000, and legit false positives were 0 across all arms - every deciding number identical to REALTEST-3.3. The four farm items are not in this release; the MCP wrapper remains at 2.8.2.
+
+1772 tests: 1770 passed, none failed, 2 skipped.
 
 ### v3.3.0 - The decoy surface: the copy is built from our map
 
