@@ -154,3 +154,7 @@ export * from "./tier2-active/decoy-identity-variants";
 export * from "./tier2-active/decoy-images";
 export * from "./tier2-active/decoy-fingerprint";
 export * from "./tier4-forensic/screenshot-watermark-attribution";
+export * from "./tier2-active/shadow-auth-tier";
+export * from "./tier2-active/decoy-write-surface";
+export * from "./tier2-active/polymorphic-challenge";
+export * from "./client/u2-challenge-client";

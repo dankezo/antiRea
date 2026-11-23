@@ -234,7 +234,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "url": "https://antirea.dannyphan.me/",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Node.js 20+",
-      "softwareVersion": "3.3.1",
+      "softwareVersion": "3.3.2",
       "license": "https://opensource.org/licenses/MIT",
       "isAccessibleForFree": true,
       "offers": {
@@ -261,7 +261,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
       "programmingLanguage": "TypeScript",
       "runtimePlatform": "Node.js 20+",
       "license": "https://opensource.org/licenses/MIT",
-      "version": "3.3.1",
+      "version": "3.3.2",
       "targetProduct": {
         "@id": "https://antirea.dannyphan.me/#software"
       }
@@ -274,11 +274,11 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
 
 <header class="site">
   <div class="wrap hd">
-    <a class="wordmark" href="#">anti<b>Rea</b><sup>V3.3.1</sup></a>
+    <a class="wordmark" href="#">anti<b>Rea</b><sup>V3.3.2</sup></a>
     <nav class="main">
       <a class="anch" href="#signals">Signals</a>
       <a class="anch" href="#how">Protocol</a>
-      <a class="anch" href="#release">3.3.1</a>
+      <a class="anch" href="#release">3.3.2</a>
       <a class="anch" href="#mcp">MCP</a>
       <a href="https://lab.dannyphan.me">Super Lab</a>
       <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea">npm</a>
@@ -295,7 +295,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
         <p class="kicker"><span class="a">Fig 00</span> - A meter for your dataset</p>
         <h1>Every identity<br>gets a <span class="m">meter.</span></h1>
         <p class="lede">Server-side TypeScript library that meters dataset access per identity and flags coordinated bot abuse. Advisory only.</p>
-        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.3.1</span> <i>&rarr;</i></a></p>
+        <p class="cta-row"><a class="cta-btn" href="https://lab.dannyphan.me">Test your site with antiRea <span class="mono">3.3.2</span> <i>&rarr;</i></a></p>
       </div>
       <div class="rail">
         <div class="rail-hd"><span>Install</span><span class="a">Node 20+</span></div>
@@ -304,7 +304,7 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
           <button class="copybtn" type="button" data-copy="npm install @dannyphan190/anti-rea">Copy</button>
         </div>
         <div class="facts">
-          <div><span>VERSION</span><span>3.3.1</span></div>
+          <div><span>VERSION</span><span>3.3.2</span></div>
           <div><span>SIGNAL KINDS</span><span>8</span></div>
           <div><span>RUNTIME DEPS</span><span>0</span></div>
           <div><span>LICENSE</span><span>MIT</span></div>
@@ -388,24 +388,22 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
     </div>
   </section>
 
-  <!-- 3.3.1 -->
+  <!-- 3.3.2 -->
   <section class="band" id="release">
     <div class="wrap">
       <div class="rel-grid">
         <div>
-          <p class="kicker"><span class="a">03</span> - Release 3.3.1</p>
-          <h2>The copy now<br>signs itself.</h2>
-          <p class="intro">3.3.1 is the provenance release: the decoy surface learns to reference itself, to speak GraphQL, to change shape per identity, and to sign the images it serves. Everything is opt-in, OFF by default and server-side; a host that enables nothing gets byte-identical behavior to 3.3.0 on real surfaces. The disclosure ships with the release (docs/PROTECTIVE_DECOYS.md in the repo). The MCP wrapper remains at 2.8.2.</p>
+          <p class="kicker"><span class="a">03</span> - Release 3.3.2</p>
+          <h2>The decoy surface<br>answers back.</h2>
+          <p class="intro">3.3.2 is the shadow release: the decoy surface learns to answer on the auth tier and on the write path, and antiRea grows its first client component - for one item only, under the DEC-1 decision, which breaks the server-only rule at exactly U2 and nowhere else. Everything is opt-in and OFF by default; a host that enables nothing gets byte-identical behavior to 3.3.1 on real surfaces. The MCP wrapper remains at 2.8.2.</p>
         </div>
         <div class="ledger">
-          <div class="led"><code>CHAIN</code><div><h4>Provenance fan-out (B2)</h4><p>Decoy records arranged as a chain of individually routed records: a level-1 record carries the next level's id, and the next record lives at its own route, so extraction walks one metered fetch per record instead of one page per dataset. Measured (decoy-map trial v4): real yield fell from 150 to 100 records (-33.3%) under the harness's all-or-nothing page budget; under partial-page accounting the same arm yields 131 (-12.7%), so the effect is quoted only with that framing, never as the bare figure. Decoy retention 78 of 78, the meter held at 150 in every arm.</p></div></div>
-          <div class="led"><code>GQL</code><div><h4>GraphQL decoy (B3)</h4><p>A phantom GraphQL schema layered over the host's declared real types - phantom object types, phantom Query fields, decoy fields merged onto real types - served as an introspection document and declared in the spec. Measured (trial v4): 10 of 10 planted identifiers entered the capture with 0 flags at meter 150. The measured carrier was the introspection response; no claim is made that spec text is captured, and this surface ships no GraphQL execution.</p></div></div>
-          <div class="led"><code>SHAPE</code><div><h4>Identity-bound variants (B4)</h4><p>One decoy endpoint whose record list is reshaped per requesting identity: a keyed variant class picks which skew fields exist, which enum values appear, and what the aliased fields are called. Measured (trial v4): 8 of 10 skew fields appeared under exactly one identity (80%); one identity's enum coverage was 60% of the universe; cross-identity field-name overlap was a 30% Jaccard. The mis-map leg - whether code written against one identity's shape fails on another's - was not measured and is not claimed.</p></div></div>
-          <div class="led"><code>SIGN</code><div><h4>Signed images, surface-wide (B1 + B5)</h4><p>Every image the decoy surface serves carries the requesting identity's AC-23 payload - the first 32 bits of an HMAC over the identity - embedded at serve time with the Y-DCT watermark; the LSB form is not shipped. Measured: the payload recovered 32/32 from 10 of 10 screenshots through a real extractor's pipeline (VIS trial), and 32/32 from inside rea-video's own output packages in 3 of 3 recorded runs, in both image classes served (VID-TRACE trial). No clean package ever decoded a full payload.</p></div></div>
-          <div class="led"><code>TRACE</code><div><h4>Visible identity fingerprint (B6)</h4><p>Decoy record lists are served with the requesting identity's visible fingerprint woven in: an assortment token, a stock phrase on every record, and a per-identity rotation of the list order, all keyed under a host secret. It exists only inside the decoy surface's serving path - every other response stays byte-identical, and real content never carries it. Measured (VID-TRACE): all three channels were legible in the video tool's output in 3 of 3 runs, with three distinct fingerprints for three identities.</p></div></div>
-          <div class="led"><code>REAL</code><div><h4>REALTEST-3.3.1: LAUNCHABLE</h4><p>The canonical release test ran the real REA 6.9.0 attacker against this exact build, B5 and B6 included, on the isolated range. A single identity stopped at exactly 150 records with export at 0; the identity-rotation arm took 1,445 of 10,000 records, while the 2.9.3 control arm still drained all 10,000; the signed-in arms held at 980 records against the 1,050 per-account ceiling; and legitimate traffic saw zero false positives across every pattern. Every deciding number identical to REALTEST-3.3. Release gate: 17/17.</p></div></div>
-          <div class="led"><code>HONEST</code><div><h4>What 3.3.1 does not claim</h4><p>The watermark and the fingerprint are attribution and contamination mechanisms, not recording prevention: they do not stop screen recording, or the cloning of anything a legitimate viewer can see. The VID-TRACE verdicts come from the video tool's deterministic and OCR pipeline - its vision-model leg did not run - on a clean recording chain kinder than an OBS or re-upload chain. The four farm items still wait for the 2026-11-23 validation, and the K1 line stays parked. What was not measured is not claimed.</p></div></div>
-          <div class="led"><code>GATE</code><div><h4>Evidence with limits</h4><p>1772 tests: 1770 pass, 0 fail, 2 skipped. Full notes in the <a href="https://github.com/dankezo/antiRea/blob/main/CHANGELOG.md">changelog</a>.</p></div></div>
+          <div class="led"><code>AUTH</code><div><h4>Shadow auth tier (N-T3)</h4><p>A decoy auth tier - a fake permission matrix and decoy records - served only to identities the host's own flag gate marks as flagged. The module accepts no host data source at all: everything it serves is synthetic, and unflagged identities proceed through the host's real auth flow byte-identically. Measured (Neon tactics trial): a gpt-5.4-level agent absorbed the shadow tier as a real auth component in 2 of 3 deciding runs (P-T3a: HIT 2/3 - the caveat travels with the claim); safety PASS with 0 real account ids in any shadow response; clean identities received byte-identical refusals with the tier on and off.</p></div></div>
+          <div class="led"><code>WRITE</code><div><h4>Decoy write surface (B-N4)</h4><p>A write-side decoy contract with a frozen fake constraint set: a fake required field, an inverted price format, a fake id space. Decoy 422 responses name the violated constraint, so a clone built against the decoy inherits the fake rules. The module holds no reference to any host store - writes land only in a module-owned sink, and the audit counts routed writes only. Measured (B-N4 trial): agent clones carried all three fake constraints into a clean twin, each producing exactly one purely fake-attributable failure; false positives PASS 36 of 36 byte-identical. The one audit-gate incident from the trial is disclosed in full in the changelog, not hidden.</p></div></div>
+          <div class="led"><code>TAX</code><div><h4>Polymorphic challenge (U2)</h4><p>Each session, the server issues a JavaScript payload morphed from the session seed - identifiers rotated, step order shuffled, decoy steps mixed in - which the client component (antiRea's first, under DEC-1) executes to answer a step-up; the server verifies arithmetically from the same seed. Challenges are short-lived and single-use: the first verify attempt consumes the challenge, pass or fail. Framing, frozen: U2 is an execution tax, not a wall - a real agent that executes JavaScript still passes. No effectiveness number exists for U2 and none is claimed.</p></div></div>
+          <div class="led"><code>REAL</code><div><h4>REALTEST-3.3.2: LAUNCHABLE</h4><p>The canonical release test ran the real REA 6.9.0 attacker against this exact build on the isolated range. A single identity stopped at exactly 150 records with export at 0; the identity-rotation arm took 1,445 of 10,000 records, while the 2.9.3 control arm still drained all 10,000; the signed-in arms held at 980 records against the 1,050 per-account ceiling; and legitimate traffic saw zero false positives across every pattern. Every deciding number identical to REALTEST-3.3.1, confirmed again in a re-run on the byte-identical dist on 2026-11-23. Release gate: 17/17.</p></div></div>
+          <div class="led"><code>HONEST</code><div><h4>What 3.3.2 does not claim</h4><p>The shadow auth loop is closed over the documented public demo credentials only - a flagged identity presenting a valid real token passes through to the host's real flow. The write surface's runtime canary self-test is a documented host obligation, not code. The four farm items are not in this release: the 2026-11-23 farm verdict failed RECOMB-01 and RECOMB-03 and left C26 and AN-02 inconclusive. The K1 line stays parked. What was not measured is not claimed.</p></div></div>
+          <div class="led"><code>GATE</code><div><h4>Evidence with limits</h4><p>1806 tests: 1804 pass, 0 fail, 2 skipped. Full notes in the <a href="https://github.com/dankezo/antiRea/blob/main/CHANGELOG.md">changelog</a>.</p></div></div>
         </div>
       </div>
     </div>
@@ -415,8 +413,8 @@ footer{border-top:1px solid var(--line);margin-top:104px;padding:52px 0 60px}
   <section class="band" style="padding-top:72px;padding-bottom:72px">
     <div class="wrap">
       <div class="stats">
-        <div class="stat"><div class="stat-num">3.3<span class="u">.1</span></div><div class="stat-cap">Current release</div></div>
-        <div class="stat"><div class="stat-num">1772</div><div class="stat-cap">Automated tests<br>1770 passing, 2 skipped</div></div>
+        <div class="stat"><div class="stat-num">3.3<span class="u">.2</span></div><div class="stat-cap">Current release</div></div>
+        <div class="stat"><div class="stat-num">1806</div><div class="stat-cap">Automated tests<br>1804 passing, 2 skipped</div></div>
         <div class="stat"><div class="stat-num">0</div><div class="stat-cap">Runtime<br>dependencies</div></div>
         <div class="stat"><div class="stat-num">MIT</div><div class="stat-cap">License<br>Use it anywhere</div></div>
       </div>
