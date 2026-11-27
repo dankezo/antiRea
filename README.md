@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.npmjs.com/package/@dannyphan190/anti-rea"><img src="https://img.shields.io/npm/v/@dannyphan190/anti-rea.svg" alt="npm version"></a>
   <a href="https://github.com/dankezo/antiRea/actions/workflows/ci.yml"><img src="https://github.com/dankezo/antiRea/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="tests/"><img src="https://img.shields.io/badge/tests-1806%20total-informational" alt="tests: 1806 total"></a>
+  <a href="tests/"><img src="https://img.shields.io/badge/tests-1851%20total-informational" alt="tests: 1851 total"></a>
 </p>
 
 <p align="center">
@@ -167,6 +167,20 @@ It is an evaluation and demo channel. Production protection still
 belongs in-process, in your own app.
 
 ## Latest release
+
+### v3.3.3 - The decoy-composite release
+
+The five mechanisms that passed their registered lab trials, composed as one surface, plus two scoped residuals, a dataset fingerprint trace module, and an opt-in escalating VDF export gate. Every feature is opt-in and OFF by default; runtime dependencies remain zero. A host that enables nothing gets byte-identical behavior to 3.3.2 on real surfaces. The frozen headline verdict is 3 of 4 gates: the cost gate FAILED on both lab twins (1.32x and 2.20x against a 3.0x floor), so this release makes NO cost claim for the composite. The composite breaks the extractor's map, rules and decisions, and gates the export path - it does not prevent record scraping through ungated paging.
+
+- **Honeymap (X33-01, `createHoneymap`):** a fake source map served to flagged identities - a synthetic module graph internally consistent with the shipped decoy surface, versioned per identity by a signed variant token in the script's sourceMappingURL. Clean identities receive the host's real map bytes unchanged; every decoy serve is logged as a trace event.
+- **One-time flows (X33-06, `createOneTimeFlow`):** sensitive actions on the flagged surface require a single-use token minted per live session, delivered only in the `x-flow-token` response header. A fixed-path replay dies at the first token step (403); live flows pass through the mint step unchanged.
+- **Semantic invariant trap (X33-11, `createInvariantTrap`):** poisons the rule an extracting agent induces - a decoy rule taught consistently on every surface, diverging from the real rule only at unobserved inputs. Measured: the headline agent adopted the decoy rule verbatim and self-reported it as verified.
+- **Composed decoy surface (X33-12/13, X33-07 scoped, affordance tarpit):** one decoy fact corroborated across every channel an agent cross-checks; decoy affordances; decoy-first ordering; anti-replay contract-prefix rotation for flagged identities only.
+- **Dataset fingerprint trace (HV-03, `createFingerprintTrace`):** per-recipient dataset variants (Tardos-family code) so a leaked or scraped copy accuses its source. Measured: 0 false accusations across 36 runs; single leaks 12/12; collusion of 2-3 accused at least one source in 16/16. Attribution only - NOT prevention; identified channels only.
+- **Escalating VDF ladder (HV-01x02, `createVdfLadder`, OPT-IN):** a verifiable-delay gate on the export path, one proof per 50 records, delay escalating per gate, keyed only to a blind-signed token so identity resets do not reset it. Measured standalone: the full gated harvest cost 1,456.48 s at native speed; a normal export session added 7.26 s for a legitimate desktop user. Token scarcity is a documented lab assumption - production needs platform attestation; a degraded mode is documented in docs/VDF-LADDER.md.
+- **REALTEST-333: ship gate PASS on the measured criteria.** Launchability 17/17; attacker task success 100% to 0% on both twins; poison uptake median 1.0; zero real-user sessions broken; spot checks 52/52; gate 2 (cost) FAIL under its frozen label. After 13 pre-ship QA fixes in the new modules, the test was re-run on the fixed build on 2026-11-27 with identical deciding numbers. CB-01, IH-01 and FC-07 are NOT in this release. The MCP wrapper ships at 3.3.3 alongside, pinning this SDK.
+
+1851 tests: 1849 passed, none failed, 2 skipped.
 
 ### v3.3.2 - The shadow release
 
