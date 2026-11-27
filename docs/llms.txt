@@ -1,8 +1,8 @@
 # antiRea
 
-> antiRea is an evidence-led, server-side TypeScript toolkit that meters dataset access per identity and detects coordinated bot abuse for web apps and SaaS. Advisory signals only, zero runtime dependencies, nothing blocked by default. Version 3.3.2, MIT, Node 20+.
+> antiRea is an evidence-led, server-side TypeScript toolkit that meters dataset access per identity and detects coordinated bot abuse for web apps and SaaS. Advisory signals only, zero runtime dependencies, nothing blocked by default. Version 3.3.3, MIT, Node 20+.
 
-antiRea meters data per record: one identity can only receive a capped slice of a dataset, so bulk extraction becomes an identity problem instead of a single export call. It combines per-identity record budgets, priced exports and session-chained cursors, RFC 9421 Web Bot Auth verification, canary traps, and advisory coordinated-cohort signals. Everything is advisory - antiRea measures and reports, the host application decides. Release 3.3.2: 1806 automated tests (1804 passing, 2 skipped).
+antiRea meters data per record: one identity can only receive a capped slice of a dataset, so bulk extraction becomes an identity problem instead of a single export call. It combines per-identity record budgets, priced exports and session-chained cursors, RFC 9421 Web Bot Auth verification, canary traps, and advisory coordinated-cohort signals. Everything is advisory - antiRea measures and reports, the host application decides. Release 3.3.3: 1851 automated tests (1849 passing, 2 skipped).
 
 ## Core
 
