@@ -2,6 +2,21 @@
 
 ## 3.3.3 - 2026-11-27
 
+**Documentation addendum, 2026-11-28 (version unchanged, no
+code change):** the independent bench synthesis of 2026-11-27/28
+is recorded in `docs/evidence/independent-bench-3.3.3-2026-11-27.md`
+and summarised at the top of `docs/EVIDENCE.md`. On its evidence,
+the README quota section now documents a split action/data quota
+layout (an SPA behind a shared NAT IP lost 3/20 buyer flows on a
+single shared bucket; the split layout completed 20/20 with read
+limits unchanged), `docs/VDF-LADDER.md` records the independent
+legitimate-user cost of the ladder (13.50 s / 13.29 s of client
+compute across 3 gates, attacker cost ~1.1x — no cost claim), and
+`docs/PROTECTIVE_DECOYS.md` states the measured scope limit that
+decoys are not interleaved into the real record list (harvested
+decoy share 10% / median 0% in the independent cells). No
+defaults, APIs or shipped behavior changed.
+
 The decoy-composite release: the five mechanisms that passed their registered lab trials as one composed surface, plus two scoped residuals, a dataset fingerprint trace module, and an opt-in escalating VDF export gate. Every feature is opt-in and OFF by default; runtime dependencies remain zero. A host that enables nothing gets byte-identical behavior to 3.3.2 on real surfaces. Every number below was measured in a registered lab trial before the scope froze (scope: SCOPE-333-FREEZE-2026-11-25.md); what was not measured is not claimed, and each item's caveat is printed where its number is. The frozen headline verdict for the composite is 3 of 4 gates: the cost gate FAILED on both lab twins (agent-loop cost ratio 1.32x on the catalog twin, 2.20x on the SPA twin, against a 3.0x floor), so this release makes NO cost claim for the composite, and the wording the frozen gate reserves for a 4/4 pass does not appear here. Honest limit, stated before the items: the composite breaks the extractor's map, rules and decisions, and gates the export path - it does not prevent record scraping through ungated paging (headline arm 2 carried 150-250 real records per run on FULL; the HV-00a FULL runs carried 120-220 real records). REALTEST-333 on this installed build ran on 2026-11-26 and passed the frozen ship gate: launchability 17/17, headline gates 1 (task success), 3 (poison uptake) and 4 (real-user false positives) PASS on both twins, gate 2 (cost) FAIL under its frozen label on the installed build as in the lab (catalog 0.836x, SPA 1.676x), module spot checks 52/52 PASS. After that run, a pre-ship QA round on 2026-11-27 found and fixed 13 defects in the new modules (prototype-key lookups, VDF redeem ordering and edge inputs, token minting validation and an unbounded-growth path, contract-rotation validation, canary escaping, non-string and null input handling - all inside the 3.3.3 additions, none in any surface shipped before 3.3.3); REALTEST-333 was re-run on the fixed build the same day and passed every measured ship-gate criterion (launchability 17/17; headline gates 1, 3 and 4 PASS on both twins with numbers identical to the pre-fix run; spot checks 52/52; gate 2 FAIL under its frozen label - the re-run's catalog cost leg is VOID on a harness error after its one permitted replacement, and the pre-fix run measured that leg at 0.836x, also FAIL). Suite after the fixes: 1851 tests / 1849 pass / 0 fail / 2 skipped, unchanged from the pre-fix build.
 
 - **Honeymap (X33-01, `createHoneymap`, NEW):** a fake source map served for the host's scripts to flagged identities - a synthetic module graph (decoy modules, decoy routes, decoy constants) internally consistent with the shipped decoy surface, versioned per identity by a signed variant token carried in the script's sourceMappingURL. Clean identities receive the host's real map bytes unchanged. The map fetch is the one request REA itself originates, so every decoy serve is logged as a trace event. **Measured (Wave 1 trial, 2026-11-24):** PASS - the decoy module graph entered REA's bundle model on the lab twin; the composite evidence is in the headnote item below.

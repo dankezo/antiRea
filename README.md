@@ -257,6 +257,40 @@ app.use("/api/", createExpressQuotaMiddleware({
 }));
 ```
 
+### Keep action traffic out of the data quota
+
+Mount a **separate quota instance for action endpoints**
+(checkout, booking, contact, account changes) instead of sharing
+the data-read bucket above. The read limits stay exactly as
+strict; the action path simply stops competing with catalog
+browsing for the same per-IP allowance. This matters most
+behind shared IPs (offices, carrier NAT, public Wi-Fi), where
+many legitimate customers arrive as one IP.
+
+```ts
+app.use("/api/checkout", createExpressQuotaMiddleware({
+  trustedIpHeader: "cf-connecting-ip",
+  tiers: {
+    anonymous: { maxRequests: 30, windowMs: 60_000 },
+    free: { maxRequests: 60, windowMs: 60_000 },
+    pro: { maxRequests: 300, windowMs: 60_000 },
+  },
+  resolveIdentity: req => ({
+    accountId: req.headers.get("x-verified-account") ?? undefined,
+    tier: "free",
+  }),
+}));
+```
+
+Measured basis (independent buyer-journey bench, 2026-11-27,
+240 browser sessions, synthetic twins): on the SPA twin behind
+a simulated shared NAT IP, the single shared bucket completed
+17/20 buyer flows and 12/15 checkout quotes (3 blocked users,
+1 checkout `429`); the split layout completed 20/20 flows and
+15/15 quotes in every cell, with read protection unchanged.
+The catalog twin was unaffected under both layouts. Full
+numbers: [docs/evidence/independent-bench-3.3.3-2026-11-27.md](docs/evidence/independent-bench-3.3.3-2026-11-27.md).
+
 ### More patterns
 
 - **Canary endpoints** - trap routes that log abnormal probing,

@@ -1,5 +1,31 @@
 # Measured results - the full evidence table
 
+## 3.3.3 — independent bench synthesis (2026-11-27/28)
+
+Four independent runs against the published npm package
+(`dist.shasum eb2c30ef3978acf55262ed8abd2e39d995d71b80`) are
+synthesised in
+[evidence/independent-bench-3.3.3-2026-11-27.md](evidence/independent-bench-3.3.3-2026-11-27.md).
+Headline verdicts, with the served model named in each case
+(two runs' nominal model labels did not match the model that
+actually served, and only the served model is credited):
+false positives **PASS** in every attacker bench (0 legit
+sessions broken out of 120 + 120 + 50); blocking **PASS** in
+the one run that measured it cleanly (task success 70.0% at
+BASE to 0.0% at FULL, DeepSeek-V4.1-Flash attacker, driven by
+invariant traps and quota cuts, not by decoy volume); poison
+**FAIL** in both runs that measured it (median 0% harvested
+decoys at FULL; 10% in the SPA/FULL-DECOY cell); cost **FAIL**
+wherever measured (0.870x USD at FULL, ~1.1x with the VDF
+ladder, below both registered bars) — consistent with this
+release's own position that no cost tax is claimed. A separate
+buyer-journey run (240 sessions) found one configuration-shaped
+legit-user failure — an SPA behind a shared NAT IP on a single
+shared quota bucket lost 3/20 buyer flows — fixed by the split
+action/data quota layout now documented in the README, with
+read limits unchanged. Cells lost to infrastructure failure
+are recorded as NOT MEASURED, never as passes.
+
 ## 3.1.0
 
 Release addendum: Linux x64, Node 24.22.1, on the maintainer's Linux VM. Suite 1661/1659/0/2; full release gate PASS, 17/17 cells (Gate 0 SDK suite; Gates 1+2 frozen FP/detection cells; Gate 2.5 golden equivalence, zero drift; Gate 3 live range smoke on this dist, range reporting SDK 3.1.0). Three GATEKEY fixes and 107 PASS-LAB candidates ship as opt-in modules; no default changed. Four built modules (AN-02, RECOMB-01, RECOMB-03, C26) are held out of this release pending the farm holdout validation of 2026-11-23 and make no claims here; three candidates (RSP-13, AC-10, AC-17) were excluded after genuine upgrade attempts, with their measurements below and in the changelog.

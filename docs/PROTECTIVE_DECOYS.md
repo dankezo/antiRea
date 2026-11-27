@@ -163,6 +163,18 @@ yield per identity from 150 to 50 records (-66.7%). The full
 numbers are in the 3.3.0 changelog entry. What was not
 measured is not claimed.
 
+One scope limit, measured independently against 3.3.3
+(2026-11-27): decoys live on their own endpoints and
+machine-read channels — they are **not interleaved into the
+real record list**. An extractor that harvests mainly the
+real list therefore takes few decoys: the independent SPA
+FULL-DECOY cell measured a harvested-decoy share of 10%, and
+a second run measured a median of 0% at FULL. No
+record-list poison percentage is claimed for this surface;
+the measured protective effect in those runs came from
+invariant contradictions and quota cuts, not decoy volume.
+See `docs/evidence/independent-bench-3.3.3-2026-11-27.md`.
+
 The 3.3.1 families were measured the same way (decoy-map
 trial v4 and the VIS trial, 2026-11-20): the provenance
 fan-out cut real yield from 150 to 100 records under the

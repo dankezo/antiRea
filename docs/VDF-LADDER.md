@@ -51,6 +51,16 @@ below attached:
 - A normal legitimate export session (3 batches, desktop
   Chromium with a WASM evaluator) added 7.26 s in total; the
   largest single gate in that session was 2.79 s.
+- Independent cross-check (2026-11-27 bench, T = 300,000 x
+  1.16 ladder wired across the full request path of two lab
+  apps): the 3 gates added 13.50 s (catalog) and 13.29 s (SPA)
+  of client compute for legitimate sessions. Hosts must budget
+  real user time, not just attacker time: at this ladder
+  setting the legit cost is on the order of ten-plus seconds
+  per gated flow, and the same run measured the attacker's
+  total cost at only ~1.1x the ungated baseline — below the
+  registered cost bars. See
+  `docs/evidence/independent-bench-3.3.3-2026-11-27.md`.
 - Server-side proof verification median was 0.404 ms under
   parallel load.
 - After paying 6 gates and resetting the entire identity layer
